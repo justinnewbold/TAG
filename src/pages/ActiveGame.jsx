@@ -2,35 +2,37 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Target, Users, Clock, X, Zap } from 'lucide-react';
-import { useStore } from '../store';
+import { Target, Users, Clock, X, Zap, AlertTriangle, Flag } from 'lucide-react';
+import { useStore, useSounds } from '../store';
+import GameEndSummary from '../components/GameEndSummary';
 
 // Custom marker icons
-const createIcon = (color, isIt = false) => {
+const createIcon = (color, isIt = false, emoji = '📍') => {
   return L.divIcon({
     className: 'custom-marker',
     html: `
       <div style="
-        width: ${isIt ? '40px' : '32px'};
-        height: ${isIt ? '40px' : '32px'};
+        width: ${isIt ? '44px' : '36px'};
+        height: ${isIt ? '44px' : '36px'};
         background: ${color};
         border-radius: 50%;
         border: 3px solid white;
-        box-shadow: 0 0 ${isIt ? '20px' : '10px'} ${color};
+        box-shadow: 0 0 ${isIt ? '20px' : '10px'} ${color}, 0 4px 8px rgba(0,0,0,0.3);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: ${isIt ? '20px' : '16px'};
+        font-size: ${isIt ? '22px' : '18px'};
+        ${isIt ? 'animation: pulse 1s infinite;' : ''}
       ">
-        ${isIt ? '🏃' : '📍'}
+        ${emoji}
       </div>
     `,
-    iconSize: [isIt ? 40 : 32, isIt ? 40 : 32],
-    iconAnchor: [isIt ? 20 : 16, isIt ? 20 : 16],
+    iconSize: [isIt ? 44 : 36, isIt ? 44 : 36],
+    iconAnchor: [isIt ? 22 : 18, isIt ? 22 : 18],
   });
 };
 
-// Map component to follow user
+// Map controller to follow user
 function MapController({ center }) {
   const map = useMap();
   
@@ -45,10 +47,15 @@ function MapController({ center }) {
 
 function ActiveGame() {
   const navigate = useNavigate();
-  const { currentGame, user, tagPlayer, endGame, updatePlayerLocation } = useStore();
+  const { currentGame, user, tagPlayer, endGame, updatePlayerLocation, games } = useStore();
+  const { playSound, vibrate } = useSounds();
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showEndSummary, setShowEndSummary] = useState(false);
+  const [endedGame, setEndedGame] = useState(null);
   const [gameTime, setGameTime] = useState(0);
+  const [tagAnimation, setTagAnimation] = useState(false);
   const intervalRef = useRef(null);
+  const prevItRef = useRef(null);
   
   // Update game timer
   useEffect(() => {
@@ -61,36 +68,71 @@ function ActiveGame() {
     }
   }, [currentGame?.startedAt]);
   
-  // Simulate other players moving (demo)
+  // Detect when IT changes (someone got tagged)
+  useEffect(() => {
+    if (currentGame?.itPlayerId && prevItRef.current !== null) {
+      if (prevItRef.current !== currentGame.itPlayerId) {
+        // Someone got tagged!
+        if (currentGame.itPlayerId === user?.id) {
+          // You got tagged!
+          playSound('tagged');
+          vibrate([200, 100, 200, 100, 400]);
+        } else if (prevItRef.current === user?.id) {
+          // You tagged someone!
+          playSound('tag');
+          vibrate([100, 50, 200]);
+          setTagAnimation(true);
+          setTimeout(() => setTagAnimation(false), 500);
+        }
+      }
+    }
+    prevItRef.current = currentGame?.itPlayerId;
+  }, [currentGame?.itPlayerId, user?.id]);
+  
+  // Simulate other players moving
   useEffect(() => {
     const moveInterval = setInterval(() => {
       if (!currentGame || !user?.location) return;
       
-      currentGame.players.forEach((player) => {
-        if (player.id !== user.id && player.location) {
-          // Random movement within ~20m
+      currentGame.players?.forEach((player) => {
+        if (player.id !== user.id && player.id.startsWith('demo') && player.location) {
           const newLat = player.location.lat + (Math.random() - 0.5) * 0.0002;
           const newLng = player.location.lng + (Math.random() - 0.5) * 0.0002;
           updatePlayerLocation(player.id, { lat: newLat, lng: newLng });
         }
       });
-    }, currentGame?.settings.gpsInterval || 10000);
+    }, currentGame?.settings?.gpsInterval || 10000);
     
     return () => clearInterval(moveInterval);
   }, [currentGame, user]);
   
+  // Check game duration
+  useEffect(() => {
+    if (currentGame?.settings?.duration && currentGame?.startedAt) {
+      const remaining = currentGame.settings.duration - (Date.now() - currentGame.startedAt);
+      if (remaining <= 0) {
+        handleEndGame();
+      }
+    }
+  }, [gameTime]);
+  
   if (!currentGame || currentGame.status !== 'active') {
+    // Check if game just ended
+    const lastGame = games.filter(g => g.status === 'ended').sort((a, b) => b.endedAt - a.endedAt)[0];
+    if (lastGame && Date.now() - lastGame.endedAt < 5000) {
+      return <GameEndSummary game={lastGame} onClose={() => navigate('/')} />;
+    }
     navigate('/');
     return null;
   }
   
   const isIt = currentGame.itPlayerId === user?.id;
-  const itPlayer = currentGame.players.find((p) => p.id === currentGame.itPlayerId);
-  const otherPlayers = currentGame.players.filter((p) => p.id !== user?.id);
+  const itPlayer = currentGame.players?.find((p) => p.id === currentGame.itPlayerId);
+  const otherPlayers = currentGame.players?.filter((p) => p.id !== user?.id) || [];
   
   // Calculate distance between two coordinates
   const getDistance = (lat1, lng1, lat2, lng2) => {
-    const R = 6371e3; // Earth's radius in meters
+    const R = 6371e3;
     const φ1 = (lat1 * Math.PI) / 180;
     const φ2 = (lat2 * Math.PI) / 180;
     const Δφ = ((lat2 - lat1) * Math.PI) / 180;
@@ -106,7 +148,7 @@ function ActiveGame() {
   
   // Find nearest player that can be tagged
   const getNearestTaggable = () => {
-    if (!isIt || !user?.location) return null;
+    if (!isIt || !user?.location) return { player: null, distance: Infinity };
     
     let nearest = null;
     let nearestDist = Infinity;
@@ -117,7 +159,7 @@ function ActiveGame() {
           user.location.lat, user.location.lng,
           player.location.lat, player.location.lng
         );
-        if (dist < nearestDist && dist <= currentGame.settings.tagRadius) {
+        if (dist < nearestDist) {
           nearest = player;
           nearestDist = dist;
         }
@@ -127,18 +169,20 @@ function ActiveGame() {
     return { player: nearest, distance: nearestDist };
   };
   
-  const nearestTaggable = getNearestTaggable();
-  const canTag = nearestTaggable?.player !== null;
+  const { player: nearestPlayer, distance: nearestDistance } = getNearestTaggable();
+  const canTag = isIt && nearestPlayer && nearestDistance <= (currentGame.settings?.tagRadius || 20);
   
   const handleTag = () => {
-    if (canTag && nearestTaggable?.player) {
-      tagPlayer(nearestTaggable.player.id);
+    if (canTag && nearestPlayer) {
+      tagPlayer(nearestPlayer.id);
     }
   };
   
   const handleEndGame = () => {
+    const gameToEnd = { ...currentGame };
     endGame(isIt ? null : user?.id);
-    navigate('/');
+    setEndedGame(gameToEnd);
+    setShowEndSummary(true);
   };
   
   const formatTime = (ms) => {
@@ -148,202 +192,245 @@ function ActiveGame() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
   
-  const defaultCenter = user?.location || { lat: 40.7128, lng: -74.006 };
+  const userLocation = user?.location || { lat: 37.7749, lng: -122.4194 };
   
   return (
-    <div className="h-screen flex flex-col">
-      {/* Top bar */}
-      <div className="absolute top-0 left-0 right-0 z-[1000] p-4">
-        <div className="card p-3 flex items-center justify-between max-w-md mx-auto">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isIt ? 'bg-neon-orange/20' : 'bg-neon-green/20'}`}>
-              {isIt ? '🏃' : '😎'}
+    <div className="fixed inset-0 flex flex-col">
+      {/* Header */}
+      <div className="relative z-10 bg-dark-900/90 backdrop-blur-sm">
+        <div className="p-4">
+          <div className="flex items-center justify-between">
+            {/* Game Info */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-white/50" />
+                <span className="font-mono text-lg font-bold">{formatTime(gameTime)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-white/50" />
+                <span>{currentGame.players?.length || 0}</span>
+              </div>
             </div>
-            <div>
-              <p className={`font-bold ${isIt ? 'text-neon-orange' : 'text-neon-green'}`}>
-                {isIt ? "You're IT!" : 'Run!'}
-              </p>
-              <p className="text-xs text-white/50">
-                {isIt ? 'Tag someone!' : `${itPlayer?.name || 'Someone'} is hunting`}
-              </p>
-            </div>
+            
+            {/* End Game */}
+            <button
+              onClick={() => setShowEndConfirm(true)}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <Flag className="w-5 h-5 text-white/50" />
+            </button>
           </div>
-          <div className="text-right">
-            <div className="flex items-center gap-1 text-white/50">
-              <Clock className="w-4 h-4" />
-              <span className="font-mono">{formatTime(gameTime)}</span>
+          
+          {/* IT Status */}
+          <div className={`mt-3 p-3 rounded-xl flex items-center justify-between ${
+            isIt 
+              ? 'bg-neon-orange/20 border border-neon-orange/30' 
+              : 'bg-neon-cyan/10 border border-neon-cyan/30'
+          }`}>
+            <div className="flex items-center gap-3">
+              {isIt ? (
+                <>
+                  <Target className="w-6 h-6 text-neon-orange animate-pulse" />
+                  <div>
+                    <p className="font-display font-bold text-neon-orange">YOU'RE IT!</p>
+                    <p className="text-xs text-white/50">Tag someone to pass it on!</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-6 h-6 text-neon-cyan" />
+                  <div>
+                    <p className="font-display font-bold text-neon-cyan">{itPlayer?.name} is IT!</p>
+                    <p className="text-xs text-white/50">Run and hide!</p>
+                  </div>
+                </>
+              )}
             </div>
-            <p className="text-xs text-white/50">{currentGame.players.length} players</p>
           </div>
         </div>
       </div>
       
       {/* Map */}
-      <div className="flex-1">
-        {user?.location ? (
-          <MapContainer
-            center={[defaultCenter.lat, defaultCenter.lng]}
-            zoom={17}
-            style={{ height: '100%', width: '100%' }}
-            zoomControl={false}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      <div className="flex-1 relative">
+        <MapContainer
+          center={[userLocation.lat, userLocation.lng]}
+          zoom={17}
+          style={{ height: '100%', width: '100%' }}
+          zoomControl={false}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          />
+          
+          <MapController center={userLocation} />
+          
+          {/* Tag radius for IT */}
+          {isIt && user?.location && (
+            <Circle
+              center={[user.location.lat, user.location.lng]}
+              radius={currentGame.settings?.tagRadius || 20}
+              pathOptions={{
+                color: '#f97316',
+                fillColor: '#f97316',
+                fillOpacity: 0.1,
+                weight: 2,
+              }}
             />
-            
-            <MapController center={user.location} />
-            
-            {/* Tag radius for IT player */}
-            {isIt && user.location && (
-              <Circle
-                center={[user.location.lat, user.location.lng]}
-                radius={currentGame.settings.tagRadius}
-                pathOptions={{
-                  color: '#f97316',
-                  fillColor: '#f97316',
-                  fillOpacity: 0.1,
-                }}
-              />
-            )}
-            
-            {/* Current user marker */}
-            {user.location && (
+          )}
+          
+          {/* User marker */}
+          {user?.location && (
+            <Marker
+              position={[user.location.lat, user.location.lng]}
+              icon={createIcon(isIt ? '#f97316' : '#00f5ff', isIt, user.avatar || '🏃')}
+            >
+              <Popup>You {isIt ? '(IT!)' : ''}</Popup>
+            </Marker>
+          )}
+          
+          {/* Other players */}
+          {otherPlayers.map((player) => {
+            if (!player.location) return null;
+            const isPlayerIt = player.id === currentGame.itPlayerId;
+            return (
               <Marker
-                position={[user.location.lat, user.location.lng]}
-                icon={createIcon(isIt ? '#f97316' : '#00f5ff', isIt)}
+                key={player.id}
+                position={[player.location.lat, player.location.lng]}
+                icon={createIcon(
+                  isPlayerIt ? '#f97316' : '#22c55e',
+                  isPlayerIt,
+                  player.avatar || '🏃'
+                )}
               >
                 <Popup>
-                  <strong>You</strong>
-                  {isIt && <p>You're IT! Tag someone!</p>}
+                  {player.name} {isPlayerIt ? '(IT!)' : ''}
                 </Popup>
               </Marker>
-            )}
-            
-            {/* Other players */}
-            {otherPlayers.map((player) => {
-              if (!player.location) return null;
-              const playerIsIt = player.id === currentGame.itPlayerId;
-              
-              return (
-                <Marker
-                  key={player.id}
-                  position={[player.location.lat, player.location.lng]}
-                  icon={createIcon(playerIsIt ? '#f97316' : '#22c55e', playerIsIt)}
-                >
-                  <Popup>
-                    <strong>{player.name}</strong>
-                    {playerIsIt && <p>🏃 IT</p>}
-                    {user.location && (
-                      <p>
-                        {Math.round(getDistance(
-                          user.location.lat, user.location.lng,
-                          player.location.lat, player.location.lng
-                        ))}m away
-                      </p>
-                    )}
-                  </Popup>
-                </Marker>
-              );
-            })}
-          </MapContainer>
-        ) : (
-          <div className="h-full flex items-center justify-center bg-dark-800">
-            <div className="text-center">
-              <div className="animate-spin w-12 h-12 border-4 border-neon-cyan border-t-transparent rounded-full mx-auto mb-4" />
-              <p className="text-white/60">Getting your location...</p>
+            );
+          })}
+        </MapContainer>
+        
+        {/* Nearest Player Info (for IT) */}
+        {isIt && nearestPlayer && (
+          <div className="absolute top-4 left-4 right-4 z-10">
+            <div className="card p-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">{nearestPlayer.avatar || '🏃'}</span>
+                <div>
+                  <p className="font-medium text-sm">{nearestPlayer.name}</p>
+                  <p className="text-xs text-white/50">Nearest target</p>
+                </div>
+              </div>
+              <div className={`text-right ${nearestDistance <= (currentGame.settings?.tagRadius || 20) ? 'text-neon-orange' : ''}`}>
+                <p className="font-bold">
+                  {nearestDistance < 1000 
+                    ? `${Math.round(nearestDistance)}m` 
+                    : `${(nearestDistance / 1000).toFixed(1)}km`}
+                </p>
+                {canTag && (
+                  <p className="text-xs text-neon-orange animate-pulse">In range!</p>
+                )}
+              </div>
             </div>
           </div>
         )}
       </div>
       
-      {/* Bottom controls */}
-      <div className="absolute bottom-0 left-0 right-0 z-[1000] p-4 pb-28">
-        <div className="max-w-md mx-auto space-y-3">
-          {/* Player list */}
-          <div className="card p-3">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              {otherPlayers.map((player) => {
-                const playerIsIt = player.id === currentGame.itPlayerId;
-                const distance = user?.location && player.location
-                  ? getDistance(user.location.lat, user.location.lng, player.location.lat, player.location.lng)
-                  : null;
-                
-                return (
-                  <div
-                    key={player.id}
-                    className={`flex-shrink-0 p-2 rounded-xl ${
-                      playerIsIt ? 'bg-neon-orange/20' : 'bg-dark-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{player.avatar || '😎'}</span>
-                      <div>
-                        <p className="text-sm font-medium">{player.name}</p>
-                        <p className="text-xs text-white/50">
-                          {distance !== null ? `${Math.round(distance)}m` : '...'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          
-          {/* TAG button (only for IT) */}
-          {isIt && (
-            <button
-              onClick={handleTag}
-              disabled={!canTag}
-              className={`w-full py-6 rounded-2xl font-bold text-2xl transition-all ${
-                canTag
-                  ? 'bg-gradient-to-r from-neon-orange to-red-500 animate-pulse-glow'
-                  : 'bg-dark-700 text-white/30'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-3">
-                <Zap className="w-8 h-8" />
-                {canTag ? `TAG ${nearestTaggable?.player?.name}!` : 'Get closer to tag!'}
-              </div>
-              {nearestTaggable?.distance && nearestTaggable.distance <= currentGame.settings.tagRadius && (
-                <p className="text-sm font-normal mt-1 opacity-80">
-                  {Math.round(nearestTaggable.distance)}m away
-                </p>
-              )}
-            </button>
-          )}
-          
-          {/* End game button */}
+      {/* TAG Button (for IT) */}
+      {isIt && (
+        <div className="absolute bottom-24 left-0 right-0 flex justify-center z-10">
           <button
-            onClick={() => setShowEndConfirm(true)}
-            className="btn-danger w-full flex items-center justify-center gap-2"
+            onClick={handleTag}
+            disabled={!canTag}
+            className={`w-32 h-32 rounded-full font-display font-bold text-2xl transition-all transform ${
+              canTag
+                ? 'bg-gradient-to-br from-neon-orange to-red-500 shadow-lg shadow-neon-orange/50 animate-pulse hover:scale-105 active:scale-95'
+                : 'bg-white/10 text-white/30'
+            } ${tagAnimation ? 'scale-110' : ''}`}
           >
-            <X className="w-5 h-5" />
-            End Game
+            TAG!
           </button>
         </div>
-      </div>
+      )}
       
-      {/* End game confirmation */}
+      {/* Distance to IT (for non-IT) */}
+      {!isIt && itPlayer?.location && user?.location && (
+        <div className="absolute bottom-24 left-4 right-4 z-10">
+          <div className="card p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Target className="w-6 h-6 text-neon-orange" />
+              <span className="font-medium">{itPlayer.name} is IT</span>
+            </div>
+            <div className="text-right">
+              <p className="font-bold text-lg">
+                {(() => {
+                  const dist = getDistance(
+                    user.location.lat, user.location.lng,
+                    itPlayer.location.lat, itPlayer.location.lng
+                  );
+                  const tagRadius = currentGame.settings?.tagRadius || 20;
+                  const danger = dist <= tagRadius * 2;
+                  return (
+                    <span className={danger ? 'text-neon-orange animate-pulse' : ''}>
+                      {dist < 1000 ? `${Math.round(dist)}m` : `${(dist / 1000).toFixed(1)}km`}
+                    </span>
+                  );
+                })()}
+              </p>
+              <p className="text-xs text-white/50">away</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* End Game Confirmation */}
       {showEndConfirm && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
-          <div className="card-glow p-6 w-full max-w-sm animate-slide-up">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="card-glow p-6 max-w-sm w-full">
             <h2 className="text-xl font-bold mb-4">End Game?</h2>
             <p className="text-white/60 mb-6">
-              This will end the game for all players. Are you sure?
+              Are you sure you want to end this game? This will end the game for all players.
             </p>
             <div className="flex gap-3">
-              <button onClick={() => setShowEndConfirm(false)} className="btn-secondary flex-1">
+              <button
+                onClick={() => setShowEndConfirm(false)}
+                className="btn-secondary flex-1"
+              >
                 Cancel
               </button>
-              <button onClick={handleEndGame} className="btn-danger flex-1">
+              <button
+                onClick={() => {
+                  setShowEndConfirm(false);
+                  handleEndGame();
+                }}
+                className="btn-primary flex-1 bg-red-500 hover:bg-red-600"
+              >
                 End Game
               </button>
             </div>
           </div>
         </div>
       )}
+      
+      {/* Game End Summary */}
+      {showEndSummary && endedGame && (
+        <GameEndSummary
+          game={endedGame}
+          onClose={() => {
+            setShowEndSummary(false);
+            navigate('/');
+          }}
+        />
+      )}
+      
+      {/* CSS for pulse animation */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.1); opacity: 0.8; }
+        }
+      `}</style>
     </div>
   );
 }
