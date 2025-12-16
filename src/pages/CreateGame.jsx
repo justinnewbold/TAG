@@ -1,18 +1,91 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin, Calendar, Plus, X, Shield } from 'lucide-react';
+import { MapContainer, TileLayer, Circle, Marker, useMap, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import { ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin, Calendar, Plus, X, Shield, Map, Crosshair } from 'lucide-react';
 import { useStore, useSounds } from '../store';
+
+// Map click handler component
+function MapClickHandler({ onLocationSelect, isSelectingZone }) {
+  useMapEvents({
+    click: (e) => {
+      if (isSelectingZone) {
+        onLocationSelect({ lat: e.latlng.lat, lng: e.latlng.lng });
+      }
+    },
+  });
+  return null;
+}
+
+// Component to recenter map
+function MapController({ center, zoom }) {
+  const map = useMap();
+  useEffect(() => {
+    if (center) {
+      map.setView([center.lat, center.lng], zoom || map.getZoom());
+    }
+  }, [center, zoom, map]);
+  return null;
+}
+
+// Custom marker icon
+const createZoneIcon = (name) => {
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `
+      <div style="
+        width: 32px;
+        height: 32px;
+        background: #22c55e;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 0 10px #22c55e;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+      ">
+        🛡️
+      </div>
+    `,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  });
+};
+
+const userIcon = L.divIcon({
+  className: 'custom-marker',
+  html: `
+    <div style="
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #00f5ff, #a855f7);
+      border-radius: 50%;
+      border: 3px solid white;
+      box-shadow: 0 0 15px #00f5ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    ">
+      📍
+    </div>
+  `,
+  iconSize: [40, 40],
+  iconAnchor: [20, 20],
+});
 
 function CreateGame() {
   const navigate = useNavigate();
   const { createGame, user } = useStore();
   const { vibrate } = useSounds();
   
+  const [userLocation, setUserLocation] = useState(null);
   const [settings, setSettings] = useState({
     gameName: `${user?.name || 'Player'}'s Game`,
     gpsInterval: 5 * 60 * 1000, // 5 minutes default
     customInterval: '',
-    tagRadius: 20,
+    tagRadius: 50,
     duration: null,
     maxPlayers: 10,
     noTagZones: [],
@@ -22,12 +95,34 @@ function CreateGame() {
   const [showCustomInterval, setShowCustomInterval] = useState(false);
   const [showAddZone, setShowAddZone] = useState(false);
   const [showAddTime, setShowAddTime] = useState(false);
+  const [showRadiusMap, setShowRadiusMap] = useState(false);
+  const [isSelectingZoneLocation, setIsSelectingZoneLocation] = useState(false);
+  const [selectedZoneLocation, setSelectedZoneLocation] = useState(null);
   
   // New zone form
-  const [newZone, setNewZone] = useState({ name: '', radius: 50 });
+  const [newZone, setNewZone] = useState({ name: '', radius: 100, lat: null, lng: null });
   
   // New time form
   const [newTime, setNewTime] = useState({ name: '', startTime: '09:00', endTime: '17:00', days: [] });
+  
+  // Get user location
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.error('Location error:', error);
+          // Default to a location if GPS fails
+          setUserLocation({ lat: 40.7128, lng: -74.0060 });
+        }
+      );
+    }
+  }, []);
   
   // GPS interval options (in milliseconds)
   const gpsOptions = [
@@ -41,11 +136,13 @@ function CreateGame() {
   ];
   
   const radiusOptions = [
-    { value: 10, label: '10m', desc: 'Close' },
-    { value: 20, label: '20m', desc: 'Standard' },
-    { value: 50, label: '50m', desc: 'Wide' },
-    { value: 100, label: '100m', desc: 'Very wide' },
+    { value: 10, label: '10m', desc: 'Very close' },
+    { value: 25, label: '25m', desc: 'Close' },
+    { value: 50, label: '50m', desc: 'Standard' },
+    { value: 100, label: '100m', desc: 'Wide' },
+    { value: 250, label: '250m', desc: 'Very wide' },
     { value: 500, label: '500m', desc: 'Huge' },
+    { value: 1000, label: '1km', desc: 'Massive' },
   ];
   
   const durationOptions = [
@@ -54,6 +151,8 @@ function CreateGame() {
     { value: 7 * 24 * 60 * 60 * 1000, label: '1 week', desc: 'Standard' },
     { value: 30 * 24 * 60 * 60 * 1000, label: '1 month', desc: 'Long' },
   ];
+  
+  const zoneRadiusOptions = [50, 100, 200, 500, 1000];
   
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   
@@ -78,30 +177,38 @@ function CreateGame() {
     });
   };
   
+  const handleZoneLocationSelect = (location) => {
+    setSelectedZoneLocation(location);
+    setNewZone({ ...newZone, lat: location.lat, lng: location.lng });
+    setIsSelectingZoneLocation(false);
+  };
+  
+  const handleUseCurrentLocation = () => {
+    if (userLocation) {
+      setSelectedZoneLocation(userLocation);
+      setNewZone({ ...newZone, lat: userLocation.lat, lng: userLocation.lng });
+    }
+  };
+  
   const handleAddZone = () => {
-    if (!newZone.name.trim()) return;
+    if (!newZone.name.trim() || !newZone.lat || !newZone.lng) return;
     
-    // Get current location for the zone
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const zone = {
-          id: Math.random().toString(36).substring(2, 9),
-          name: newZone.name,
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          radius: newZone.radius,
-        };
-        setSettings({
-          ...settings,
-          noTagZones: [...settings.noTagZones, zone],
-        });
-        setNewZone({ name: '', radius: 50 });
-        setShowAddZone(false);
-      },
-      (error) => {
-        alert('Could not get your location. Please enable GPS.');
-      }
-    );
+    const zone = {
+      id: Math.random().toString(36).substring(2, 9),
+      name: newZone.name,
+      lat: newZone.lat,
+      lng: newZone.lng,
+      radius: newZone.radius,
+    };
+    
+    setSettings({
+      ...settings,
+      noTagZones: [...settings.noTagZones, zone],
+    });
+    
+    setNewZone({ name: '', radius: 100, lat: null, lng: null });
+    setSelectedZoneLocation(null);
+    setShowAddZone(false);
   };
   
   const handleRemoveZone = (zoneId) => {
@@ -119,7 +226,7 @@ function CreateGame() {
       name: newTime.name,
       startTime: newTime.startTime,
       endTime: newTime.endTime,
-      days: newTime.days.length > 0 ? newTime.days : [0, 1, 2, 3, 4, 5, 6], // All days if none selected
+      days: newTime.days.length > 0 ? newTime.days : [0, 1, 2, 3, 4, 5, 6],
     };
     setSettings({
       ...settings,
@@ -144,7 +251,6 @@ function CreateGame() {
   };
   
   const handleCreate = () => {
-    // Validate custom interval
     if (settings.gpsInterval === 'custom' && !settings.customInterval) {
       alert('Please enter a custom interval');
       return;
@@ -157,10 +263,9 @@ function CreateGame() {
     }
   };
   
-  const formatInterval = (ms) => {
-    if (ms < 60 * 60 * 1000) return `${ms / (60 * 1000)} min`;
-    if (ms < 24 * 60 * 60 * 1000) return `${ms / (60 * 60 * 1000)} hour${ms > 60 * 60 * 1000 ? 's' : ''}`;
-    return `${ms / (24 * 60 * 60 * 1000)} day${ms > 24 * 60 * 60 * 1000 ? 's' : ''}`;
+  const formatRadius = (meters) => {
+    if (meters >= 1000) return `${(meters / 1000).toFixed(1)}km`;
+    return `${meters}m`;
   };
   
   return (
@@ -189,6 +294,64 @@ function CreateGame() {
           />
         </div>
         
+        {/* Tag Radius with Map */}
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Target className="w-5 h-5 text-neon-purple" />
+              <div>
+                <h3 className="font-medium">Tag Radius</h3>
+                <p className="text-xs text-white/50">Distance to tag someone</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowRadiusMap(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-neon-purple/20 rounded-lg text-neon-purple text-sm hover:bg-neon-purple/30 transition-colors"
+            >
+              <Map className="w-4 h-4" />
+              View on Map
+            </button>
+          </div>
+          
+          {/* Radius Slider */}
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-2xl font-bold text-neon-purple">{formatRadius(settings.tagRadius)}</span>
+            </div>
+            <input
+              type="range"
+              min="10"
+              max="1000"
+              step="10"
+              value={settings.tagRadius}
+              onChange={(e) => setSettings({ ...settings, tagRadius: parseInt(e.target.value) })}
+              className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-neon-purple"
+            />
+            <div className="flex justify-between text-xs text-white/40 mt-1">
+              <span>10m</span>
+              <span>500m</span>
+              <span>1km</span>
+            </div>
+          </div>
+          
+          {/* Quick Select Buttons */}
+          <div className="grid grid-cols-4 gap-2">
+            {radiusOptions.slice(0, 4).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setSettings({ ...settings, tagRadius: opt.value })}
+                className={`p-2 rounded-xl text-center transition-all text-sm ${
+                  settings.tagRadius === opt.value
+                    ? 'bg-neon-purple/20 border-2 border-neon-purple text-neon-purple'
+                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        
         {/* GPS Update Interval */}
         <div className="card p-4">
           <div className="flex items-center gap-3 mb-4">
@@ -215,7 +378,6 @@ function CreateGame() {
             ))}
           </div>
           
-          {/* Custom Interval Input */}
           {showCustomInterval && (
             <div className="mt-4 p-3 bg-white/5 rounded-xl">
               <label className="label">Custom Interval (minutes)</label>
@@ -233,33 +395,6 @@ function CreateGame() {
               <p className="text-xs text-white/40 mt-2">Minimum interval is 5 minutes</p>
             </div>
           )}
-        </div>
-        
-        {/* Tag Radius */}
-        <div className="card p-4">
-          <div className="flex items-center gap-3 mb-4">
-            <Target className="w-5 h-5 text-neon-purple" />
-            <div>
-              <h3 className="font-medium">Tag Radius</h3>
-              <p className="text-xs text-white/50">Distance to tag someone</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-5 gap-2">
-            {radiusOptions.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setSettings({ ...settings, tagRadius: opt.value })}
-                className={`p-3 rounded-xl text-center transition-all ${
-                  settings.tagRadius === opt.value
-                    ? 'bg-neon-purple/20 border-2 border-neon-purple text-neon-purple'
-                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
-                }`}
-              >
-                <p className="font-bold text-sm">{opt.label}</p>
-                <p className="text-xs opacity-60">{opt.desc}</p>
-              </button>
-            ))}
-          </div>
         </div>
         
         {/* Game Duration */}
@@ -341,7 +476,7 @@ function CreateGame() {
                     <MapPin className="w-4 h-4 text-green-400" />
                     <div>
                       <p className="font-medium text-sm">{zone.name}</p>
-                      <p className="text-xs text-white/50">{zone.radius}m radius</p>
+                      <p className="text-xs text-white/50">{formatRadius(zone.radius)} radius</p>
                     </div>
                   </div>
                   <button
@@ -355,61 +490,6 @@ function CreateGame() {
             </div>
           ) : (
             <p className="text-sm text-white/40 text-center py-4">No safe zones added</p>
-          )}
-          
-          {/* Add Zone Modal */}
-          {showAddZone && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
-              <div className="card-glow p-6 w-full max-w-md animate-slide-up">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-lg">Add No-Tag Zone</h3>
-                  <button onClick={() => setShowAddZone(false)} className="p-2 hover:bg-white/10 rounded-lg">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <p className="text-sm text-white/50 mb-4">
-                  Your current location will be used as the center of this zone.
-                </p>
-                <div className="space-y-4">
-                  <div>
-                    <label className="label">Zone Name</label>
-                    <input
-                      type="text"
-                      value={newZone.name}
-                      onChange={(e) => setNewZone({ ...newZone, name: e.target.value })}
-                      placeholder="e.g., Home, Work, School"
-                      className="input-field"
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Safe Radius (meters)</label>
-                    <div className="flex gap-2">
-                      {[25, 50, 100, 200, 500].map((r) => (
-                        <button
-                          key={r}
-                          onClick={() => setNewZone({ ...newZone, radius: r })}
-                          className={`flex-1 py-2 rounded-lg text-sm transition-all ${
-                            newZone.radius === r
-                              ? 'bg-green-400/20 border border-green-400 text-green-400'
-                              : 'bg-white/5 border border-white/10'
-                          }`}
-                        >
-                          {r}m
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleAddZone}
-                    disabled={!newZone.name.trim()}
-                    className="btn-primary w-full bg-green-500 hover:bg-green-600 disabled:opacity-50"
-                  >
-                    <MapPin className="w-4 h-4 inline mr-2" />
-                    Add Zone at Current Location
-                  </button>
-                </div>
-              </div>
-            </div>
           )}
         </div>
         
@@ -456,78 +536,6 @@ function CreateGame() {
           ) : (
             <p className="text-sm text-white/40 text-center py-4">No time restrictions added</p>
           )}
-          
-          {/* Add Time Modal */}
-          {showAddTime && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
-              <div className="card-glow p-6 w-full max-w-md animate-slide-up">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-lg">Add No-Tag Time</h3>
-                  <button onClick={() => setShowAddTime(false)} className="p-2 hover:bg-white/10 rounded-lg">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="label">Rule Name</label>
-                    <input
-                      type="text"
-                      value={newTime.name}
-                      onChange={(e) => setNewTime({ ...newTime, name: e.target.value })}
-                      placeholder="e.g., Work Hours, Sleep Time"
-                      className="input-field"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="label">Start Time</label>
-                      <input
-                        type="time"
-                        value={newTime.startTime}
-                        onChange={(e) => setNewTime({ ...newTime, startTime: e.target.value })}
-                        className="input-field"
-                      />
-                    </div>
-                    <div>
-                      <label className="label">End Time</label>
-                      <input
-                        type="time"
-                        value={newTime.endTime}
-                        onChange={(e) => setNewTime({ ...newTime, endTime: e.target.value })}
-                        className="input-field"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="label">Days (leave empty for all days)</label>
-                    <div className="flex gap-1">
-                      {daysOfWeek.map((day, index) => (
-                        <button
-                          key={day}
-                          onClick={() => toggleDay(index)}
-                          className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                            newTime.days.includes(index)
-                              ? 'bg-blue-400/20 border border-blue-400 text-blue-400'
-                              : 'bg-white/5 border border-white/10 text-white/60'
-                          }`}
-                        >
-                          {day}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleAddTime}
-                    disabled={!newTime.name.trim()}
-                    className="btn-primary w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-50"
-                  >
-                    <Calendar className="w-4 h-4 inline mr-2" />
-                    Add Time Rule
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
         
         {/* Create Button */}
@@ -536,6 +544,346 @@ function CreateGame() {
           Create Game
         </button>
       </div>
+      
+      {/* Tag Radius Map Modal */}
+      {showRadiusMap && userLocation && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col">
+          <div className="p-4 bg-dark-900 border-b border-white/10">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-lg">Tag Radius Preview</h3>
+                <p className="text-sm text-white/50">See how far you can tag</p>
+              </div>
+              <button onClick={() => setShowRadiusMap(false)} className="p-2 hover:bg-white/10 rounded-lg">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+          
+          <div className="flex-1 relative">
+            <MapContainer
+              center={[userLocation.lat, userLocation.lng]}
+              zoom={settings.tagRadius > 500 ? 14 : settings.tagRadius > 100 ? 16 : 17}
+              style={{ height: '100%', width: '100%' }}
+              zoomControl={false}
+            >
+              <TileLayer
+                attribution='&copy; OpenStreetMap'
+                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              />
+              <MapController center={userLocation} zoom={settings.tagRadius > 500 ? 14 : settings.tagRadius > 100 ? 16 : 17} />
+              
+              {/* Tag radius circle */}
+              <Circle
+                center={[userLocation.lat, userLocation.lng]}
+                radius={settings.tagRadius}
+                pathOptions={{
+                  color: '#a855f7',
+                  fillColor: '#a855f7',
+                  fillOpacity: 0.2,
+                  weight: 3,
+                }}
+              />
+              
+              {/* User marker */}
+              <Marker position={[userLocation.lat, userLocation.lng]} icon={userIcon} />
+              
+              {/* No-tag zones */}
+              {settings.noTagZones.map((zone) => (
+                <React.Fragment key={zone.id}>
+                  <Circle
+                    center={[zone.lat, zone.lng]}
+                    radius={zone.radius}
+                    pathOptions={{
+                      color: '#22c55e',
+                      fillColor: '#22c55e',
+                      fillOpacity: 0.15,
+                      weight: 2,
+                      dashArray: '5, 5',
+                    }}
+                  />
+                  <Marker position={[zone.lat, zone.lng]} icon={createZoneIcon(zone.name)} />
+                </React.Fragment>
+              ))}
+            </MapContainer>
+            
+            {/* Legend */}
+            <div className="absolute bottom-4 left-4 right-4 card p-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-full bg-neon-purple/50 border-2 border-neon-purple"></div>
+                  <span className="text-sm">Tag Radius: {formatRadius(settings.tagRadius)}</span>
+                </div>
+                {settings.noTagZones.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full bg-green-500/50 border-2 border-green-500 border-dashed"></div>
+                    <span className="text-sm">Safe Zones ({settings.noTagZones.length})</span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Radius Slider in Map View */}
+              <div className="space-y-2">
+                <input
+                  type="range"
+                  min="10"
+                  max="1000"
+                  step="10"
+                  value={settings.tagRadius}
+                  onChange={(e) => setSettings({ ...settings, tagRadius: parseInt(e.target.value) })}
+                  className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-neon-purple"
+                />
+                <div className="flex justify-between text-xs text-white/40">
+                  <span>10m</span>
+                  <span>500m</span>
+                  <span>1km</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Add Zone Modal with Map */}
+      {showAddZone && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col">
+          <div className="p-4 bg-dark-900 border-b border-white/10">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-lg">Add No-Tag Zone</h3>
+                <p className="text-sm text-white/50">
+                  {isSelectingZoneLocation ? 'Tap the map to select location' : 'Configure your safe zone'}
+                </p>
+              </div>
+              <button onClick={() => { setShowAddZone(false); setIsSelectingZoneLocation(false); setSelectedZoneLocation(null); }} className="p-2 hover:bg-white/10 rounded-lg">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+          
+          {/* Map for zone selection */}
+          <div className="h-64 relative">
+            {userLocation && (
+              <MapContainer
+                center={[selectedZoneLocation?.lat || userLocation.lat, selectedZoneLocation?.lng || userLocation.lng]}
+                zoom={16}
+                style={{ height: '100%', width: '100%' }}
+                zoomControl={false}
+              >
+                <TileLayer
+                  attribution='&copy; OpenStreetMap'
+                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                />
+                <MapClickHandler onLocationSelect={handleZoneLocationSelect} isSelectingZone={isSelectingZoneLocation} />
+                
+                {/* User location marker */}
+                <Marker position={[userLocation.lat, userLocation.lng]} icon={userIcon} />
+                
+                {/* Selected zone preview */}
+                {selectedZoneLocation && (
+                  <>
+                    <Circle
+                      center={[selectedZoneLocation.lat, selectedZoneLocation.lng]}
+                      radius={newZone.radius}
+                      pathOptions={{
+                        color: '#22c55e',
+                        fillColor: '#22c55e',
+                        fillOpacity: 0.2,
+                        weight: 2,
+                      }}
+                    />
+                    <Marker position={[selectedZoneLocation.lat, selectedZoneLocation.lng]} icon={createZoneIcon('')} />
+                  </>
+                )}
+                
+                {/* Existing zones */}
+                {settings.noTagZones.map((zone) => (
+                  <Circle
+                    key={zone.id}
+                    center={[zone.lat, zone.lng]}
+                    radius={zone.radius}
+                    pathOptions={{
+                      color: '#22c55e',
+                      fillColor: '#22c55e',
+                      fillOpacity: 0.1,
+                      weight: 1,
+                      dashArray: '5, 5',
+                    }}
+                  />
+                ))}
+              </MapContainer>
+            )}
+            
+            {/* Map overlay instructions */}
+            {isSelectingZoneLocation && (
+              <div className="absolute top-2 left-2 right-2 bg-green-500/90 text-white text-center py-2 px-4 rounded-lg text-sm font-medium">
+                Tap on the map to place your safe zone
+              </div>
+            )}
+          </div>
+          
+          {/* Zone configuration form */}
+          <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+            {/* Location Selection Buttons */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={handleUseCurrentLocation}
+                className={`p-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
+                  selectedZoneLocation && selectedZoneLocation.lat === userLocation?.lat
+                    ? 'bg-green-500/20 border-2 border-green-500 text-green-400'
+                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                }`}
+              >
+                <Crosshair className="w-4 h-4" />
+                <span className="text-sm">Current Location</span>
+              </button>
+              <button
+                onClick={() => setIsSelectingZoneLocation(!isSelectingZoneLocation)}
+                className={`p-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
+                  isSelectingZoneLocation
+                    ? 'bg-green-500/20 border-2 border-green-500 text-green-400'
+                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                }`}
+              >
+                <MapPin className="w-4 h-4" />
+                <span className="text-sm">Pick on Map</span>
+              </button>
+            </div>
+            
+            {selectedZoneLocation && (
+              <div className="p-2 bg-green-500/10 rounded-lg text-center text-sm text-green-400">
+                📍 Location selected
+              </div>
+            )}
+            
+            <div>
+              <label className="label">Zone Name</label>
+              <input
+                type="text"
+                value={newZone.name}
+                onChange={(e) => setNewZone({ ...newZone, name: e.target.value })}
+                placeholder="e.g., Home, Work, School"
+                className="input-field"
+              />
+            </div>
+            
+            <div>
+              <label className="label">Safe Radius: {formatRadius(newZone.radius)}</label>
+              <input
+                type="range"
+                min="25"
+                max="1000"
+                step="25"
+                value={newZone.radius}
+                onChange={(e) => setNewZone({ ...newZone, radius: parseInt(e.target.value) })}
+                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-green-500"
+              />
+              <div className="flex justify-between text-xs text-white/40 mt-1">
+                <span>25m</span>
+                <span>500m</span>
+                <span>1km</span>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              {zoneRadiusOptions.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setNewZone({ ...newZone, radius: r })}
+                  className={`flex-1 py-2 rounded-lg text-sm transition-all ${
+                    newZone.radius === r
+                      ? 'bg-green-400/20 border border-green-400 text-green-400'
+                      : 'bg-white/5 border border-white/10'
+                  }`}
+                >
+                  {formatRadius(r)}
+                </button>
+              ))}
+            </div>
+            
+            <button
+              onClick={handleAddZone}
+              disabled={!newZone.name.trim() || !selectedZoneLocation}
+              className="btn-primary w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Shield className="w-4 h-4 inline mr-2" />
+              Add Safe Zone
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Add Time Modal */}
+      {showAddTime && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="card-glow p-6 w-full max-w-md animate-slide-up max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg">Add No-Tag Time</h3>
+              <button onClick={() => setShowAddTime(false)} className="p-2 hover:bg-white/10 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="label">Rule Name</label>
+                <input
+                  type="text"
+                  value={newTime.name}
+                  onChange={(e) => setNewTime({ ...newTime, name: e.target.value })}
+                  placeholder="e.g., Work Hours, Sleep Time"
+                  className="input-field"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Start Time</label>
+                  <input
+                    type="time"
+                    value={newTime.startTime}
+                    onChange={(e) => setNewTime({ ...newTime, startTime: e.target.value })}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="label">End Time</label>
+                  <input
+                    type="time"
+                    value={newTime.endTime}
+                    onChange={(e) => setNewTime({ ...newTime, endTime: e.target.value })}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label">Days (leave empty for all days)</label>
+                <div className="flex gap-1">
+                  {daysOfWeek.map((day, index) => (
+                    <button
+                      key={day}
+                      onClick={() => toggleDay(index)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                        newTime.days.includes(index)
+                          ? 'bg-blue-400/20 border border-blue-400 text-blue-400'
+                          : 'bg-white/5 border border-white/10 text-white/60'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={handleAddTime}
+                disabled={!newTime.name.trim()}
+                className="btn-primary w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-50"
+              >
+                <Calendar className="w-4 h-4 inline mr-2" />
+                Add Time Rule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
