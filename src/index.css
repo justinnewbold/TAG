@@ -2,141 +2,268 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --neon-cyan: #00f5ff;
+  --neon-purple: #a855f7;
+  --neon-orange: #f97316;
+  --dark-900: #0f0f1a;
+  --dark-800: #1a1a2e;
+  --dark-700: #252542;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  font-family: 'Inter', system-ui, sans-serif;
-  background: #0a0a0f;
-  color: white;
-  min-height: 100vh;
-  overflow-x: hidden;
+html {
+  scroll-behavior: smooth;
 }
 
-/* Custom scrollbar */
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--dark-900);
+  color: white;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #12121a;
+  background: var(--dark-800);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #00f5ff40;
+  background: var(--dark-700);
   border-radius: 3px;
 }
 
-/* Leaflet map overrides */
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neon-cyan);
+}
+
+/* Leaflet overrides */
 .leaflet-container {
-  background: #0a0a0f !important;
+  background: var(--dark-900) !important;
 }
 
-.leaflet-tile {
-  filter: invert(1) hue-rotate(180deg) brightness(0.8) contrast(1.2);
+.leaflet-popup-content-wrapper {
+  background: var(--dark-800) !important;
+  color: white !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
 }
 
-.leaflet-control-zoom {
-  border: none !important;
+.leaflet-popup-tip {
+  background: var(--dark-800) !important;
 }
 
-.leaflet-control-zoom a {
-  background: #12121a !important;
-  color: #00f5ff !important;
-  border: 1px solid #00f5ff30 !important;
+.leaflet-popup-close-button {
+  color: white !important;
 }
 
-.leaflet-control-attribution {
-  background: #12121a90 !important;
-  color: #ffffff50 !important;
-  font-size: 10px !important;
-}
-
-/* Glass card effect */
+/* Custom Classes */
 @layer components {
+  .font-display {
+    font-family: 'Orbitron', sans-serif;
+  }
+  
   .card {
-    @apply bg-dark-800/80 backdrop-blur-xl border border-white/10 rounded-2xl;
+    @apply bg-dark-800/80 backdrop-blur-sm rounded-2xl border border-white/5;
   }
   
   .card-glow {
-    @apply bg-dark-800/80 backdrop-blur-xl border border-neon-cyan/30 rounded-2xl;
-    box-shadow: 0 0 30px rgba(0, 245, 255, 0.1);
+    @apply bg-dark-800/80 backdrop-blur-sm rounded-2xl border border-white/10;
+    box-shadow: 0 0 30px rgba(0, 245, 255, 0.05);
   }
   
   .btn-primary {
-    @apply px-6 py-3 bg-gradient-to-r from-neon-cyan to-neon-purple text-white font-semibold rounded-xl;
-    @apply hover:opacity-90 transition-all duration-200;
-    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply px-6 py-3 rounded-xl font-semibold transition-all;
+    @apply bg-gradient-to-r from-neon-cyan to-neon-purple;
+    @apply hover:opacity-90 hover:scale-[1.02] active:scale-[0.98];
   }
   
   .btn-secondary {
-    @apply px-6 py-3 bg-dark-700 border border-white/20 text-white font-medium rounded-xl;
-    @apply hover:bg-dark-600 hover:border-white/30 transition-all duration-200;
-  }
-  
-  .btn-danger {
-    @apply px-6 py-3 bg-red-500/20 border border-red-500/50 text-red-400 font-medium rounded-xl;
-    @apply hover:bg-red-500/30 transition-all duration-200;
+    @apply px-6 py-3 rounded-xl font-semibold transition-all;
+    @apply bg-white/10 border border-white/20;
+    @apply hover:bg-white/20 hover:border-white/30;
   }
   
   .input-field {
-    @apply w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white;
-    @apply placeholder:text-white/30 focus:outline-none focus:border-neon-cyan/50;
-    @apply transition-all duration-200;
+    @apply w-full px-4 py-3 rounded-xl;
+    @apply bg-white/5 border border-white/10;
+    @apply focus:outline-none focus:border-neon-cyan/50 focus:bg-white/10;
+    @apply placeholder:text-white/30 transition-all;
   }
   
   .label {
-    @apply block text-sm text-white/60 mb-2 font-medium;
+    @apply block text-sm text-white/60 mb-2;
   }
   
-  .nav-item {
-    @apply flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-200;
-    @apply text-white/50 hover:text-white hover:bg-white/5;
+  .text-neon-cyan {
+    color: var(--neon-cyan);
   }
   
-  .nav-item.active {
-    @apply text-neon-cyan bg-neon-cyan/10;
+  .text-neon-purple {
+    color: var(--neon-purple);
+  }
+  
+  .text-neon-orange {
+    color: var(--neon-orange);
+  }
+  
+  .bg-neon-cyan {
+    background-color: var(--neon-cyan);
+  }
+  
+  .bg-neon-purple {
+    background-color: var(--neon-purple);
+  }
+  
+  .bg-neon-orange {
+    background-color: var(--neon-orange);
+  }
+  
+  .bg-dark-900 {
+    background-color: var(--dark-900);
+  }
+  
+  .bg-dark-800 {
+    background-color: var(--dark-800);
+  }
+  
+  .bg-dark-700 {
+    background-color: var(--dark-700);
+  }
+  
+  .border-neon-cyan {
+    border-color: var(--neon-cyan);
+  }
+  
+  .border-neon-purple {
+    border-color: var(--neon-purple);
+  }
+  
+  .border-neon-orange {
+    border-color: var(--neon-orange);
   }
 }
 
-/* Player marker pulse */
-.player-marker {
-  position: relative;
+/* Animations */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.player-marker::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  animation: radar 2s linear infinite;
-  border: 2px solid currentColor;
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* TAG button animation */
-.tag-button {
-  position: relative;
-  overflow: hidden;
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.tag-button::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: conic-gradient(from 0deg, transparent, rgba(0, 245, 255, 0.3), transparent);
-  animation: spin 3s linear infinite;
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px var(--neon-cyan);
+  }
+  50% {
+    box-shadow: 0 0 40px var(--neon-cyan), 0 0 60px var(--neon-purple);
+  }
 }
 
-@keyframes spin {
-  100% { transform: rotate(360deg); }
+@keyframes bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+.animate-slide-down {
+  animation: slide-down 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.5s ease-out;
+}
+
+/* Safe area padding for mobile */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* PWA install prompt styling */
+.pwa-install-prompt {
+  @apply fixed bottom-20 left-4 right-4 p-4 rounded-2xl;
+  @apply bg-gradient-to-r from-neon-cyan/20 to-neon-purple/20;
+  @apply border border-neon-cyan/30 backdrop-blur-lg;
+  @apply animate-slide-up z-50;
+}
+
+/* Loading states */
+.skeleton {
+  @apply animate-pulse bg-white/10 rounded;
+}
+
+/* Focus visible for accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  @apply outline-none ring-2 ring-neon-cyan ring-offset-2 ring-offset-dark-900;
+}
+
+/* Custom marker animation */
+.custom-marker {
+  transition: transform 0.3s ease;
+}
+
+.custom-marker:hover {
+  transform: scale(1.1);
 }
