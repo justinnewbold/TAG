@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Copy, Check, Play, UserPlus, Settings, Clock, Target, MapPin, X, Share2 } from 'lucide-react';
+import { ArrowLeft, Users, Copy, Check, Play, UserPlus, Clock, Target, MapPin, Shield, Calendar, Share2 } from 'lucide-react';
 import { useStore, useSounds } from '../store';
 import InviteModal from '../components/InviteModal';
 
@@ -36,7 +36,6 @@ function GameLobby() {
   const handleStartGame = () => {
     if (!canStart) return;
     
-    // Countdown animation
     setCountdown(3);
     playSound('gameStart');
     vibrate([100, 100, 100, 100, 100, 100, 300]);
@@ -65,15 +64,27 @@ function GameLobby() {
     return null;
   }
   
+  const formatInterval = (ms) => {
+    if (ms < 60 * 60 * 1000) return `${Math.floor(ms / (60 * 1000))} min`;
+    if (ms < 24 * 60 * 60 * 1000) return `${Math.floor(ms / (60 * 60 * 1000))} hour${ms >= 2 * 60 * 60 * 1000 ? 's' : ''}`;
+    return `${Math.floor(ms / (24 * 60 * 60 * 1000))} day${ms >= 2 * 24 * 60 * 60 * 1000 ? 's' : ''}`;
+  };
+  
+  const formatDuration = (ms) => {
+    if (!ms) return 'Unlimited';
+    if (ms < 24 * 60 * 60 * 1000) return `${Math.floor(ms / (60 * 60 * 1000))} hours`;
+    if (ms < 7 * 24 * 60 * 60 * 1000) return `${Math.floor(ms / (24 * 60 * 60 * 1000))} days`;
+    return `${Math.floor(ms / (7 * 24 * 60 * 60 * 1000))} week${ms >= 2 * 7 * 24 * 60 * 60 * 1000 ? 's' : ''}`;
+  };
+  
+  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  
   return (
-    <div className="min-h-screen p-6">
+    <div className="min-h-screen p-6 pb-32">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <button
-            onClick={handleLeave}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-          >
+          <button onClick={handleLeave} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
             <ArrowLeft className="w-6 h-6" />
           </button>
           <div>
@@ -95,9 +106,7 @@ function GameLobby() {
           <button
             onClick={handleCopyCode}
             className={`p-3 rounded-xl transition-all ${
-              copied 
-                ? 'bg-green-500/20 text-green-400' 
-                : 'bg-white/10 hover:bg-white/20 text-white'
+              copied ? 'bg-green-500/20 text-green-400' : 'bg-white/10 hover:bg-white/20'
             }`}
           >
             {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
@@ -114,39 +123,81 @@ function GameLobby() {
       
       {/* Game Settings */}
       <div className="card p-4 mb-6">
-        <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-3">
-          Game Settings
-        </h3>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="text-center p-2 bg-white/5 rounded-lg">
-            <Clock className="w-4 h-4 mx-auto text-neon-cyan mb-1" />
-            <p className="text-sm font-medium">
-              {(currentGame.settings?.gpsInterval || 10000) / 1000}s
-            </p>
-            <p className="text-xs text-white/40">GPS Update</p>
+        <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-3">Game Settings</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 bg-white/5 rounded-lg">
+            <div className="flex items-center gap-2 mb-1">
+              <Clock className="w-4 h-4 text-neon-cyan" />
+              <span className="text-xs text-white/50">GPS Update</span>
+            </div>
+            <p className="font-medium">{formatInterval(currentGame.settings?.gpsInterval)}</p>
           </div>
-          <div className="text-center p-2 bg-white/5 rounded-lg">
-            <Target className="w-4 h-4 mx-auto text-neon-purple mb-1" />
-            <p className="text-sm font-medium">
-              {currentGame.settings?.tagRadius || 20}m
-            </p>
-            <p className="text-xs text-white/40">Tag Radius</p>
+          <div className="p-3 bg-white/5 rounded-lg">
+            <div className="flex items-center gap-2 mb-1">
+              <Target className="w-4 h-4 text-neon-purple" />
+              <span className="text-xs text-white/50">Tag Radius</span>
+            </div>
+            <p className="font-medium">{currentGame.settings?.tagRadius}m</p>
           </div>
-          <div className="text-center p-2 bg-white/5 rounded-lg">
-            <Users className="w-4 h-4 mx-auto text-neon-orange mb-1" />
-            <p className="text-sm font-medium">
-              {currentGame.settings?.maxPlayers || 10}
-            </p>
-            <p className="text-xs text-white/40">Max Players</p>
+          <div className="p-3 bg-white/5 rounded-lg">
+            <div className="flex items-center gap-2 mb-1">
+              <Users className="w-4 h-4 text-neon-orange" />
+              <span className="text-xs text-white/50">Max Players</span>
+            </div>
+            <p className="font-medium">{currentGame.settings?.maxPlayers}</p>
+          </div>
+          <div className="p-3 bg-white/5 rounded-lg">
+            <div className="flex items-center gap-2 mb-1">
+              <Clock className="w-4 h-4 text-amber-400" />
+              <span className="text-xs text-white/50">Duration</span>
+            </div>
+            <p className="font-medium">{formatDuration(currentGame.settings?.duration)}</p>
           </div>
         </div>
+        
+        {/* No-Tag Zones */}
+        {currentGame.settings?.noTagZones?.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="flex items-center gap-2 mb-2">
+              <Shield className="w-4 h-4 text-green-400" />
+              <span className="text-sm font-medium text-green-400">Safe Zones ({currentGame.settings.noTagZones.length})</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {currentGame.settings.noTagZones.map((zone) => (
+                <span key={zone.id} className="text-xs bg-green-400/10 text-green-400 px-2 py-1 rounded-full">
+                  {zone.name} ({zone.radius}m)
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* No-Tag Times */}
+        {currentGame.settings?.noTagTimes?.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="flex items-center gap-2 mb-2">
+              <Calendar className="w-4 h-4 text-blue-400" />
+              <span className="text-sm font-medium text-blue-400">Protected Times ({currentGame.settings.noTagTimes.length})</span>
+            </div>
+            <div className="space-y-1">
+              {currentGame.settings.noTagTimes.map((time) => (
+                <div key={time.id} className="text-xs bg-blue-400/10 text-blue-400 px-2 py-1 rounded-lg">
+                  <span className="font-medium">{time.name}:</span> {time.startTime} - {time.endTime}
+                  <span className="text-blue-400/60 ml-1">
+                    ({time.days.length === 7 ? 'Daily' : time.days.map(d => daysOfWeek[d]).join(', ')})
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       
       {/* Players List */}
       <div className="card p-4 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider">
-            Players ({playerCount}/{currentGame.settings?.maxPlayers || 10})
+            Players ({playerCount}/{currentGame.settings?.maxPlayers})
           </h3>
           <button
             onClick={() => setShowInvite(true)}
@@ -167,15 +218,11 @@ function GameLobby() {
                   : 'bg-white/5'
               }`}
             >
-              <div className="text-2xl">
-                {player.avatar || '👤'}
-              </div>
+              <div className="text-2xl">{player.avatar || '👤'}</div>
               <div className="flex-1">
                 <p className="font-medium">
                   {player.name}
-                  {player.id === user?.id && (
-                    <span className="text-neon-cyan ml-2">(You)</span>
-                  )}
+                  {player.id === user?.id && <span className="text-neon-cyan ml-2">(You)</span>}
                 </p>
                 <p className="text-xs text-white/40">
                   {player.id === currentGame.host ? '👑 Host' : 'Player'}
@@ -224,9 +271,7 @@ function GameLobby() {
       {countdown !== null && (
         <div className="fixed inset-0 z-50 bg-dark-900/95 flex items-center justify-center">
           <div className="text-center animate-pulse">
-            <div className="text-9xl font-display font-bold text-neon-cyan mb-4">
-              {countdown}
-            </div>
+            <div className="text-9xl font-display font-bold text-neon-cyan mb-4">{countdown}</div>
             <p className="text-2xl text-white/60">Get Ready!</p>
           </div>
         </div>
@@ -234,10 +279,7 @@ function GameLobby() {
       
       {/* Invite Modal */}
       {showInvite && (
-        <InviteModal
-          gameCode={currentGame.code}
-          onClose={() => setShowInvite(false)}
-        />
+        <InviteModal gameCode={currentGame.code} onClose={() => setShowInvite(false)} />
       )}
     </div>
   );
