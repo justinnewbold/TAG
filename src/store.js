@@ -79,21 +79,82 @@ export const ACHIEVEMENTS = {
   },
 };
 
+// Helper to check if current time is in a no-tag period
+export const isInNoTagTime = (noTagTimes) => {
+  if (!noTagTimes || noTagTimes.length === 0) return false;
+  
+  const now = new Date();
+  const currentDay = now.getDay();
+  const currentTime = now.getHours() * 60 + now.getMinutes();
+  
+  return noTagTimes.some(rule => {
+    // Check if current day is included
+    if (!rule.days.includes(currentDay)) return false;
+    
+    // Parse times
+    const [startHour, startMin] = rule.startTime.split(':').map(Number);
+    const [endHour, endMin] = rule.endTime.split(':').map(Number);
+    const startMins = startHour * 60 + startMin;
+    const endMins = endHour * 60 + endMin;
+    
+    // Handle overnight times (e.g., 22:00 - 06:00)
+    if (endMins < startMins) {
+      return currentTime >= startMins || currentTime <= endMins;
+    }
+    
+    return currentTime >= startMins && currentTime <= endMins;
+  });
+};
+
+// Helper to check if location is in a no-tag zone
+export const isInNoTagZone = (location, noTagZones) => {
+  if (!location || !noTagZones || noTagZones.length === 0) return false;
+  
+  const getDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371e3;
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lng2 - lng1) * Math.PI) / 180;
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+  
+  return noTagZones.some(zone => {
+    const distance = getDistance(location.lat, location.lng, zone.lat, zone.lng);
+    return distance <= zone.radius;
+  });
+};
+
+// Check if tagging is currently allowed
+export const canTagNow = (game, taggerLocation, targetLocation) => {
+  // Check no-tag times
+  if (isInNoTagTime(game?.settings?.noTagTimes)) {
+    return { allowed: false, reason: 'No-tag time period active' };
+  }
+  
+  // Check if tagger is in no-tag zone
+  if (isInNoTagZone(taggerLocation, game?.settings?.noTagZones)) {
+    return { allowed: false, reason: 'You are in a safe zone' };
+  }
+  
+  // Check if target is in no-tag zone
+  if (isInNoTagZone(targetLocation, game?.settings?.noTagZones)) {
+    return { allowed: false, reason: 'Target is in a safe zone' };
+  }
+  
+  return { allowed: true, reason: null };
+};
+
 // Initial state
 const initialState = {
-  // User
   user: null,
-  
-  // Current game
   currentGame: null,
-  
-  // All games (history)
   games: [],
-  
-  // Friends list
   friends: [],
-  
-  // User stats
   stats: {
     gamesPlayed: 0,
     gamesWon: 0,
@@ -105,12 +166,8 @@ const initialState = {
     fastestTag: null,
     playedAtNight: false,
   },
-  
-  // Achievements
   achievements: [],
   newAchievement: null,
-  
-  // App settings
   settings: {
     notifications: true,
     sound: true,
@@ -119,8 +176,6 @@ const initialState = {
     darkMode: true,
     showDistance: true,
   },
-  
-  // Pending invites
   pendingInvites: [],
 };
 
@@ -173,11 +228,13 @@ export const useStore = create(
           hostName: user?.name,
           status: 'waiting',
           settings: {
-            gpsInterval: settings.gpsInterval || 10000,
+            gpsInterval: settings.gpsInterval || 5 * 60 * 1000, // Default 5 minutes
             tagRadius: settings.tagRadius || 20,
             duration: settings.duration || null,
             maxPlayers: settings.maxPlayers || 10,
             gameName: settings.gameName || `${user?.name}'s Game`,
+            noTagZones: settings.noTagZones || [],
+            noTagTimes: settings.noTagTimes || [],
           },
           players: [{
             ...user,
@@ -209,12 +266,10 @@ export const useStore = create(
           const game = state.games.find(g => g.code === gameCode);
           if (!game || game.status !== 'waiting') return state;
           
-          // Check if already in game
           if (game.players.some(p => p.id === user.id)) {
             return { currentGame: game };
           }
           
-          // Check max players
           if (game.players.length >= game.settings.maxPlayers) {
             return state;
           }
@@ -246,7 +301,6 @@ export const useStore = create(
         set((state) => {
           if (!state.currentGame) return state;
           
-          // Randomly select IT
           const players = state.currentGame.players;
           const itIndex = Math.floor(Math.random() * players.length);
           const itPlayerId = players[itIndex].id;
@@ -263,7 +317,6 @@ export const useStore = create(
             })),
           };
           
-          // Track night play
           const newStats = { ...state.stats };
           if (isNight) {
             newStats.playedAtNight = true;
@@ -280,13 +333,25 @@ export const useStore = create(
       },
       
       tagPlayer: (taggedPlayerId) => {
+        const state = get();
+        const currentGame = state.currentGame;
+        
+        if (!currentGame || currentGame.status !== 'active') return { success: false };
+        
+        // Check no-tag rules
+        const tagger = currentGame.players.find(p => p.id === currentGame.itPlayerId);
+        const target = currentGame.players.find(p => p.id === taggedPlayerId);
+        
+        const tagCheck = canTagNow(currentGame, tagger?.location, target?.location);
+        if (!tagCheck.allowed) {
+          return { success: false, reason: tagCheck.reason };
+        }
+        
         set((state) => {
-          if (!state.currentGame || state.currentGame.status !== 'active') return state;
-          
           const now = Date.now();
           const taggerId = state.currentGame.itPlayerId;
-          const tagger = state.currentGame.players.find(p => p.id === taggerId);
-          const tagTime = tagger?.becameItAt ? now - tagger.becameItAt : null;
+          const currentTagger = state.currentGame.players.find(p => p.id === taggerId);
+          const tagTime = currentTagger?.becameItAt ? now - currentTagger.becameItAt : null;
           
           const tag = {
             id: generateId(),
@@ -311,7 +376,6 @@ export const useStore = create(
             })),
           };
           
-          // Update stats
           const newStats = { ...state.stats };
           if (taggerId === state.user?.id) {
             newStats.totalTags += 1;
@@ -331,6 +395,7 @@ export const useStore = create(
         });
         
         get().checkAchievements();
+        return { success: true };
       },
       
       endGame: (winnerId = null) => {
@@ -340,13 +405,11 @@ export const useStore = create(
           const now = Date.now();
           const gameTime = state.currentGame.startedAt ? now - state.currentGame.startedAt : 0;
           
-          // Calculate survival times
           const playerStats = state.currentGame.players.map(p => ({
             ...p,
             finalSurvivalTime: p.isIt ? 0 : gameTime - (p.becameItAt || 0),
           }));
           
-          // Find winner (longest survivor who isn't IT)
           const actualWinner = winnerId || playerStats
             .filter(p => !p.isIt)
             .sort((a, b) => b.finalSurvivalTime - a.finalSurvivalTime)[0]?.id;
@@ -359,7 +422,6 @@ export const useStore = create(
             players: playerStats,
           };
           
-          // Update stats
           const newStats = { ...state.stats };
           newStats.gamesPlayed += 1;
           newStats.totalPlayTime += gameTime;
@@ -368,13 +430,11 @@ export const useStore = create(
             newStats.gamesWon += 1;
           }
           
-          // Calculate user's survival time
           const userPlayer = playerStats.find(p => p.id === state.user?.id);
           if (userPlayer && userPlayer.finalSurvivalTime > newStats.longestSurvival) {
             newStats.longestSurvival = userPlayer.finalSurvivalTime;
           }
           
-          // Count unique friends
           const friendIds = new Set();
           state.games.forEach(g => {
             g.players.forEach(p => {
@@ -427,7 +487,7 @@ export const useStore = create(
         });
       },
       
-      // Simulate other players (for demo)
+      // Demo players
       addDemoPlayers: () => {
         set((state) => {
           if (!state.currentGame || !state.user?.location) return state;
@@ -440,7 +500,7 @@ export const useStore = create(
               id: 'demo1',
               name: 'Alex',
               avatar: '🏃',
-              location: { lat: baseLat + 0.0003, lng: baseLng + 0.0002 },
+              location: { lat: baseLat + 0.001, lng: baseLng + 0.001 },
               isIt: false,
               joinedAt: Date.now(),
               lastUpdate: Date.now(),
@@ -451,7 +511,7 @@ export const useStore = create(
               id: 'demo2',
               name: 'Sam',
               avatar: '🏃‍♀️',
-              location: { lat: baseLat - 0.0002, lng: baseLng + 0.0004 },
+              location: { lat: baseLat - 0.001, lng: baseLng + 0.002 },
               isIt: false,
               joinedAt: Date.now(),
               lastUpdate: Date.now(),
@@ -462,7 +522,7 @@ export const useStore = create(
               id: 'demo3',
               name: 'Jordan',
               avatar: '🏃‍♂️',
-              location: { lat: baseLat + 0.0001, lng: baseLng - 0.0003 },
+              location: { lat: baseLat + 0.0005, lng: baseLng - 0.001 },
               isIt: false,
               joinedAt: Date.now(),
               lastUpdate: Date.now(),
@@ -512,12 +572,10 @@ export const useStore = create(
         settings: { ...state.settings, ...newSettings },
       })),
       
-      // Delete game history
       clearGameHistory: () => set((state) => ({
         games: state.games.filter(g => g.id === state.currentGame?.id),
       })),
       
-      // Reset
       reset: () => set(initialState),
       
       logout: () => set({
@@ -546,48 +604,57 @@ export const useSounds = () => {
   const playSound = (soundName) => {
     if (!settings.sound) return;
     
-    // Using web audio API for simple sounds
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-    
-    switch (soundName) {
-      case 'tag':
-        oscillator.frequency.value = 800;
-        gainNode.gain.value = 0.3;
-        oscillator.start();
-        oscillator.stop(ctx.currentTime + 0.1);
-        break;
-      case 'tagged':
-        oscillator.frequency.value = 300;
-        gainNode.gain.value = 0.3;
-        oscillator.start();
-        oscillator.stop(ctx.currentTime + 0.3);
-        break;
-      case 'gameStart':
-        oscillator.frequency.value = 440;
-        gainNode.gain.value = 0.2;
-        oscillator.start();
-        oscillator.frequency.linearRampToValueAtTime(880, ctx.currentTime + 0.2);
-        oscillator.stop(ctx.currentTime + 0.3);
-        break;
-      case 'achievement':
-        oscillator.type = 'triangle';
-        oscillator.frequency.value = 523;
-        gainNode.gain.value = 0.2;
-        oscillator.start();
-        oscillator.frequency.setValueAtTime(659, ctx.currentTime + 0.1);
-        oscillator.frequency.setValueAtTime(784, ctx.currentTime + 0.2);
-        oscillator.stop(ctx.currentTime + 0.4);
-        break;
-      default:
-        oscillator.frequency.value = 440;
-        gainNode.gain.value = 0.1;
-        oscillator.start();
-        oscillator.stop(ctx.currentTime + 0.1);
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      switch (soundName) {
+        case 'tag':
+          oscillator.frequency.value = 800;
+          gainNode.gain.value = 0.3;
+          oscillator.start();
+          oscillator.stop(ctx.currentTime + 0.1);
+          break;
+        case 'tagged':
+          oscillator.frequency.value = 300;
+          gainNode.gain.value = 0.3;
+          oscillator.start();
+          oscillator.stop(ctx.currentTime + 0.3);
+          break;
+        case 'gameStart':
+          oscillator.frequency.value = 440;
+          gainNode.gain.value = 0.2;
+          oscillator.start();
+          oscillator.frequency.linearRampToValueAtTime(880, ctx.currentTime + 0.2);
+          oscillator.stop(ctx.currentTime + 0.3);
+          break;
+        case 'achievement':
+          oscillator.type = 'triangle';
+          oscillator.frequency.value = 523;
+          gainNode.gain.value = 0.2;
+          oscillator.start();
+          oscillator.frequency.setValueAtTime(659, ctx.currentTime + 0.1);
+          oscillator.frequency.setValueAtTime(784, ctx.currentTime + 0.2);
+          oscillator.stop(ctx.currentTime + 0.4);
+          break;
+        case 'error':
+          oscillator.frequency.value = 200;
+          gainNode.gain.value = 0.2;
+          oscillator.start();
+          oscillator.stop(ctx.currentTime + 0.2);
+          break;
+        default:
+          oscillator.frequency.value = 440;
+          gainNode.gain.value = 0.1;
+          oscillator.start();
+          oscillator.stop(ctx.currentTime + 0.1);
+      }
+    } catch (e) {
+      // Audio context not available
     }
   };
   
