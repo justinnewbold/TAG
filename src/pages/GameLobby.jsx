@@ -1,61 +1,58 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Copy, Share2, Mail, MessageSquare, Users, Play, UserPlus, X } from 'lucide-react';
-import { useStore } from '../store';
+import { ArrowLeft, Users, Copy, Check, Play, UserPlus, Settings, Clock, Target, MapPin, X, Share2 } from 'lucide-react';
+import { useStore, useSounds } from '../store';
+import InviteModal from '../components/InviteModal';
 
 function GameLobby() {
   const navigate = useNavigate();
   const { currentGame, user, startGame, leaveGame, addDemoPlayers } = useStore();
-  const [showInvite, setShowInvite] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [invitePhone, setInvitePhone] = useState('');
+  const { playSound, vibrate } = useSounds();
   const [copied, setCopied] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [countdown, setCountdown] = useState(null);
   
-  if (!currentGame) {
-    navigate('/');
-    return null;
-  }
+  const isHost = currentGame?.host === user?.id;
+  const playerCount = currentGame?.players?.length || 0;
+  const canStart = playerCount >= 2;
   
-  const isHost = currentGame.host === user?.id;
-  const canStart = currentGame.players.length >= 2;
+  // Auto-add demo players for testing
+  useEffect(() => {
+    if (isHost && playerCount === 1 && user?.location) {
+      const timer = setTimeout(() => {
+        addDemoPlayers();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isHost, playerCount, user?.location]);
   
-  const copyCode = async () => {
-    await navigator.clipboard.writeText(currentGame.code);
+  const handleCopyCode = async () => {
+    await navigator.clipboard.writeText(currentGame?.code || '');
     setCopied(true);
+    vibrate([50]);
     setTimeout(() => setCopied(false), 2000);
   };
   
-  const shareGame = async () => {
-    const shareData = {
-      title: 'Join my TAG! game',
-      text: `Join my game of TAG! Use code: ${currentGame.code}`,
-      url: `${window.location.origin}/join?code=${currentGame.code}`,
-    };
+  const handleStartGame = () => {
+    if (!canStart) return;
     
-    if (navigator.share) {
-      await navigator.share(shareData);
-    } else {
-      copyCode();
-    }
-  };
-  
-  const sendInvite = (type) => {
-    const message = `Join my game of TAG! Use code: ${currentGame.code} - ${window.location.origin}/join`;
+    // Countdown animation
+    setCountdown(3);
+    playSound('gameStart');
+    vibrate([100, 100, 100, 100, 100, 100, 300]);
     
-    if (type === 'email' && inviteEmail) {
-      window.open(`mailto:${inviteEmail}?subject=Join my TAG! game&body=${encodeURIComponent(message)}`);
-      setInviteEmail('');
-    } else if (type === 'sms' && invitePhone) {
-      window.open(`sms:${invitePhone}?body=${encodeURIComponent(message)}`);
-      setInvitePhone('');
-    }
-    
-    setShowInvite(false);
-  };
-  
-  const handleStart = () => {
-    startGame();
-    navigate('/game');
+    const countdownInterval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval);
+          startGame();
+          navigate('/game');
+          return null;
+        }
+        playSound('tag');
+        return prev - 1;
+      });
+    }, 1000);
   };
   
   const handleLeave = () => {
@@ -63,205 +60,184 @@ function GameLobby() {
     navigate('/');
   };
   
-  // For demo: add some fake players
-  const handleAddDemo = () => {
-    addDemoPlayers();
-  };
+  if (!currentGame) {
+    navigate('/');
+    return null;
+  }
   
   return (
-    <div className="p-6 max-w-md mx-auto">
+    <div className="min-h-screen p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <button onClick={handleLeave} className="p-2 hover:bg-white/10 rounded-xl transition-all">
+          <button
+            onClick={handleLeave}
+            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+          >
             <ArrowLeft className="w-6 h-6" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold">Game Lobby</h1>
-            <p className="text-white/50 text-sm">Waiting for players...</p>
+            <h1 className="text-xl font-display font-bold">
+              {currentGame.settings?.gameName || 'Game Lobby'}
+            </h1>
+            <p className="text-sm text-white/50">Waiting for players...</p>
           </div>
         </div>
       </div>
       
-      {/* Game Code */}
-      <div className="card-glow p-6 mb-6 text-center">
+      {/* Game Code Card */}
+      <div className="card-glow p-6 mb-6 text-center bg-gradient-to-b from-neon-cyan/10 to-transparent">
         <p className="text-sm text-white/50 mb-2">Game Code</p>
         <div className="flex items-center justify-center gap-4">
-          <span className="text-4xl font-bold tracking-[0.3em] text-neon-cyan">
+          <span className="text-4xl font-display font-bold tracking-widest text-neon-cyan">
             {currentGame.code}
           </span>
           <button
-            onClick={copyCode}
-            className="p-2 hover:bg-white/10 rounded-lg transition-all"
+            onClick={handleCopyCode}
+            className={`p-3 rounded-xl transition-all ${
+              copied 
+                ? 'bg-green-500/20 text-green-400' 
+                : 'bg-white/10 hover:bg-white/20 text-white'
+            }`}
           >
-            <Copy className={`w-5 h-5 ${copied ? 'text-neon-green' : ''}`} />
+            {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
           </button>
         </div>
-        {copied && <p className="text-neon-green text-sm mt-2">Copied!</p>}
-        
-        <div className="flex gap-2 mt-4 justify-center">
-          <button onClick={shareGame} className="btn-secondary flex items-center gap-2 text-sm">
-            <Share2 className="w-4 h-4" />
-            Share
-          </button>
-          <button onClick={() => setShowInvite(true)} className="btn-secondary flex items-center gap-2 text-sm">
-            <UserPlus className="w-4 h-4" />
-            Invite
-          </button>
-        </div>
+        <button
+          onClick={() => setShowInvite(true)}
+          className="mt-4 text-sm text-neon-cyan hover:underline flex items-center justify-center gap-2 mx-auto"
+        >
+          <Share2 className="w-4 h-4" />
+          Share invite link
+        </button>
       </div>
       
       {/* Game Settings */}
       <div className="card p-4 mb-6">
-        <h3 className="font-semibold mb-3 flex items-center gap-2">
-          <span className="text-white/50">⚙️</span> Game Settings
+        <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-3">
+          Game Settings
         </h3>
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <p className="text-white/50">GPS Interval</p>
-            <p className="font-medium">{currentGame.settings.gpsInterval / 1000}s</p>
-          </div>
-          <div>
-            <p className="text-white/50">Tag Radius</p>
-            <p className="font-medium">{currentGame.settings.tagRadius}m</p>
-          </div>
-          <div>
-            <p className="text-white/50">Duration</p>
-            <p className="font-medium">
-              {currentGame.settings.duration
-                ? `${currentGame.settings.duration / 60000} min`
-                : 'Unlimited'}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="text-center p-2 bg-white/5 rounded-lg">
+            <Clock className="w-4 h-4 mx-auto text-neon-cyan mb-1" />
+            <p className="text-sm font-medium">
+              {(currentGame.settings?.gpsInterval || 10000) / 1000}s
             </p>
+            <p className="text-xs text-white/40">GPS Update</p>
           </div>
-          <div>
-            <p className="text-white/50">Max Players</p>
-            <p className="font-medium">{currentGame.settings.maxPlayers}</p>
+          <div className="text-center p-2 bg-white/5 rounded-lg">
+            <Target className="w-4 h-4 mx-auto text-neon-purple mb-1" />
+            <p className="text-sm font-medium">
+              {currentGame.settings?.tagRadius || 20}m
+            </p>
+            <p className="text-xs text-white/40">Tag Radius</p>
+          </div>
+          <div className="text-center p-2 bg-white/5 rounded-lg">
+            <Users className="w-4 h-4 mx-auto text-neon-orange mb-1" />
+            <p className="text-sm font-medium">
+              {currentGame.settings?.maxPlayers || 10}
+            </p>
+            <p className="text-xs text-white/40">Max Players</p>
           </div>
         </div>
       </div>
       
-      {/* Players */}
+      {/* Players List */}
       <div className="card p-4 mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold flex items-center gap-2">
-            <Users className="w-5 h-5 text-neon-cyan" />
-            Players ({currentGame.players.length})
+          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider">
+            Players ({playerCount}/{currentGame.settings?.maxPlayers || 10})
           </h3>
-          {/* Demo button for testing */}
           <button
-            onClick={handleAddDemo}
-            className="text-xs text-white/40 hover:text-white/60"
+            onClick={() => setShowInvite(true)}
+            className="text-sm text-neon-cyan hover:underline flex items-center gap-1"
           >
-            + Add Demo Players
+            <UserPlus className="w-4 h-4" />
+            Invite
           </button>
         </div>
         
-        <div className="space-y-2">
-          {currentGame.players.map((player) => (
+        <div className="space-y-3">
+          {currentGame.players?.map((player) => (
             <div
               key={player.id}
-              className="flex items-center gap-3 p-3 bg-dark-700/50 rounded-xl"
+              className={`flex items-center gap-3 p-3 rounded-xl ${
+                player.id === user?.id 
+                  ? 'bg-neon-cyan/10 border border-neon-cyan/30' 
+                  : 'bg-white/5'
+              }`}
             >
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-neon-cyan to-neon-purple flex items-center justify-center text-lg">
-                {player.avatar || '😎'}
+              <div className="text-2xl">
+                {player.avatar || '👤'}
               </div>
               <div className="flex-1">
                 <p className="font-medium">
                   {player.name}
-                  {player.id === user?.id && <span className="text-neon-cyan text-sm ml-2">(You)</span>}
-                  {player.id === currentGame.host && <span className="text-neon-orange text-sm ml-2">👑</span>}
+                  {player.id === user?.id && (
+                    <span className="text-neon-cyan ml-2">(You)</span>
+                  )}
                 </p>
                 <p className="text-xs text-white/40">
-                  {player.location ? '📍 Location ready' : '⏳ Getting location...'}
+                  {player.id === currentGame.host ? '👑 Host' : 'Player'}
                 </p>
               </div>
+              {player.location && (
+                <div className="flex items-center gap-1 text-green-400">
+                  <MapPin className="w-4 h-4" />
+                  <span className="text-xs">Ready</span>
+                </div>
+              )}
             </div>
           ))}
         </div>
+        
+        {playerCount < 2 && (
+          <p className="text-center text-sm text-white/40 mt-4 py-4 border-t border-white/10">
+            Need at least 2 players to start
+          </p>
+        )}
       </div>
       
-      {/* Actions */}
-      {isHost ? (
+      {/* Start Button */}
+      {isHost && (
         <button
-          onClick={handleStart}
+          onClick={handleStartGame}
           disabled={!canStart}
-          className="btn-primary w-full flex items-center justify-center gap-2"
+          className={`w-full p-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all ${
+            canStart
+              ? 'bg-gradient-to-r from-neon-cyan to-neon-purple hover:opacity-90'
+              : 'bg-white/10 text-white/40 cursor-not-allowed'
+          }`}
         >
-          <Play className="w-5 h-5" />
-          {canStart ? 'Start Game' : 'Need at least 2 players'}
+          <Play className="w-6 h-6" />
+          {canStart ? 'Start Game' : `Waiting for ${2 - playerCount} more player${2 - playerCount > 1 ? 's' : ''}`}
         </button>
-      ) : (
-        <div className="text-center text-white/50">
-          Waiting for host to start the game...
+      )}
+      
+      {!isHost && (
+        <div className="text-center p-4 card">
+          <p className="text-white/60">Waiting for host to start the game...</p>
         </div>
       )}
       
-      <button onClick={handleLeave} className="btn-danger w-full mt-3">
-        Leave Game
-      </button>
+      {/* Countdown Overlay */}
+      {countdown !== null && (
+        <div className="fixed inset-0 z-50 bg-dark-900/95 flex items-center justify-center">
+          <div className="text-center animate-pulse">
+            <div className="text-9xl font-display font-bold text-neon-cyan mb-4">
+              {countdown}
+            </div>
+            <p className="text-2xl text-white/60">Get Ready!</p>
+          </div>
+        </div>
+      )}
       
       {/* Invite Modal */}
       {showInvite && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
-          <div className="card-glow p-6 w-full max-w-md animate-slide-up">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">Invite Friends</h2>
-              <button onClick={() => setShowInvite(false)} className="p-2 hover:bg-white/10 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              {/* Email invite */}
-              <div>
-                <label className="label flex items-center gap-2">
-                  <Mail className="w-4 h-4" />
-                  Email Invite
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="friend@email.com"
-                    className="input-field flex-1"
-                  />
-                  <button
-                    onClick={() => sendInvite('email')}
-                    disabled={!inviteEmail}
-                    className="btn-primary"
-                  >
-                    Send
-                  </button>
-                </div>
-              </div>
-              
-              {/* SMS invite */}
-              <div>
-                <label className="label flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  SMS Invite
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="tel"
-                    value={invitePhone}
-                    onChange={(e) => setInvitePhone(e.target.value)}
-                    placeholder="+1 (555) 000-0000"
-                    className="input-field flex-1"
-                  />
-                  <button
-                    onClick={() => sendInvite('sms')}
-                    disabled={!invitePhone}
-                    className="btn-primary"
-                  >
-                    Send
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <InviteModal
+          gameCode={currentGame.code}
+          onClose={() => setShowInvite(false)}
+        />
       )}
     </div>
   );
