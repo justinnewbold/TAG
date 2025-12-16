@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { useStore } from './store';
 
 // Pages
@@ -11,10 +11,14 @@ import ActiveGame from './pages/ActiveGame';
 import Stats from './pages/Stats';
 import Friends from './pages/Friends';
 import Settings from './pages/Settings';
+import GameHistory from './pages/GameHistory';
+import Leaderboards from './pages/Leaderboards';
+import Achievements from './pages/Achievements';
 
 // Components
 import Navigation from './components/Navigation';
 import SignupModal from './components/SignupModal';
+import AchievementToast from './components/AchievementToast';
 
 function App() {
   const { user, currentGame } = useStore();
@@ -45,10 +49,22 @@ function App() {
     }
   }, [user]);
   
+  // Register service worker for PWA
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  }, []);
+  
   return (
     <div className="min-h-screen bg-dark-900 text-white">
       {/* Background gradient */}
       <div className="fixed inset-0 bg-gradient-to-br from-neon-purple/5 via-transparent to-neon-cyan/5 pointer-events-none" />
+      
+      {/* Achievement Toast */}
+      <AchievementToast />
       
       {/* Main content */}
       <main className="relative pb-24">
@@ -61,6 +77,9 @@ function App() {
           <Route path="/stats" element={<Stats />} />
           <Route path="/friends" element={<Friends />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/history" element={<GameHistory />} />
+          <Route path="/leaderboards" element={<Leaderboards />} />
+          <Route path="/achievements" element={<Achievements />} />
         </Routes>
       </main>
       
