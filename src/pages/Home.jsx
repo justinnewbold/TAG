@@ -1,51 +1,52 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users, MapPin, Timer, Target, Zap, Trophy } from 'lucide-react';
-import { useStore } from '../store';
+import { Plus, Users, MapPin, Timer, Target, Trophy, Award, History, Crown } from 'lucide-react';
+import { useStore, ACHIEVEMENTS } from '../store';
 
 function Home() {
   const navigate = useNavigate();
-  const { user, currentGame, stats } = useStore();
+  const { user, currentGame, stats, achievements, games } = useStore();
+  
+  const completedGames = games.filter(g => g.status === 'ended').length;
+  const unlockedAchievements = achievements.length;
+  const totalAchievements = Object.keys(ACHIEVEMENTS).length;
   
   return (
-    <div className="p-6 max-w-md mx-auto">
+    <div className="min-h-screen p-6">
       {/* Header */}
-      <div className="text-center py-8">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-neon-cyan to-neon-purple mb-4 animate-pulse-glow">
-          <Zap className="w-10 h-10 text-white" />
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-display font-bold">
+            <span className="text-neon-cyan">TAG</span>
+            <span className="text-neon-purple">!</span>
+          </h1>
+          <p className="text-white/50 text-sm">Hunt your friends</p>
         </div>
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-neon-cyan to-neon-purple bg-clip-text text-transparent">
-          TAG!
-        </h1>
-        <p className="text-white/60 mt-2">Hunt your friends in the real world</p>
-      </div>
-      
-      {/* User greeting */}
-      {user && (
-        <div className="card p-4 mb-6">
+        
+        {user && (
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-neon-cyan to-neon-purple flex items-center justify-center text-2xl">
-              {user.avatar}
+            <div className="text-right">
+              <p className="font-medium">{user.name}</p>
+              <p className="text-xs text-white/50">{stats.gamesWon} wins</p>
             </div>
-            <div>
-              <p className="font-semibold">{user.name}</p>
-              <p className="text-sm text-white/50">
-                {stats.gamesPlayed} games • {stats.totalTags} tags
-              </p>
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center text-2xl">
+              {user.avatar || '👤'}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
       
-      {/* Current game status */}
+      {/* Active Game Banner */}
       {currentGame && (
-        <div className="card-glow p-4 mb-6">
+        <div className="card-glow p-4 mb-6 bg-gradient-to-r from-neon-cyan/10 to-neon-purple/10">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-neon-cyan">Active Game</p>
-              <p className="font-bold text-lg">Code: {currentGame.code}</p>
+              <p className="text-sm text-neon-cyan font-medium">
+                {currentGame.status === 'active' ? '🎮 Game in Progress' : '⏳ Waiting in Lobby'}
+              </p>
+              <p className="text-lg font-bold">{currentGame.settings?.gameName || `Game ${currentGame.code}`}</p>
               <p className="text-sm text-white/50">
-                {currentGame.players.length} player{currentGame.players.length !== 1 ? 's' : ''}
+                {currentGame.players?.length || 0} player{currentGame.players?.length !== 1 ? 's' : ''}
               </p>
             </div>
             <button
@@ -58,7 +59,31 @@ function Home() {
         </div>
       )}
       
-      {/* Main actions */}
+      {/* Quick Stats */}
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        <div className="card p-3 text-center">
+          <Trophy className="w-5 h-5 mx-auto text-neon-cyan mb-1" />
+          <p className="text-xl font-bold">{stats.gamesWon}</p>
+          <p className="text-xs text-white/40">Wins</p>
+        </div>
+        <div className="card p-3 text-center">
+          <Target className="w-5 h-5 mx-auto text-neon-purple mb-1" />
+          <p className="text-xl font-bold">{stats.totalTags}</p>
+          <p className="text-xs text-white/40">Tags</p>
+        </div>
+        <div className="card p-3 text-center">
+          <History className="w-5 h-5 mx-auto text-neon-orange mb-1" />
+          <p className="text-xl font-bold">{completedGames}</p>
+          <p className="text-xs text-white/40">Games</p>
+        </div>
+        <div className="card p-3 text-center">
+          <Award className="w-5 h-5 mx-auto text-amber-400 mb-1" />
+          <p className="text-xl font-bold">{unlockedAchievements}/{totalAchievements}</p>
+          <p className="text-xs text-white/40">Badges</p>
+        </div>
+      </div>
+      
+      {/* Main Actions */}
       {!currentGame && (
         <div className="space-y-4 mb-8">
           <button
@@ -89,23 +114,60 @@ function Home() {
         </div>
       )}
       
-      {/* Features */}
+      {/* Feature Cards */}
+      <div className="grid grid-cols-2 gap-3 mb-8">
+        <button
+          onClick={() => navigate('/leaderboards')}
+          className="card p-4 text-left hover:bg-white/5 transition-all"
+        >
+          <Crown className="w-6 h-6 text-amber-400 mb-2" />
+          <p className="font-medium">Leaderboards</p>
+          <p className="text-xs text-white/40">See top players</p>
+        </button>
+        
+        <button
+          onClick={() => navigate('/achievements')}
+          className="card p-4 text-left hover:bg-white/5 transition-all"
+        >
+          <Award className="w-6 h-6 text-neon-purple mb-2" />
+          <p className="font-medium">Achievements</p>
+          <p className="text-xs text-white/40">{unlockedAchievements} unlocked</p>
+        </button>
+        
+        <button
+          onClick={() => navigate('/history')}
+          className="card p-4 text-left hover:bg-white/5 transition-all"
+        >
+          <History className="w-6 h-6 text-neon-cyan mb-2" />
+          <p className="font-medium">Game History</p>
+          <p className="text-xs text-white/40">{completedGames} games</p>
+        </button>
+        
+        <button
+          onClick={() => navigate('/friends')}
+          className="card p-4 text-left hover:bg-white/5 transition-all"
+        >
+          <Users className="w-6 h-6 text-neon-orange mb-2" />
+          <p className="font-medium">Friends</p>
+          <p className="text-xs text-white/40">Invite & manage</p>
+        </button>
+      </div>
+      
+      {/* How it Works */}
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider">How it works</h3>
         
         {[
-          { icon: MapPin, title: 'GPS Tracking', desc: 'Real-time location updates', color: 'neon-cyan' },
-          { icon: Timer, title: 'Custom Intervals', desc: 'Set GPS update frequency', color: 'neon-purple' },
-          { icon: Target, title: 'Tag Radius', desc: 'Get close enough to tag', color: 'neon-pink' },
-          { icon: Trophy, title: 'Track Stats', desc: 'Wins, tags, and more', color: 'neon-orange' },
-        ].map((feature, i) => (
-          <div key={i} className="card p-4 flex items-center gap-4">
-            <div className={`p-3 rounded-xl bg-${feature.color}/10`}>
-              <feature.icon className={`w-5 h-5 text-${feature.color}`} />
-            </div>
+          { icon: MapPin, title: 'GPS Tracking', desc: 'Real-time location updates', color: 'text-neon-cyan' },
+          { icon: Timer, title: 'Custom Intervals', desc: 'Set GPS update frequency', color: 'text-neon-purple' },
+          { icon: Target, title: 'Tag Radius', desc: 'Get close to tag others', color: 'text-neon-orange' },
+          { icon: Trophy, title: 'Win & Earn', desc: 'Collect achievements', color: 'text-amber-400' },
+        ].map(({ icon: Icon, title, desc, color }) => (
+          <div key={title} className="flex items-center gap-4 p-3 card">
+            <Icon className={`w-5 h-5 ${color}`} />
             <div>
-              <p className="font-medium">{feature.title}</p>
-              <p className="text-sm text-white/50">{feature.desc}</p>
+              <p className="font-medium text-sm">{title}</p>
+              <p className="text-xs text-white/40">{desc}</p>
             </div>
           </div>
         ))}
