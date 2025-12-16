@@ -1,103 +1,136 @@
 import React, { useState } from 'react';
-import { UserPlus, Zap } from 'lucide-react';
+import { User, MapPin, Check } from 'lucide-react';
 import { useStore } from '../store';
 
 function SignupModal({ onClose }) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
   const { setUser } = useStore();
+  const [name, setName] = useState('');
+  const [avatar, setAvatar] = useState('🏃');
+  const [locationStatus, setLocationStatus] = useState('pending');
+  
+  const avatars = ['🏃', '🏃‍♀️', '🏃‍♂️', '🦊', '🐺', '🦁', '🐯', '🦅', '🦈', '🐉', '👤', '⭐'];
+  
+  const handleRequestLocation = () => {
+    setLocationStatus('requesting');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocationStatus('granted');
+      },
+      (error) => {
+        setLocationStatus('denied');
+      },
+      { enableHighAccuracy: true }
+    );
+  };
   
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
     
-    setUser({
+    const user = {
       id: Math.random().toString(36).substring(2, 9),
       name: name.trim(),
-      email: email.trim() || null,
-      phone: phone.trim() || null,
-      avatar: '😎',
+      avatar,
       createdAt: Date.now(),
-    });
+    };
     
+    setUser(user);
     onClose();
   };
   
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
-      <div className="card-glow p-6 w-full max-w-md animate-slide-up">
-        {/* Header */}
+    <div className="fixed inset-0 z-50 bg-dark-900/95 backdrop-blur-sm flex items-center justify-center p-6">
+      <div className="w-full max-w-md animate-slide-up">
+        {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-neon-cyan to-neon-purple mb-4">
-            <Zap className="w-10 h-10 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-neon-cyan to-neon-purple bg-clip-text text-transparent">
-            TAG!
+          <h1 className="text-5xl font-display font-bold mb-2">
+            <span className="text-neon-cyan">TAG</span>
+            <span className="text-neon-purple">!</span>
           </h1>
-          <p className="text-white/60 mt-2">The GPS Hunter Game</p>
+          <p className="text-white/60">Hunt your friends with GPS</p>
         </div>
         
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="card-glow p-6 space-y-6">
           <div>
-            <label className="label">Your Name *</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter your name"
-              className="input-field"
-              autoFocus
-              required
-            />
+            <label className="label">Your Name</label>
+            <div className="relative">
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your name"
+                className="input-field pl-12"
+                maxLength={20}
+                autoFocus
+                required
+              />
+            </div>
           </div>
           
           <div>
-            <label className="label">Email (for invites)</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              className="input-field"
-            />
+            <label className="label">Choose Avatar</label>
+            <div className="flex flex-wrap gap-2">
+              {avatars.map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => setAvatar(a)}
+                  className={`text-2xl p-3 rounded-xl transition-all ${
+                    avatar === a
+                      ? 'bg-neon-cyan/20 ring-2 ring-neon-cyan scale-110'
+                      : 'bg-white/5 hover:bg-white/10'
+                  }`}
+                >
+                  {a}
+                </button>
+              ))}
+            </div>
           </div>
           
           <div>
-            <label className="label">Phone (for SMS invites)</label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+1 (555) 000-0000"
-              className="input-field"
-            />
+            <label className="label">Location Access</label>
+            <button
+              type="button"
+              onClick={handleRequestLocation}
+              disabled={locationStatus === 'granted'}
+              className={`w-full p-4 rounded-xl flex items-center gap-3 transition-all ${
+                locationStatus === 'granted'
+                  ? 'bg-green-500/20 border border-green-500/50 text-green-400'
+                  : locationStatus === 'denied'
+                  ? 'bg-red-500/20 border border-red-500/50 text-red-400'
+                  : 'bg-white/5 border border-white/10 hover:bg-white/10'
+              }`}
+            >
+              {locationStatus === 'granted' ? (
+                <Check className="w-5 h-5" />
+              ) : (
+                <MapPin className="w-5 h-5" />
+              )}
+              <span className="flex-1 text-left">
+                {locationStatus === 'pending' && 'Enable Location'}
+                {locationStatus === 'requesting' && 'Requesting...'}
+                {locationStatus === 'granted' && 'Location Enabled'}
+                {locationStatus === 'denied' && 'Location Denied - Tap to retry'}
+              </span>
+            </button>
+            <p className="text-xs text-white/40 mt-2">
+              Required to play TAG! Your location is only shared during active games.
+            </p>
           </div>
           
-          <button type="submit" className="btn-primary w-full mt-6 flex items-center justify-center gap-2">
-            <UserPlus className="w-5 h-5" />
-            Let's Play!
+          <button
+            type="submit"
+            disabled={!name.trim()}
+            className="btn-primary w-full py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Start Playing
           </button>
         </form>
         
-        {/* Features */}
-        <div className="mt-8 pt-6 border-t border-white/10">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <div className="text-2xl mb-1">📍</div>
-              <div className="text-xs text-white/50">GPS Tracking</div>
-            </div>
-            <div>
-              <div className="text-2xl mb-1">👥</div>
-              <div className="text-xs text-white/50">Play with Friends</div>
-            </div>
-            <div>
-              <div className="text-2xl mb-1">🏆</div>
-              <div className="text-xs text-white/50">Track Stats</div>
-            </div>
-          </div>
-        </div>
+        <p className="text-center text-xs text-white/30 mt-6">
+          By playing, you agree to share your location with other players during games.
+        </p>
       </div>
     </div>
   );
