@@ -1,143 +1,180 @@
 import React, { useState } from 'react';
-import { UserPlus, X, Mail, Phone, Users, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, UserPlus, Search, Mail, MessageSquare, Users, Send, X, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
 
 function Friends() {
-  const { friends, addFriend, removeFriend } = useStore();
-  const [showAdd, setShowAdd] = useState(false);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const navigate = useNavigate();
+  const { friends, addFriend, removeFriend, games, user } = useStore();
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [inviteValue, setInviteValue] = useState('');
+  const [inviteName, setInviteName] = useState('');
   
-  const handleAdd = (e) => {
-    e.preventDefault();
-    if (!name.trim()) return;
+  const filteredFriends = friends.filter(f =>
+    f.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    f.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
+  // Get friend stats
+  const getFriendStats = (friendId) => {
+    let gamesWithFriend = 0;
+    games.filter(g => g.status === 'ended').forEach(game => {
+      if (game.players?.some(p => p.id === friendId)) {
+        gamesWithFriend++;
+      }
+    });
+    return { gamesPlayed: gamesWithFriend };
+  };
+  
+  const handleInvite = () => {
+    if (!inviteValue.trim() || !inviteName.trim()) return;
     
+    const isEmail = inviteValue.includes('@');
     addFriend({
-      name: name.trim(),
-      email: email.trim() || null,
-      phone: phone.trim() || null,
-      avatar: '👤',
+      name: inviteName,
+      email: isEmail ? inviteValue : null,
+      phone: !isEmail ? inviteValue : null,
+      status: 'invited',
     });
     
-    setName('');
-    setEmail('');
-    setPhone('');
-    setShowAdd(false);
+    // Open mail/sms app
+    const shareText = `Hey ${inviteName}! Join me on TAG - the GPS hunt game! 🏃‍♂️\n\nDownload: https://tag.newbold.cloud`;
+    
+    if (isEmail) {
+      const subject = encodeURIComponent('Join me on TAG! 🏃‍♂️');
+      const body = encodeURIComponent(shareText);
+      window.open(`mailto:${inviteValue}?subject=${subject}&body=${body}`);
+    } else {
+      const body = encodeURIComponent(shareText);
+      window.open(`sms:${inviteValue}?body=${body}`);
+    }
+    
+    setInviteValue('');
+    setInviteName('');
+    setShowInviteModal(false);
   };
   
   return (
-    <div className="p-6 max-w-md mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold">Friends</h1>
-          <p className="text-white/50 text-sm">Manage your contacts</p>
+    <div className="min-h-screen p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-display font-bold">Friends</h1>
+          <span className="text-sm text-white/50">({friends.length})</span>
         </div>
         <button
-          onClick={() => setShowAdd(true)}
-          className="btn-primary flex items-center gap-2"
+          onClick={() => setShowInviteModal(true)}
+          className="btn-primary py-2 px-4 flex items-center gap-2"
         >
-          <UserPlus className="w-5 h-5" />
+          <UserPlus className="w-4 h-4" />
           Add
         </button>
       </div>
       
-      {/* Friends List */}
-      {friends.length > 0 ? (
-        <div className="space-y-2">
-          {friends.map((friend) => (
-            <div key={friend.id} className="card p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-neon-cyan to-neon-purple flex items-center justify-center text-xl">
-                  {friend.avatar}
-                </div>
-                <div>
-                  <p className="font-medium">{friend.name}</p>
-                  <div className="flex items-center gap-2 text-sm text-white/40">
-                    {friend.email && (
-                      <span className="flex items-center gap-1">
-                        <Mail className="w-3 h-3" />
-                        {friend.email}
-                      </span>
-                    )}
-                    {friend.phone && (
-                      <span className="flex items-center gap-1">
-                        <Phone className="w-3 h-3" />
-                        {friend.phone}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => removeFriend(friend.id)}
-                className="p-2 hover:bg-red-500/20 rounded-lg transition-all text-white/40 hover:text-red-400"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="card p-8 text-center">
-          <Users className="w-12 h-12 text-white/20 mx-auto mb-4" />
-          <p className="text-white/40">No friends added yet</p>
-          <p className="text-sm text-white/30">Add friends to easily invite them to games</p>
-        </div>
-      )}
+      <div className="relative mb-6">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search friends..."
+          className="input-field pl-12"
+        />
+      </div>
       
-      {/* Add Friend Modal */}
-      {showAdd && (
+      <div className="space-y-3">
+        {filteredFriends.length > 0 ? (
+          filteredFriends.map((friend) => {
+            const stats = getFriendStats(friend.id);
+            return (
+              <div key={friend.id} className="card p-4 flex items-center gap-4">
+                <div className="text-3xl">
+                  {friend.avatar || '👤'}
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-medium">{friend.name}</h3>
+                  <p className="text-xs text-white/50">
+                    {friend.email || friend.phone || 'No contact'}
+                  </p>
+                  {stats.gamesPlayed > 0 && (
+                    <p className="text-xs text-neon-cyan mt-1">
+                      {stats.gamesPlayed} games together
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => removeFriend(friend.id)}
+                  className="p-2 hover:bg-red-500/20 rounded-lg text-red-400 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })
+        ) : (
+          <div className="text-center py-12">
+            <Users className="w-12 h-12 text-white/20 mx-auto mb-4" />
+            <p className="text-white/50">
+              {searchQuery ? 'No friends found' : 'No friends yet'}
+            </p>
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="mt-4 text-neon-cyan hover:underline text-sm"
+            >
+              Invite friends to play
+            </button>
+          </div>
+        )}
+      </div>
+      
+      {showInviteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
           <div className="card-glow p-6 w-full max-w-md animate-slide-up">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">Add Friend</h2>
-              <button onClick={() => setShowAdd(false)} className="p-2 hover:bg-white/10 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-neon-cyan/10 rounded-xl">
+                  <UserPlus className="w-6 h-6 text-neon-cyan" />
+                </div>
+                <div>
+                  <h2 className="font-display font-bold text-xl">Add Friend</h2>
+                  <p className="text-sm text-white/50">Send an invite</p>
+                </div>
+              </div>
+              <button onClick={() => setShowInviteModal(false)} className="p-2 hover:bg-white/10 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <form onSubmit={handleAdd} className="space-y-4">
+            <div className="space-y-4">
               <div>
-                <label className="label">Name *</label>
+                <label className="label">Name</label>
                 <input
                   type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
                   placeholder="Friend's name"
                   className="input-field"
-                  autoFocus
-                  required
                 />
               </div>
-              
               <div>
-                <label className="label">Email</label>
+                <label className="label">Email or Phone</label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="friend@email.com"
+                  type="text"
+                  value={inviteValue}
+                  onChange={(e) => setInviteValue(e.target.value)}
+                  placeholder="friend@email.com or +1555000000"
                   className="input-field"
                 />
               </div>
-              
-              <div>
-                <label className="label">Phone</label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+1 (555) 000-0000"
-                  className="input-field"
-                />
-              </div>
-              
-              <button type="submit" className="btn-primary w-full">
-                Add Friend
+              <button
+                onClick={handleInvite}
+                disabled={!inviteName.trim() || !inviteValue.trim()}
+                className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Send className="w-5 h-5" />
+                Send Invite
               </button>
-            </form>
+            </div>
           </div>
         </div>
       )}
