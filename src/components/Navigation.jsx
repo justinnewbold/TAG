@@ -1,39 +1,45 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Users, Trophy, Settings, Gamepad2 } from 'lucide-react';
-import { useStore } from '../store';
+import { Home, Users, BarChart3, Settings, Trophy } from 'lucide-react';
 
 function Navigation() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentGame } = useStore();
   
-  const navItems = [
+  const tabs = [
     { path: '/', icon: Home, label: 'Home' },
+    { path: '/leaderboards', icon: Trophy, label: 'Ranks' },
     { path: '/friends', icon: Users, label: 'Friends' },
-    { path: currentGame ? (currentGame.status === 'active' ? '/game' : '/lobby') : '/create', icon: Gamepad2, label: 'Game', highlight: true },
-    { path: '/stats', icon: Trophy, label: 'Stats' },
+    { path: '/stats', icon: BarChart3, label: 'Stats' },
     { path: '/settings', icon: Settings, label: 'Settings' },
   ];
   
+  // Don't show during active game
+  if (location.pathname === '/game' || location.pathname === '/lobby') {
+    return null;
+  }
+  
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-dark-800/90 backdrop-blur-xl border-t border-white/10 px-2 py-2 z-50">
-      <div className="flex justify-around items-center max-w-md mx-auto">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          const Icon = item.icon;
+    <nav className="fixed bottom-0 left-0 right-0 bg-dark-800/95 backdrop-blur-lg border-t border-white/10 pb-safe z-40">
+      <div className="flex items-center justify-around py-2">
+        {tabs.map(({ path, icon: Icon, label }) => {
+          const isActive = location.pathname === path;
           
           return (
             <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              className={`nav-item ${isActive ? 'active' : ''} ${item.highlight ? 'relative' : ''}`}
+              key={path}
+              onClick={() => navigate(path)}
+              className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all ${
+                isActive 
+                  ? 'text-neon-cyan' 
+                  : 'text-white/40 hover:text-white/60'
+              }`}
             >
-              {item.highlight && (
-                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-12 h-12 bg-gradient-to-r from-neon-cyan to-neon-purple rounded-full -z-10 opacity-50" />
+              <Icon className={`w-6 h-6 ${isActive ? 'drop-shadow-[0_0_8px_rgba(0,245,255,0.5)]' : ''}`} />
+              <span className="text-xs font-medium">{label}</span>
+              {isActive && (
+                <div className="absolute bottom-1 w-1 h-1 rounded-full bg-neon-cyan" />
               )}
-              <Icon className={`w-5 h-5 ${item.highlight ? 'text-neon-cyan' : ''}`} />
-              <span className="text-xs">{item.label}</span>
             </button>
           );
         })}
