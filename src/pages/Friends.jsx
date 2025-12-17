@@ -39,7 +39,8 @@ function Friends() {
     });
     
     // Open mail/sms app
-    const shareText = `Hey ${inviteName}! Join me on TAG - the GPS hunt game! 🏃‍♂️\n\nDownload: https://tag.newbold.cloud`;
+    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+    const shareText = `Hey ${inviteName}! Join me on TAG - the GPS hunt game! 🏃‍♂️\n\nDownload: ${appUrl}`;
     
     if (isEmail) {
       const subject = encodeURIComponent('Join me on TAG! 🏃‍♂️');

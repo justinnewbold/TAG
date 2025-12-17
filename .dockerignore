@@ -1,0 +1,32 @@
+# Dependencies
+node_modules
+server/node_modules
+
+# Build output
+dist
+
+# Git
+.git
+.gitignore
+
+# Environment files
+.env
+.env.*
+!.env.example
+server/.env
+server/.env.*
+!server/.env.example
+
+# Data
+server/data
+
+# Development files
+*.md
+.vscode
+.idea
+*.log
+
+# Docker files (prevent recursive copying)
+Dockerfile
+docker-compose.yml
+.dockerignore

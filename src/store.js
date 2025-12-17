@@ -582,6 +582,209 @@ export const useStore = create(
         user: null,
         currentGame: null,
       }),
+
+      // Socket event handlers for real-time multiplayer
+      syncGameState: (game) => set((state) => {
+        if (!game) return { currentGame: null };
+
+        // Update games list if this game exists
+        const gameExists = state.games.some(g => g.id === game.id);
+        const updatedGames = gameExists
+          ? state.games.map(g => g.id === game.id ? game : g)
+          : [...state.games, game];
+
+        return {
+          currentGame: game,
+          games: updatedGames,
+        };
+      }),
+
+      handlePlayerJoined: ({ player, playerCount }) => set((state) => {
+        if (!state.currentGame) return state;
+
+        // Check if player already exists
+        const exists = state.currentGame.players.some(p => p.id === player.id);
+        if (exists) return state;
+
+        const updatedGame = {
+          ...state.currentGame,
+          players: [...state.currentGame.players, {
+            ...player,
+            isIt: false,
+            joinedAt: Date.now(),
+            tagCount: 0,
+            survivalTime: 0,
+          }],
+        };
+
+        return {
+          currentGame: updatedGame,
+          games: state.games.map(g => g.id === updatedGame.id ? updatedGame : g),
+        };
+      }),
+
+      handlePlayerLeft: ({ playerId, newHost, playerCount }) => set((state) => {
+        if (!state.currentGame) return state;
+
+        const updatedGame = {
+          ...state.currentGame,
+          players: state.currentGame.players.filter(p => p.id !== playerId),
+          host: newHost || state.currentGame.host,
+        };
+
+        return {
+          currentGame: updatedGame,
+          games: state.games.map(g => g.id === updatedGame.id ? updatedGame : g),
+        };
+      }),
+
+      handlePlayerLocation: ({ playerId, location, timestamp }) => set((state) => {
+        if (!state.currentGame) return state;
+
+        const updatedGame = {
+          ...state.currentGame,
+          players: state.currentGame.players.map(p =>
+            p.id === playerId ? { ...p, location, lastUpdate: timestamp } : p
+          ),
+        };
+
+        return {
+          currentGame: updatedGame,
+          games: state.games.map(g => g.id === updatedGame.id ? updatedGame : g),
+        };
+      }),
+
+      handlePlayerTagged: ({ taggerId, taggedId, newItPlayerId, tagTime, tag }) => {
+        set((state) => {
+          if (!state.currentGame) return state;
+
+          const now = Date.now();
+          const updatedGame = {
+            ...state.currentGame,
+            itPlayerId: newItPlayerId,
+            tags: [...state.currentGame.tags, tag],
+            players: state.currentGame.players.map(p => ({
+              ...p,
+              isIt: p.id === newItPlayerId,
+              tagCount: p.id === taggerId ? (p.tagCount || 0) + 1 : p.tagCount,
+              becameItAt: p.id === newItPlayerId ? now : null,
+            })),
+          };
+
+          const newStats = { ...state.stats };
+          if (taggerId === state.user?.id) {
+            newStats.totalTags += 1;
+            if (tagTime && (!newStats.fastestTag || tagTime < newStats.fastestTag)) {
+              newStats.fastestTag = tagTime;
+            }
+          }
+          if (taggedId === state.user?.id) {
+            newStats.timesTagged += 1;
+          }
+
+          return {
+            currentGame: updatedGame,
+            games: state.games.map(g => g.id === updatedGame.id ? updatedGame : g),
+            stats: newStats,
+          };
+        });
+
+        get().checkAchievements();
+      },
+
+      handleGameStarted: ({ game, itPlayerId }) => {
+        const hour = new Date().getHours();
+        const isNight = hour >= 22 || hour < 5;
+
+        set((state) => {
+          const newStats = { ...state.stats };
+          if (isNight) {
+            newStats.playedAtNight = true;
+          }
+
+          return {
+            currentGame: game,
+            games: state.games.map(g => g.id === game.id ? game : g),
+            stats: newStats,
+          };
+        });
+
+        get().checkAchievements();
+      },
+
+      handleGameEnded: ({ game, winnerId, summary }) => {
+        set((state) => {
+          const gameTime = game.gameDuration || 0;
+
+          const newStats = { ...state.stats };
+          newStats.gamesPlayed += 1;
+          newStats.totalPlayTime += gameTime;
+
+          if (winnerId === state.user?.id) {
+            newStats.gamesWon += 1;
+          }
+
+          const userPlayer = game.players.find(p => p.id === state.user?.id);
+          if (userPlayer?.finalSurvivalTime > newStats.longestSurvival) {
+            newStats.longestSurvival = userPlayer.finalSurvivalTime;
+          }
+
+          // Update unique friends count
+          const friendIds = new Set();
+          state.games.forEach(g => {
+            g.players.forEach(p => {
+              if (p.id !== state.user?.id) friendIds.add(p.id);
+            });
+          });
+          game.players.forEach(p => {
+            if (p.id !== state.user?.id) friendIds.add(p.id);
+          });
+          newStats.uniqueFriendsPlayed = friendIds.size;
+
+          return {
+            currentGame: null,
+            games: state.games.map(g => g.id === game.id ? game : g),
+            stats: newStats,
+            lastGameSummary: summary,
+          };
+        });
+
+        get().checkAchievements();
+      },
+
+      handlePlayerOffline: ({ playerId }) => set((state) => {
+        if (!state.currentGame) return state;
+
+        const updatedGame = {
+          ...state.currentGame,
+          players: state.currentGame.players.map(p =>
+            p.id === playerId ? { ...p, isOnline: false } : p
+          ),
+        };
+
+        return {
+          currentGame: updatedGame,
+          games: state.games.map(g => g.id === updatedGame.id ? updatedGame : g),
+        };
+      }),
+
+      handlePlayerOnline: ({ playerId }) => set((state) => {
+        if (!state.currentGame) return state;
+
+        const updatedGame = {
+          ...state.currentGame,
+          players: state.currentGame.players.map(p =>
+            p.id === playerId ? { ...p, isOnline: true } : p
+          ),
+        };
+
+        return {
+          currentGame: updatedGame,
+          games: state.games.map(g => g.id === updatedGame.id ? updatedGame : g),
+        };
+      }),
+
+      clearLastGameSummary: () => set({ lastGameSummary: null }),
     }),
     {
       name: 'tag-game-storage',

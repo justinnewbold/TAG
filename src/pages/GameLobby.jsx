@@ -1,51 +1,65 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Copy, Check, Play, UserPlus, Clock, Target, MapPin, Shield, Calendar, Share2 } from 'lucide-react';
+import { ArrowLeft, Users, Copy, Check, Play, UserPlus, Clock, Target, MapPin, Shield, Calendar, Share2, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { useStore, useSounds } from '../store';
+import { api } from '../services/api';
+import { socketService } from '../services/socket';
 import InviteModal from '../components/InviteModal';
 
 function GameLobby() {
   const navigate = useNavigate();
-  const { currentGame, user, startGame, leaveGame, addDemoPlayers } = useStore();
+  const { currentGame, user, startGame, leaveGame, syncGameState } = useStore();
   const { playSound, vibrate } = useSounds();
   const [copied, setCopied] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [countdown, setCountdown] = useState(null);
-  
+  const [isStarting, setIsStarting] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [error, setError] = useState('');
+
   const isHost = currentGame?.host === user?.id;
   const playerCount = currentGame?.players?.length || 0;
   const canStart = playerCount >= 2;
-  
-  // Auto-add demo players for testing
+
+  // Listen for game started event (for non-host players)
   useEffect(() => {
-    if (isHost && playerCount === 1 && user?.location) {
-      const timer = setTimeout(() => {
-        addDemoPlayers();
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [isHost, playerCount, user?.location]);
-  
+    const handleGameStarted = ({ game }) => {
+      playSound('gameStart');
+      vibrate([100, 100, 100, 100, 100, 100, 300]);
+      syncGameState(game);
+      navigate('/game');
+    };
+
+    socketService.on('game:started', handleGameStarted);
+
+    return () => {
+      socketService.off('game:started', handleGameStarted);
+    };
+  }, [navigate, playSound, vibrate, syncGameState]);
+
   const handleCopyCode = async () => {
     await navigator.clipboard.writeText(currentGame?.code || '');
     setCopied(true);
     vibrate([50]);
     setTimeout(() => setCopied(false), 2000);
   };
-  
-  const handleStartGame = () => {
-    if (!canStart) return;
-    
+
+  const handleStartGame = async () => {
+    if (!canStart || isStarting) return;
+
+    setIsStarting(true);
+    setError('');
     setCountdown(3);
     playSound('gameStart');
     vibrate([100, 100, 100, 100, 100, 100, 300]);
-    
+
+    // Countdown animation
     const countdownInterval = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(countdownInterval);
-          startGame();
-          navigate('/game');
+          // Actually start the game after countdown
+          doStartGame();
           return null;
         }
         playSound('tag');
@@ -53,8 +67,43 @@ function GameLobby() {
       });
     }, 1000);
   };
-  
-  const handleLeave = () => {
+
+  const doStartGame = async () => {
+    try {
+      // Try to start via API
+      const { game } = await api.startGame(currentGame.id);
+      syncGameState(game);
+      navigate('/game');
+    } catch (err) {
+      console.error('Start game error:', err);
+
+      // Fallback to local-only mode
+      if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
+        startGame();
+        navigate('/game');
+      } else {
+        setError(err.message || 'Failed to start game');
+        setCountdown(null);
+      }
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const handleLeave = async () => {
+    if (isLeaving) return;
+
+    setIsLeaving(true);
+
+    try {
+      // Try to leave via API
+      await api.leaveGame();
+      socketService.leaveGameRoom(currentGame.id);
+    } catch (err) {
+      console.error('Leave game error:', err);
+      // Continue with local leave even if API fails
+    }
+
     leaveGame();
     navigate('/');
   };
@@ -228,12 +277,19 @@ function GameLobby() {
                   {player.id === currentGame.host ? '👑 Host' : 'Player'}
                 </p>
               </div>
-              {player.location && (
-                <div className="flex items-center gap-1 text-green-400">
-                  <MapPin className="w-4 h-4" />
-                  <span className="text-xs">Ready</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {player.location && (
+                  <div className="flex items-center gap-1 text-green-400">
+                    <MapPin className="w-4 h-4" />
+                    <span className="text-xs">Ready</span>
+                  </div>
+                )}
+                {player.isOnline !== false ? (
+                  <Wifi className="w-4 h-4 text-green-400" />
+                ) : (
+                  <WifiOff className="w-4 h-4 text-white/30" />
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -245,19 +301,35 @@ function GameLobby() {
         )}
       </div>
       
+      {/* Error Display */}
+      {error && (
+        <div className="p-3 mb-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+
       {/* Start Button */}
       {isHost && (
         <button
           onClick={handleStartGame}
-          disabled={!canStart}
+          disabled={!canStart || isStarting}
           className={`w-full p-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all ${
-            canStart
+            canStart && !isStarting
               ? 'bg-gradient-to-r from-neon-cyan to-neon-purple hover:opacity-90'
               : 'bg-white/10 text-white/40 cursor-not-allowed'
           }`}
         >
-          <Play className="w-6 h-6" />
-          {canStart ? 'Start Game' : `Waiting for ${2 - playerCount} more player${2 - playerCount > 1 ? 's' : ''}`}
+          {isStarting ? (
+            <>
+              <Loader2 className="w-6 h-6 animate-spin" />
+              Starting...
+            </>
+          ) : (
+            <>
+              <Play className="w-6 h-6" />
+              {canStart ? 'Start Game' : `Waiting for ${2 - playerCount} more player${2 - playerCount > 1 ? 's' : ''}`}
+            </>
+          )}
         </button>
       )}
       

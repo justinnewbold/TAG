@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Volume2, Vibrate, MapPin, Moon, LogOut, Trash2, User, Info, ChevronRight, Shield, Download } from 'lucide-react';
 import { useStore } from '../store';
+import { api } from '../services/api';
+import { socketService } from '../services/socket';
 
 function Settings() {
   const navigate = useNavigate();
@@ -33,11 +35,25 @@ function Settings() {
     }
   };
   
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (profileName.trim()) {
       updateUserProfile({ name: profileName.trim() });
+      try {
+        await api.updateProfile({ name: profileName.trim() });
+      } catch (err) {
+        console.log('Could not sync profile to server:', err);
+      }
     }
     setEditingProfile(false);
+  };
+
+  const handleAvatarChange = async (avatar) => {
+    updateUserProfile({ avatar });
+    try {
+      await api.updateProfile({ avatar });
+    } catch (err) {
+      console.log('Could not sync avatar to server:', err);
+    }
   };
   
   const toggleSetting = (key) => {
@@ -87,7 +103,7 @@ function Settings() {
             {avatars.map((avatar) => (
               <button
                 key={avatar}
-                onClick={() => updateUserProfile({ avatar })}
+                onClick={() => handleAvatarChange(avatar)}
                 className={`text-2xl p-2 rounded-lg transition-all ${
                   user?.avatar === avatar
                     ? 'bg-neon-cyan/20 ring-2 ring-neon-cyan'
@@ -193,7 +209,12 @@ function Settings() {
           message="You'll need to sign up again to play."
           confirmText="Log Out"
           confirmClass="bg-red-500"
-          onConfirm={() => { logout(); navigate('/'); }}
+          onConfirm={() => {
+            socketService.disconnect();
+            api.logout();
+            logout();
+            navigate('/');
+          }}
           onCancel={() => setShowLogoutConfirm(false)}
         />
       )}

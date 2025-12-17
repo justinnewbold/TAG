@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Circle, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin, Calendar, Plus, X, Shield, Map, Crosshair } from 'lucide-react';
+import { ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin, Calendar, Plus, X, Shield, Map, Crosshair, Loader2 } from 'lucide-react';
 import { useStore, useSounds } from '../store';
+import { api } from '../services/api';
+import { socketService } from '../services/socket';
 
 // Map click handler component
 function MapClickHandler({ onLocationSelect, isSelectingZone }) {
@@ -77,10 +79,12 @@ const userIcon = L.divIcon({
 
 function CreateGame() {
   const navigate = useNavigate();
-  const { createGame, user } = useStore();
+  const { createGame, syncGameState, user } = useStore();
   const { vibrate } = useSounds();
-  
+
   const [userLocation, setUserLocation] = useState(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState('');
   const [settings, setSettings] = useState({
     gameName: `${user?.name || 'Player'}'s Game`,
     gpsInterval: 5 * 60 * 1000, // 5 minutes default
@@ -91,7 +95,7 @@ function CreateGame() {
     noTagZones: [],
     noTagTimes: [],
   });
-  
+
   const [showCustomInterval, setShowCustomInterval] = useState(false);
   const [showAddZone, setShowAddZone] = useState(false);
   const [showAddTime, setShowAddTime] = useState(false);
@@ -250,16 +254,43 @@ function CreateGame() {
     setNewTime({ ...newTime, days });
   };
   
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (settings.gpsInterval === 'custom' && !settings.customInterval) {
-      alert('Please enter a custom interval');
+      setError('Please enter a custom interval');
       return;
     }
-    
+
+    if (isCreating) return;
+
+    setIsCreating(true);
+    setError('');
     vibrate([50, 30, 100]);
-    const game = createGame(settings);
-    if (game) {
+
+    try {
+      // Try to create game on server
+      const { game } = await api.createGame(settings);
+
+      // Sync game state to store
+      syncGameState(game);
+
+      // Join the socket room for this game
+      socketService.joinGameRoom(game.id);
+
       navigate('/lobby');
+    } catch (err) {
+      console.error('Create game error:', err);
+
+      // Fallback to local-only mode if server is unavailable
+      if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
+        const game = createGame(settings);
+        if (game) {
+          navigate('/lobby');
+        }
+      } else {
+        setError(err.message || 'Failed to create game');
+      }
+    } finally {
+      setIsCreating(false);
     }
   };
   
@@ -538,10 +569,30 @@ function CreateGame() {
           )}
         </div>
         
+        {/* Error Display */}
+        {error && (
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
         {/* Create Button */}
-        <button onClick={handleCreate} className="btn-primary w-full flex items-center justify-center gap-2 py-4">
-          <Gamepad2 className="w-5 h-5" />
-          Create Game
+        <button
+          onClick={handleCreate}
+          disabled={isCreating}
+          className="btn-primary w-full flex items-center justify-center gap-2 py-4 disabled:opacity-50"
+        >
+          {isCreating ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Creating Game...
+            </>
+          ) : (
+            <>
+              <Gamepad2 className="w-5 h-5" />
+              Create Game
+            </>
+          )}
         </button>
       </div>
       
