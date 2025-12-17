@@ -45,10 +45,18 @@ function SignupModal({ onClose }) {
       setUser(user);
       onClose();
     } catch (err) {
-      console.error('Registration error:', err);
+      if (import.meta.env.DEV) console.error('Registration error:', err);
+
+      // Detect network/connection errors (including Safari-specific messages)
+      const isNetworkError =
+        err.message === 'Failed to fetch' ||
+        err.message.includes('NetworkError') ||
+        err.message.includes('Unable to connect') ||
+        err.message.includes('Load failed') ||
+        err.name === 'TypeError';
 
       // Fallback to local-only mode if server is unavailable
-      if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
+      if (isNetworkError) {
         const localUser = {
           id: Math.random().toString(36).substring(2, 9),
           name: name.trim(),
@@ -59,7 +67,7 @@ function SignupModal({ onClose }) {
         setUser(localUser);
         onClose();
       } else {
-        setError(err.message || 'Failed to create account');
+        setError(err.message || 'Failed to create account. Please try again.');
       }
     } finally {
       setIsSubmitting(false);

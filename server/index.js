@@ -100,7 +100,10 @@ const gameLimiter = rateLimit({
 // Middleware
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Length', 'X-Request-Id'],
 }));
 app.use(express.json({ limit: '10kb' })); // Limit body size
 

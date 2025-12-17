@@ -29,15 +29,33 @@ class ApiService {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'same-origin', // Explicit for Safari compatibility
+      });
+    } catch (fetchError) {
+      // Network error or CORS issue
+      throw new Error('Unable to connect to server. Please check your connection.');
+    }
 
-    const data = await response.json();
+    // Handle empty responses
+    const text = await response.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (parseError) {
+      // Response wasn't valid JSON
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+      data = {};
+    }
 
     if (!response.ok) {
-      throw new Error(data.error || 'Request failed');
+      throw new Error(data.error || `Request failed: ${response.status}`);
     }
 
     return data;
