@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
-import { User, MapPin, Check } from 'lucide-react';
+import { User, MapPin, Check, Loader2 } from 'lucide-react';
 import { useStore } from '../store';
+import { api } from '../services/api';
+import { socketService } from '../services/socket';
 
 function SignupModal({ onClose }) {
   const { setUser } = useStore();
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('🏃');
   const [locationStatus, setLocationStatus] = useState('pending');
-  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
   const avatars = ['🏃', '🏃‍♀️', '🏃‍♂️', '🦊', '🐺', '🦁', '🐯', '🦅', '🦈', '🐉', '👤', '⭐'];
-  
+
   const handleRequestLocation = () => {
     setLocationStatus('requesting');
     navigator.geolocation.getCurrentPosition(
@@ -22,20 +26,44 @@ function SignupModal({ onClose }) {
       { enableHighAccuracy: true }
     );
   };
-  
-  const handleSubmit = (e) => {
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    
-    const user = {
-      id: Math.random().toString(36).substring(2, 9),
-      name: name.trim(),
-      avatar,
-      createdAt: Date.now(),
-    };
-    
-    setUser(user);
-    onClose();
+    if (!name.trim() || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      // Register with the backend
+      const { user, token } = await api.register(name.trim(), avatar);
+
+      // Connect to socket after registration
+      socketService.connect();
+
+      // Set user in store
+      setUser(user);
+      onClose();
+    } catch (err) {
+      console.error('Registration error:', err);
+
+      // Fallback to local-only mode if server is unavailable
+      if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
+        const localUser = {
+          id: Math.random().toString(36).substring(2, 9),
+          name: name.trim(),
+          avatar,
+          createdAt: Date.now(),
+          isOffline: true,
+        };
+        setUser(localUser);
+        onClose();
+      } else {
+        setError(err.message || 'Failed to create account');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   return (
@@ -119,12 +147,25 @@ function SignupModal({ onClose }) {
             </p>
           </div>
           
+          {error && (
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={!name.trim()}
-            className="btn-primary w-full py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!name.trim() || isSubmitting}
+            className="btn-primary w-full py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            Start Playing
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Creating Account...
+              </>
+            ) : (
+              'Start Playing'
+            )}
           </button>
         </form>
         

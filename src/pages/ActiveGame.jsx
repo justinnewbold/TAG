@@ -2,8 +2,10 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Target, Users, Clock, X, Zap, AlertTriangle, Flag, Shield, Calendar } from 'lucide-react';
+import { Target, Users, Clock, X, Zap, AlertTriangle, Flag, Shield, Calendar, Loader2 } from 'lucide-react';
 import { useStore, useSounds, isInNoTagTime, isInNoTagZone, canTagNow } from '../store';
+import { api } from '../services/api';
+import { socketService } from '../services/socket';
 import GameEndSummary from '../components/GameEndSummary';
 
 // Custom marker icons
@@ -44,7 +46,7 @@ function MapController({ center }) {
 
 function ActiveGame() {
   const navigate = useNavigate();
-  const { currentGame, user, tagPlayer, endGame, updatePlayerLocation, games } = useStore();
+  const { currentGame, user, tagPlayer, endGame, updatePlayerLocation, syncGameState, games } = useStore();
   const { playSound, vibrate } = useSounds();
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showEndSummary, setShowEndSummary] = useState(false);
@@ -52,26 +54,49 @@ function ActiveGame() {
   const [gameTime, setGameTime] = useState(0);
   const [tagAnimation, setTagAnimation] = useState(false);
   const [tagError, setTagError] = useState(null);
+  const [isTagging, setIsTagging] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
   const [noTagStatus, setNoTagStatus] = useState({ inZone: false, inTime: false });
   const intervalRef = useRef(null);
   const prevItRef = useRef(null);
-  
+
+  // Send location updates via socket
+  useEffect(() => {
+    if (user?.location && currentGame?.status === 'active') {
+      socketService.updateLocation(user.location);
+    }
+  }, [user?.location, currentGame?.status]);
+
+  // Listen for game ended event
+  useEffect(() => {
+    const handleGameEnded = ({ game, summary }) => {
+      setEndedGame(game);
+      setShowEndSummary(true);
+    };
+
+    socketService.on('game:ended', handleGameEnded);
+
+    return () => {
+      socketService.off('game:ended', handleGameEnded);
+    };
+  }, []);
+
   // Update game timer and no-tag status
   useEffect(() => {
     if (currentGame?.startedAt) {
       intervalRef.current = setInterval(() => {
         setGameTime(Date.now() - currentGame.startedAt);
-        
+
         // Check no-tag status
         const inTime = isInNoTagTime(currentGame.settings?.noTagTimes);
         const inZone = isInNoTagZone(user?.location, currentGame.settings?.noTagZones);
         setNoTagStatus({ inTime, inZone });
       }, 1000);
-      
+
       return () => clearInterval(intervalRef.current);
     }
   }, [currentGame?.startedAt, currentGame?.settings, user?.location]);
-  
+
   // Detect when IT changes
   useEffect(() => {
     if (currentGame?.itPlayerId && prevItRef.current !== null) {
@@ -89,24 +114,7 @@ function ActiveGame() {
     }
     prevItRef.current = currentGame?.itPlayerId;
   }, [currentGame?.itPlayerId, user?.id]);
-  
-  // Simulate demo players moving
-  useEffect(() => {
-    const moveInterval = setInterval(() => {
-      if (!currentGame || !user?.location) return;
-      
-      currentGame.players?.forEach((player) => {
-        if (player.id !== user.id && player.id.startsWith('demo') && player.location) {
-          const newLat = player.location.lat + (Math.random() - 0.5) * 0.0005;
-          const newLng = player.location.lng + (Math.random() - 0.5) * 0.0005;
-          updatePlayerLocation(player.id, { lat: newLat, lng: newLng });
-        }
-      });
-    }, currentGame?.settings?.gpsInterval || 5 * 60 * 1000);
-    
-    return () => clearInterval(moveInterval);
-  }, [currentGame, user]);
-  
+
   // Check game duration
   useEffect(() => {
     if (currentGame?.settings?.duration && currentGame?.startedAt) {
@@ -172,9 +180,9 @@ function ActiveGame() {
   const tagCheck = canTagNow(currentGame, user?.location, nearestPlayer?.location);
   const canTag = inTagRange && tagCheck.allowed;
   
-  const handleTag = () => {
-    if (!inTagRange) return;
-    
+  const handleTag = async () => {
+    if (!inTagRange || isTagging) return;
+
     if (!tagCheck.allowed) {
       setTagError(tagCheck.reason);
       playSound('error');
@@ -182,22 +190,65 @@ function ActiveGame() {
       setTimeout(() => setTagError(null), 3000);
       return;
     }
-    
+
     if (nearestPlayer) {
-      const result = tagPlayer(nearestPlayer.id);
-      if (!result.success && result.reason) {
-        setTagError(result.reason);
-        playSound('error');
-        setTimeout(() => setTagError(null), 3000);
+      setIsTagging(true);
+
+      try {
+        // Try to tag via API
+        const { success, tagTime } = await api.tagPlayer(currentGame.id, nearestPlayer.id);
+
+        if (success) {
+          playSound('tag');
+          vibrate([100, 50, 200]);
+          setTagAnimation(true);
+          setTimeout(() => setTagAnimation(false), 500);
+        }
+      } catch (err) {
+        console.error('Tag error:', err);
+
+        // Fallback to local tag if server unavailable
+        if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
+          const result = tagPlayer(nearestPlayer.id);
+          if (result.success) {
+            playSound('tag');
+            vibrate([100, 50, 200]);
+            setTagAnimation(true);
+            setTimeout(() => setTagAnimation(false), 500);
+          }
+        } else {
+          setTagError(err.message || 'Failed to tag');
+          playSound('error');
+          vibrate([100, 50, 100]);
+          setTimeout(() => setTagError(null), 3000);
+        }
+      } finally {
+        setIsTagging(false);
       }
     }
   };
-  
-  const handleEndGame = () => {
+
+  const handleEndGame = async () => {
+    if (isEnding) return;
+
+    setIsEnding(true);
     const gameToEnd = { ...currentGame };
-    endGame(isIt ? null : user?.id);
-    setEndedGame(gameToEnd);
-    setShowEndSummary(true);
+
+    try {
+      // Try to end via API
+      const { game, summary } = await api.endGame(currentGame.id);
+      setEndedGame(game);
+      setShowEndSummary(true);
+    } catch (err) {
+      console.error('End game error:', err);
+
+      // Fallback to local end
+      endGame(isIt ? null : user?.id);
+      setEndedGame(gameToEnd);
+      setShowEndSummary(true);
+    } finally {
+      setIsEnding(false);
+    }
   };
   
   const formatTime = (ms) => {
@@ -422,16 +473,18 @@ function ActiveGame() {
         <div className="absolute bottom-24 left-0 right-0 flex justify-center z-10">
           <button
             onClick={handleTag}
-            disabled={!inTagRange}
+            disabled={!inTagRange || isTagging}
             className={`w-32 h-32 rounded-full font-display font-bold text-2xl transition-all transform ${
-              canTag
+              canTag && !isTagging
                 ? 'bg-gradient-to-br from-neon-orange to-red-500 shadow-lg shadow-neon-orange/50 animate-pulse hover:scale-105 active:scale-95'
                 : inTagRange && !tagCheck.allowed
                 ? 'bg-yellow-500/50 text-yellow-200'
                 : 'bg-white/10 text-white/30'
             } ${tagAnimation ? 'scale-110' : ''}`}
           >
-            {!inTagRange ? 'TAG!' : !tagCheck.allowed ? '🛡️' : 'TAG!'}
+            {isTagging ? (
+              <Loader2 className="w-10 h-10 animate-spin mx-auto" />
+            ) : !inTagRange ? 'TAG!' : !tagCheck.allowed ? '🛡️' : 'TAG!'}
           </button>
         </div>
       )}

@@ -1,70 +1,78 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Users, Gamepad2, AlertCircle } from 'lucide-react';
 import { useStore, useSounds } from '../store';
+import { api } from '../services/api';
+import { socketService } from '../services/socket';
 
 function JoinGame() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { joinGame, games, user } = useStore();
+  const { joinGame, syncGameState, games, user } = useStore();
   const { vibrate } = useSounds();
-  
+
   const [gameCode, setGameCode] = useState('');
   const [error, setError] = useState('');
   const [isJoining, setIsJoining] = useState(false);
-  
+  const hasAutoJoined = useRef(false);
+
   // Check for game code in URL params (deep link)
   useEffect(() => {
     const codeFromUrl = searchParams.get('code');
-    if (codeFromUrl) {
+    if (codeFromUrl && !hasAutoJoined.current) {
+      hasAutoJoined.current = true;
       setGameCode(codeFromUrl.toUpperCase());
       // Auto-join if code is provided
       handleJoin(codeFromUrl.toUpperCase());
     }
   }, [searchParams]);
-  
+
   const handleJoin = async (code = gameCode) => {
     if (!code || code.length < 6) {
       setError('Please enter a valid game code');
       vibrate([100, 50, 100]);
       return;
     }
-    
+
+    if (isJoining) return;
+
     setIsJoining(true);
     setError('');
-    
-    // Check if game exists
-    const game = games.find(g => g.code === code.toUpperCase() && g.status === 'waiting');
-    
-    if (!game) {
-      setError('Game not found or already started');
-      setIsJoining(false);
-      vibrate([100, 50, 100]);
-      return;
-    }
-    
-    // Check if game is full
-    if (game.players.length >= game.settings.maxPlayers) {
-      setError('This game is full');
-      setIsJoining(false);
-      vibrate([100, 50, 100]);
-      return;
-    }
-    
-    // Check if already in game
-    if (game.players.some(p => p.id === user?.id)) {
-      navigate('/lobby');
-      return;
-    }
-    
-    // Join the game
-    const joined = joinGame(code.toUpperCase());
-    
-    if (joined) {
+
+    try {
+      // Try to join via API
+      const { game } = await api.joinGame(code.toUpperCase());
+
+      // Sync game state to store
+      syncGameState(game);
+
+      // Join the socket room
+      socketService.joinGameRoom(game.id);
+
       vibrate([50, 30, 100]);
       navigate('/lobby');
-    } else {
-      setError('Failed to join game');
+    } catch (err) {
+      console.error('Join game error:', err);
+
+      // Fallback to local-only mode if server is unavailable
+      if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
+        // Try local games
+        const localGame = games.find(g => g.code === code.toUpperCase() && g.status === 'waiting');
+
+        if (localGame) {
+          const joined = joinGame(code.toUpperCase());
+          if (joined) {
+            vibrate([50, 30, 100]);
+            navigate('/lobby');
+            return;
+          }
+        }
+        setError('Game not found. Make sure the server is running or try a local game.');
+      } else {
+        setError(err.message || 'Failed to join game');
+      }
+      vibrate([100, 50, 100]);
+    } finally {
       setIsJoining(false);
     }
   };

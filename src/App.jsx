@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { useStore } from './store';
+import { api } from './services/api';
+import { socketService } from './services/socket';
 
 // Pages
 import Home from './pages/Home';
@@ -21,34 +23,84 @@ import SignupModal from './components/SignupModal';
 import AchievementToast from './components/AchievementToast';
 
 function App() {
-  const { user, currentGame } = useStore();
+  const { user, currentGame, setUser, syncGameState } = useStore();
   const [showSignup, setShowSignup] = useState(false);
-  
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  // Try to re-authenticate with existing token on app load
   useEffect(() => {
-    if (!user) {
-      setShowSignup(true);
+    const initAuth = async () => {
+      const existingToken = api.getToken();
+
+      if (existingToken && !user) {
+        try {
+          // Try to login with existing token
+          const { user: authUser } = await api.login(existingToken);
+          setUser(authUser);
+
+          // Connect socket
+          socketService.connect();
+
+          // Try to get current game if any
+          try {
+            const { game } = await api.getCurrentGame();
+            if (game) {
+              syncGameState(game);
+              socketService.joinGameRoom(game.id);
+            }
+          } catch (e) {
+            // No current game, that's ok
+          }
+        } catch (err) {
+          // Token invalid, clear it
+          console.log('Auth token invalid, clearing');
+          api.logout();
+          setShowSignup(true);
+        }
+      } else if (!user) {
+        setShowSignup(true);
+      }
+
+      setIsInitializing(false);
+    };
+
+    initAuth();
+  }, []);
+
+  // Connect socket when user is set
+  useEffect(() => {
+    if (user && !isInitializing) {
+      socketService.connect();
     }
-  }, [user]);
-  
-  // Request location permission
+  }, [user, isInitializing]);
+
+  // Request location permission and send updates
   useEffect(() => {
     if (user && 'geolocation' in navigator) {
       const watchId = navigator.geolocation.watchPosition(
         (position) => {
-          useStore.getState().updateUserLocation({
+          const location = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
             accuracy: position.coords.accuracy,
-          });
+          };
+
+          // Update store
+          useStore.getState().updateUserLocation(location);
+
+          // Send to server via socket if in active game
+          if (currentGame?.status === 'active') {
+            socketService.updateLocation(location);
+          }
         },
         (error) => console.log('Location error:', error),
         { enableHighAccuracy: true, maximumAge: 5000 }
       );
-      
+
       return () => navigator.geolocation.clearWatch(watchId);
     }
-  }, [user]);
-  
+  }, [user, currentGame?.status]);
+
   // Register service worker for PWA
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -57,6 +109,21 @@ function App() {
       });
     }
   }, []);
+
+  // Show loading while initializing
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-dark-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-4xl font-display font-bold mb-4">
+            <span className="text-neon-cyan">TAG</span>
+            <span className="text-neon-purple">!</span>
+          </h1>
+          <div className="w-8 h-8 border-2 border-neon-cyan border-t-transparent rounded-full animate-spin mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen bg-dark-900 text-white">
