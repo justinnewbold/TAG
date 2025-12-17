@@ -95,9 +95,16 @@ export class GameManager {
 
   createGame(host, settings) {
     let gameCode;
-    // Ensure unique game code
+    let attempts = 0;
+    const maxAttempts = 100;
+
+    // Ensure unique game code with iteration limit
     do {
       gameCode = generateGameCode();
+      attempts++;
+      if (attempts >= maxAttempts) {
+        throw new Error('Unable to generate unique game code. Please try again.');
+      }
     } while (this.gamesByCode.has(gameCode) || gameDb.getByCode(gameCode));
 
     const gameId = uuidv4();
@@ -455,10 +462,21 @@ export class GameManager {
     const gameTime = game.startedAt ? now - game.startedAt : 0;
 
     // Calculate final stats for each player
-    const playerStats = game.players.map(p => ({
-      ...p,
-      finalSurvivalTime: p.isIt ? 0 : gameTime - (p.becameItAt || 0),
-    }));
+    // finalSurvivalTime = time the player spent NOT being IT
+    const playerStats = game.players.map(p => {
+      let survivalTime;
+      if (p.isIt) {
+        // Currently IT at game end - survival time is time before they became IT
+        survivalTime = p.becameItAt ? p.becameItAt - game.startedAt : 0;
+      } else if (p.becameItAt) {
+        // Was IT at some point but passed it - survival = time before becoming IT
+        survivalTime = p.becameItAt - game.startedAt;
+      } else {
+        // Never was IT - survived the whole game
+        survivalTime = gameTime;
+      }
+      return { ...p, finalSurvivalTime: Math.max(0, survivalTime) };
+    });
 
     // Winner is the non-IT player with longest survival
     const winner = playerStats

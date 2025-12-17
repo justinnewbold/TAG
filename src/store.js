@@ -374,10 +374,8 @@ export const useStore = create(
               ...p,
               isIt: p.id === taggedPlayerId,
               tagCount: p.id === taggerId ? (p.tagCount || 0) + 1 : p.tagCount,
-              becameItAt: p.id === taggedPlayerId ? now : null,
-              survivalTime: p.id !== taggerId && p.id !== taggedPlayerId 
-                ? (p.survivalTime || 0) + (now - (state.currentGame.startedAt || now))
-                : p.survivalTime,
+              // Track when player became IT (used for final survival time calculation)
+              becameItAt: p.id === taggedPlayerId ? now : (p.id === taggerId ? null : p.becameItAt),
             })),
           };
           
@@ -410,10 +408,21 @@ export const useStore = create(
           const now = Date.now();
           const gameTime = state.currentGame.startedAt ? now - state.currentGame.startedAt : 0;
           
-          const playerStats = state.currentGame.players.map(p => ({
-            ...p,
-            finalSurvivalTime: p.isIt ? 0 : gameTime - (p.becameItAt || 0),
-          }));
+          // Calculate final survival time for each player
+          const playerStats = state.currentGame.players.map(p => {
+            let survivalTime;
+            if (p.isIt) {
+              // Currently IT at game end - survival time is time before they became IT
+              survivalTime = p.becameItAt ? p.becameItAt - state.currentGame.startedAt : 0;
+            } else if (p.becameItAt) {
+              // Was IT at some point but passed it - survival = time before becoming IT
+              survivalTime = p.becameItAt - state.currentGame.startedAt;
+            } else {
+              // Never was IT - survived the whole game
+              survivalTime = gameTime;
+            }
+            return { ...p, finalSurvivalTime: Math.max(0, survivalTime) };
+          });
           
           const actualWinner = winnerId || playerStats
             .filter(p => !p.isIt)

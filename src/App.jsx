@@ -92,8 +92,8 @@ function App() {
           // Update store
           useStore.getState().updateUserLocation(location);
 
-          // Send to server via socket if in active game
-          if (currentGame?.status === 'active') {
+          // Send to server via socket if in active game and connected
+          if (currentGame?.status === 'active' && socketService.isConnected()) {
             socketService.updateLocation(location);
           }
         },

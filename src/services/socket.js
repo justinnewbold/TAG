@@ -69,6 +69,12 @@ class SocketService {
     }
 
     if (this.socket) {
+      // Prevent duplicate listeners
+      const existingListeners = this.listeners.get(event) || [];
+      if (existingListeners.includes(callback)) {
+        return; // Already registered
+      }
+
       this.socket.on(event, callback);
 
       // Track listeners for cleanup
