@@ -51,10 +51,24 @@ function GameLobby() {
   }, [navigate, playSound, vibrate, syncGameState]);
 
   const handleCopyCode = async () => {
-    await navigator.clipboard.writeText(currentGame?.code || '');
-    setCopied(true);
-    vibrate([50]);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(currentGame?.code || '');
+      } else {
+        // Fallback for non-HTTPS contexts
+        const textArea = document.createElement('textarea');
+        textArea.value = currentGame?.code || '';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      setCopied(true);
+      vibrate([50]);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('Copy failed:', err);
+    }
   };
 
   const handleStartGame = async () => {
@@ -92,13 +106,15 @@ function GameLobby() {
       syncGameState(game);
       navigate('/game');
     } catch (err) {
-      console.error('Start game error:', err);
+      if (import.meta.env.DEV) console.error('Start game error:', err);
 
       // Fallback to local-only mode
       if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
         startGame();
         navigate('/game');
       } else {
+        // Reset flag so user can retry
+        gameStartedRef.current = false;
         setError(err.message || 'Failed to start game');
         setCountdown(null);
       }

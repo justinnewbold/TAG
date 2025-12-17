@@ -205,16 +205,17 @@ router.post('/:id/start', (req, res) => {
       itPlayerId: result.game.itPlayerId,
     });
 
-    // Send push notifications to all players
+    // Send push notifications to all players (fire and forget)
     const itPlayer = result.game.players.find(p => p.id === result.game.itPlayerId);
     result.game.players.forEach(player => {
       if (player.id === result.game.itPlayerId) {
-        pushService.sendToUser(player.id, pushService.notifications.youAreIt());
+        pushService.sendToUser(player.id, pushService.notifications.youAreIt())
+          .catch(() => {});
       } else {
         pushService.sendToUser(player.id, pushService.notifications.gameStarting(
           result.game.settings.gameName || 'TAG!',
           itPlayer?.name || 'Someone'
-        ));
+        )).catch(() => {});
       }
     });
 
@@ -252,11 +253,11 @@ router.post('/:id/end', (req, res) => {
       summary,
     });
 
-    // Send push notifications about game ending
+    // Send push notifications about game ending (fire and forget)
     result.game.players.forEach(player => {
       pushService.sendToUser(player.id, pushService.notifications.gameEnded(
         result.game.winnerName || 'Unknown'
-      ));
+      )).catch(() => {});
     });
 
     res.json({
@@ -305,9 +306,10 @@ router.post('/:id/tag/:targetId', (req, res) => {
       tag: result.tag,
     });
 
-    // Send push notification to tagged player
+    // Send push notification to tagged player (fire and forget)
     if (taggedPlayer) {
-      pushService.sendToUser(targetIdValidation.id, pushService.notifications.youAreIt(req.user.name));
+      pushService.sendToUser(targetIdValidation.id, pushService.notifications.youAreIt(req.user.name))
+        .catch(() => {});
 
       // Notify other players
       result.game.players
@@ -316,7 +318,7 @@ router.post('/:id/tag/:targetId', (req, res) => {
           pushService.sendToUser(p.id, pushService.notifications.playerTagged(
             req.user.name,
             taggedPlayer.name
-          ));
+          )).catch(() => {});
         });
     }
 

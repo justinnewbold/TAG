@@ -85,7 +85,8 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
             // Send push notification when IT is very close (within 1.5x tag radius)
             if (distance <= game.settings.tagRadius * 1.5) {
-              pushService.sendToUser(user.id, pushService.notifications.itNearby(Math.round(distance)));
+              pushService.sendToUser(user.id, pushService.notifications.itNearby(Math.round(distance)))
+                .catch(() => {}); // Fire and forget
             }
           }
         }
@@ -129,7 +130,8 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
       // Send push notification to the tagged player (they're now IT)
       if (taggedPlayer) {
-        pushService.sendToUser(validatedTargetId, pushService.notifications.youAreIt(user.name));
+        pushService.sendToUser(validatedTargetId, pushService.notifications.youAreIt(user.name))
+          .catch(() => {}); // Fire and forget
 
         // Notify other players that someone was tagged
         result.game.players
@@ -138,7 +140,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
             pushService.sendToUser(p.id, pushService.notifications.playerTagged(
               user.name,
               taggedPlayer.name
-            ));
+            )).catch(() => {}); // Fire and forget
           });
       }
     } else {
