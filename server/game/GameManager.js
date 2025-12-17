@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { gameDb, userDb } from '../db/index.js';
 
 // Generate 6-character game code
 const generateGameCode = () => {
@@ -56,9 +57,40 @@ const isInNoTagZone = (location, noTagZones) => {
 
 export class GameManager {
   constructor() {
-    this.games = new Map(); // gameId -> game
+    // In-memory cache for active games (for real-time location data)
+    this.activeGames = new Map(); // gameId -> game with live location data
     this.gamesByCode = new Map(); // gameCode -> gameId
     this.playerGames = new Map(); // playerId -> gameId
+
+    // Load active games from database on startup
+    this._loadActiveGames();
+  }
+
+  _loadActiveGames() {
+    // This would load waiting/active games from DB
+    // For now, we start fresh - games in progress would need reconnection
+    console.log('GameManager initialized with database persistence');
+  }
+
+  _cacheGame(game) {
+    this.activeGames.set(game.id, game);
+    this.gamesByCode.set(game.code, game.id);
+    game.players.forEach(p => {
+      this.playerGames.set(p.id, game.id);
+    });
+  }
+
+  _uncachePlayer(playerId) {
+    this.playerGames.delete(playerId);
+  }
+
+  _uncacheGame(gameId) {
+    const game = this.activeGames.get(gameId);
+    if (game) {
+      this.gamesByCode.delete(game.code);
+      game.players.forEach(p => this.playerGames.delete(p.id));
+      this.activeGames.delete(gameId);
+    }
   }
 
   createGame(host, settings) {
@@ -66,7 +98,7 @@ export class GameManager {
     // Ensure unique game code
     do {
       gameCode = generateGameCode();
-    } while (this.gamesByCode.has(gameCode));
+    } while (this.gamesByCode.has(gameCode) || gameDb.getByCode(gameCode));
 
     const gameId = uuidv4();
     const game = {
@@ -103,25 +135,58 @@ export class GameManager {
       createdAt: Date.now(),
     };
 
-    this.games.set(gameId, game);
-    this.gamesByCode.set(gameCode, gameId);
-    this.playerGames.set(host.id, gameId);
+    // Persist to database
+    gameDb.create(game);
+
+    // Cache in memory
+    this._cacheGame(game);
 
     return game;
   }
 
   getGame(gameId) {
-    return this.games.get(gameId);
+    // First check cache
+    let game = this.activeGames.get(gameId);
+    if (game) return game;
+
+    // Then check database
+    game = gameDb.getById(gameId);
+    if (game && (game.status === 'waiting' || game.status === 'active')) {
+      this._cacheGame(game);
+    }
+    return game;
   }
 
   getGameByCode(code) {
-    const gameId = this.gamesByCode.get(code.toUpperCase());
-    return gameId ? this.games.get(gameId) : null;
+    const upperCode = code.toUpperCase();
+
+    // First check cache
+    const cachedId = this.gamesByCode.get(upperCode);
+    if (cachedId) {
+      return this.activeGames.get(cachedId);
+    }
+
+    // Then check database
+    const game = gameDb.getByCode(upperCode);
+    if (game && (game.status === 'waiting' || game.status === 'active')) {
+      this._cacheGame(game);
+    }
+    return game;
   }
 
   getPlayerGame(playerId) {
-    const gameId = this.playerGames.get(playerId);
-    return gameId ? this.games.get(gameId) : null;
+    // First check cache
+    const cachedId = this.playerGames.get(playerId);
+    if (cachedId) {
+      return this.activeGames.get(cachedId);
+    }
+
+    // Then check database
+    const game = gameDb.getActiveGameForPlayer(playerId);
+    if (game) {
+      this._cacheGame(game);
+    }
+    return game;
   }
 
   joinGame(gameCode, player) {
@@ -145,12 +210,12 @@ export class GameManager {
     }
 
     // Check if player is in another game
-    const existingGame = this.playerGames.get(player.id);
-    if (existingGame && existingGame !== game.id) {
+    const existingGame = this.getPlayerGame(player.id);
+    if (existingGame && existingGame.id !== game.id) {
       return { success: false, error: 'You are already in another game' };
     }
 
-    game.players.push({
+    const newPlayer = {
       id: player.id,
       name: player.name,
       avatar: player.avatar,
@@ -161,9 +226,13 @@ export class GameManager {
       tagCount: 0,
       survivalTime: 0,
       becameItAt: null,
-    });
+    };
 
+    game.players.push(newPlayer);
     this.playerGames.set(player.id, game.id);
+
+    // Persist to database
+    gameDb.addPlayer(game.id, newPlayer);
 
     return { success: true, game };
   }
@@ -175,25 +244,29 @@ export class GameManager {
     }
 
     game.players = game.players.filter(p => p.id !== playerId);
-    this.playerGames.delete(playerId);
+    this._uncachePlayer(playerId);
+
+    // Persist removal to database
+    gameDb.removePlayer(game.id, playerId);
 
     // If host leaves, assign new host or end game
     if (game.host === playerId && game.players.length > 0) {
       game.host = game.players[0].id;
       game.hostName = game.players[0].name;
+      gameDb.updateGame(game);
     }
 
     // If no players left, cleanup game
     if (game.players.length === 0) {
-      this.games.delete(game.id);
-      this.gamesByCode.delete(game.code);
+      this._uncacheGame(game.id);
+      gameDb.deleteGame(game.id);
     }
 
     return { success: true, game };
   }
 
   startGame(gameId, hostId) {
-    const game = this.games.get(gameId);
+    const game = this.getGame(gameId);
 
     if (!game) {
       return { success: false, error: 'Game not found' };
@@ -224,6 +297,10 @@ export class GameManager {
       becameItAt: p.id === itPlayerId ? Date.now() : null,
     }));
 
+    // Persist to database
+    gameDb.updateGame(game);
+    game.players.forEach(p => gameDb.updatePlayer(game.id, p));
+
     return { success: true, game };
   }
 
@@ -235,6 +312,7 @@ export class GameManager {
     if (player) {
       player.location = location;
       player.lastUpdate = Date.now();
+      // Location is transient, not persisted to DB (too frequent)
     }
 
     return game;
@@ -260,7 +338,7 @@ export class GameManager {
   }
 
   tagPlayer(gameId, taggerId, targetId) {
-    const game = this.games.get(gameId);
+    const game = this.getGame(gameId);
 
     if (!game) {
       return { success: false, error: 'Game not found' };
@@ -328,11 +406,38 @@ export class GameManager {
       return p;
     });
 
+    // Persist to database
+    gameDb.updateGame(game);
+    gameDb.addTag(game.id, tag);
+    game.players.forEach(p => {
+      if (p.id === taggerId || p.id === targetId) {
+        gameDb.updatePlayer(game.id, p);
+      }
+    });
+
+    // Update user stats
+    const taggerStats = userDb.getById(taggerId);
+    if (taggerStats) {
+      userDb.updateStats(taggerId, {
+        totalTags: (taggerStats.stats.totalTags || 0) + 1,
+        fastestTag: tagTime && (!taggerStats.stats.fastestTag || tagTime < taggerStats.stats.fastestTag)
+          ? tagTime
+          : taggerStats.stats.fastestTag,
+      });
+    }
+
+    const targetStats = userDb.getById(targetId);
+    if (targetStats) {
+      userDb.updateStats(targetId, {
+        timesTagged: (targetStats.stats.timesTagged || 0) + 1,
+      });
+    }
+
     return { success: true, game, tag, tagTime };
   }
 
   endGame(gameId, hostId) {
-    const game = this.games.get(gameId);
+    const game = this.getGame(gameId);
 
     if (!game) {
       return { success: false, error: 'Game not found' };
@@ -367,17 +472,43 @@ export class GameManager {
     game.players = playerStats;
     game.gameDuration = gameTime;
 
-    // Cleanup player-game associations
+    // Persist final state to database
+    gameDb.updateGame(game);
+    game.players.forEach(p => gameDb.updatePlayer(game.id, p));
+
+    // Update user stats for all players
     game.players.forEach(p => {
-      this.playerGames.delete(p.id);
+      const userStats = userDb.getById(p.id);
+      if (userStats) {
+        const updates = {
+          gamesPlayed: (userStats.stats.gamesPlayed || 0) + 1,
+          totalPlayTime: (userStats.stats.totalPlayTime || 0) + gameTime,
+        };
+
+        if (p.id === game.winnerId) {
+          updates.gamesWon = (userStats.stats.gamesWon || 0) + 1;
+        }
+
+        if (p.finalSurvivalTime > (userStats.stats.longestSurvival || 0)) {
+          updates.longestSurvival = p.finalSurvivalTime;
+        }
+
+        userDb.updateStats(p.id, updates);
+      }
     });
+
+    // Cleanup from cache
+    game.players.forEach(p => {
+      this._uncachePlayer(p.id);
+    });
+    this._uncacheGame(game.id);
 
     return { success: true, game };
   }
 
   // Get game summary for ended games
   getGameSummary(gameId) {
-    const game = this.games.get(gameId);
+    const game = gameDb.getById(gameId);
     if (!game || game.status !== 'ended') return null;
 
     return {
@@ -402,14 +533,13 @@ export class GameManager {
     };
   }
 
+  // Get player's game history
+  getPlayerHistory(playerId, limit = 20) {
+    return gameDb.getPlayerHistory(playerId, limit);
+  }
+
   // Cleanup old ended games (call periodically)
-  cleanupOldGames(maxAgeMs = 24 * 60 * 60 * 1000) {
-    const now = Date.now();
-    for (const [gameId, game] of this.games) {
-      if (game.status === 'ended' && (now - game.endedAt) > maxAgeMs) {
-        this.gamesByCode.delete(game.code);
-        this.games.delete(gameId);
-      }
-    }
+  cleanupOldGames(maxAgeMs = 7 * 24 * 60 * 60 * 1000) {
+    gameDb.cleanupOldGames(maxAgeMs);
   }
 }

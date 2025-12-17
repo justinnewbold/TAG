@@ -21,6 +21,7 @@ import Achievements from './pages/Achievements';
 import Navigation from './components/Navigation';
 import SignupModal from './components/SignupModal';
 import AchievementToast from './components/AchievementToast';
+import { GameErrorBoundary } from './components/ErrorBoundary';
 
 function App() {
   const { user, currentGame, setUser, syncGameState } = useStore();
@@ -139,8 +140,8 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/create" element={user ? <CreateGame /> : <Navigate to="/" />} />
           <Route path="/join" element={user ? <JoinGame /> : <Navigate to="/" />} />
-          <Route path="/lobby" element={currentGame ? <GameLobby /> : <Navigate to="/" />} />
-          <Route path="/game" element={currentGame?.status === 'active' ? <ActiveGame /> : <Navigate to="/" />} />
+          <Route path="/lobby" element={currentGame ? <GameErrorBoundary><GameLobby /></GameErrorBoundary> : <Navigate to="/" />} />
+          <Route path="/game" element={currentGame?.status === 'active' ? <GameErrorBoundary><ActiveGame /></GameErrorBoundary> : <Navigate to="/" />} />
           <Route path="/stats" element={<Stats />} />
           <Route path="/friends" element={<Friends />} />
           <Route path="/settings" element={<Settings />} />

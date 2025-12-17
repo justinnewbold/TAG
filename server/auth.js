@@ -1,12 +1,9 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import { userDb } from './db/index.js';
 
 const router = express.Router();
-
-// In-memory user store (replace with database in production)
-const users = new Map();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'tag-game-secret-key-change-in-production';
 const JWT_EXPIRES_IN = '7d';
@@ -29,27 +26,16 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Name must be at least 2 characters' });
     }
 
+    if (name.trim().length > 30) {
+      return res.status(400).json({ error: 'Name must be 30 characters or less' });
+    }
+
     const id = uuidv4();
-    const user = {
+    const user = userDb.create({
       id,
       name: name.trim(),
       avatar: avatar || '😀',
-      createdAt: Date.now(),
-      stats: {
-        gamesPlayed: 0,
-        gamesWon: 0,
-        totalTags: 0,
-        timesTagged: 0,
-        longestSurvival: 0,
-        totalPlayTime: 0,
-        uniqueFriendsPlayed: 0,
-        fastestTag: null,
-        playedAtNight: false,
-      },
-      achievements: [],
-    };
-
-    users.set(id, user);
+    });
 
     const token = generateToken(user);
 
@@ -79,7 +65,7 @@ router.post('/login', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = users.get(decoded.id);
+    const user = userDb.getById(decoded.id);
 
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
@@ -108,24 +94,24 @@ router.post('/login', async (req, res) => {
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
     const { name, avatar } = req.body;
-    const user = users.get(req.user.id);
+    const user = userDb.getById(req.user.id);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (name) user.name = name.trim();
-    if (avatar) user.avatar = avatar;
-
-    users.set(user.id, user);
+    const updatedUser = userDb.update(user.id, {
+      name: name ? name.trim() : user.name,
+      avatar: avatar || user.avatar,
+    });
 
     res.json({
       user: {
-        id: user.id,
-        name: user.name,
-        avatar: user.avatar,
-        stats: user.stats,
-        achievements: user.achievements,
+        id: updatedUser.id,
+        name: updatedUser.name,
+        avatar: updatedUser.avatar,
+        stats: updatedUser.stats,
+        achievements: updatedUser.achievements,
       },
     });
   } catch (error) {
@@ -137,7 +123,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
 // Get current user
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = users.get(req.user.id);
+    const user = userDb.getById(req.user.id);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -195,28 +181,18 @@ export function authenticateSocket(socket, next) {
 
 // Helper to get user by ID
 export function getUser(userId) {
-  return users.get(userId);
+  return userDb.getById(userId);
 }
 
 // Helper to update user stats
 export function updateUserStats(userId, statsUpdate) {
-  const user = users.get(userId);
-  if (user) {
-    user.stats = { ...user.stats, ...statsUpdate };
-    users.set(userId, user);
-  }
-  return user;
+  userDb.updateStats(userId, statsUpdate);
+  return userDb.getById(userId);
 }
 
 // Helper to add achievement
 export function addAchievement(userId, achievementId) {
-  const user = users.get(userId);
-  if (user && !user.achievements.includes(achievementId)) {
-    user.achievements.push(achievementId);
-    users.set(userId, user);
-    return true;
-  }
-  return false;
+  return userDb.addAchievement(userId, achievementId);
 }
 
-export { router as authRouter, users };
+export { router as authRouter };
