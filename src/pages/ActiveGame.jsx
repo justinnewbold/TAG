@@ -115,15 +115,23 @@ function ActiveGame() {
     prevItRef.current = currentGame?.itPlayerId;
   }, [currentGame?.itPlayerId, user?.id]);
 
-  // Check game duration
+  // Check game duration - uses interval instead of depending on gameTime to avoid re-renders
   useEffect(() => {
-    if (currentGame?.settings?.duration && currentGame?.startedAt) {
+    if (!currentGame?.settings?.duration || !currentGame?.startedAt) return;
+
+    const checkDuration = () => {
       const remaining = currentGame.settings.duration - (Date.now() - currentGame.startedAt);
       if (remaining <= 0) {
         handleEndGame();
       }
-    }
-  }, [gameTime]);
+    };
+
+    // Check immediately and then every 5 seconds
+    checkDuration();
+    const intervalId = setInterval(checkDuration, 5000);
+
+    return () => clearInterval(intervalId);
+  }, [currentGame?.settings?.duration, currentGame?.startedAt]);
   
   if (!currentGame || currentGame.status !== 'active') {
     const lastGame = games.filter(g => g.status === 'ended').sort((a, b) => b.endedAt - a.endedAt)[0];

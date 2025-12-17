@@ -116,15 +116,23 @@ export function useSocket() {
   // Attempt tag through socket
   const attemptTag = useCallback((targetId) => {
     return new Promise((resolve) => {
-      socketService.on('tag:result', (result) => {
-        socketService.off('tag:result');
+      let resolved = false;
+
+      const handleResult = (result) => {
+        if (resolved) return;
+        resolved = true;
+        socketService.off('tag:result', handleResult);
         resolve(result);
-      });
+      };
+
+      socketService.on('tag:result', handleResult);
       socketService.attemptTag(targetId);
 
       // Timeout after 5 seconds
       setTimeout(() => {
-        socketService.off('tag:result');
+        if (resolved) return;
+        resolved = true;
+        socketService.off('tag:result', handleResult);
         resolve({ success: false, error: 'Request timed out' });
       }, 5000);
     });

@@ -119,6 +119,7 @@ export const validate = {
             return coords.valid && !isNaN(radius) && radius > 0 && radius <= 1000;
           })
           .map(zone => ({
+            id: zone.id, // Preserve zone ID for React keys
             lat: parseFloat(zone.lat),
             lng: parseFloat(zone.lng),
             radius: Math.min(parseInt(zone.radius), 1000),
@@ -146,9 +147,11 @@ export const validate = {
             );
           })
           .map(rule => ({
+            id: rule.id, // Preserve rule ID for React keys
             days: rule.days.filter(d => d >= 0 && d <= 6),
             startTime: rule.startTime,
-            endTime: rule.endTime
+            endTime: rule.endTime,
+            name: sanitize.string(rule.name || '', 30)
           }));
       }
     }

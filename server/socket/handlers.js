@@ -111,13 +111,14 @@ export function setupSocketHandlers(io, socket, gameManager) {
     const result = gameManager.tagPlayer(game.id, user.id, targetValidation.id);
 
     if (result.success) {
-      const taggedPlayer = result.game.players.find(p => p.id === targetId);
+      const validatedTargetId = targetValidation.id;
+      const taggedPlayer = result.game.players.find(p => p.id === validatedTargetId);
 
       // Notify all players in the game
       io.to(`game:${game.id}`).emit('player:tagged', {
         taggerId: user.id,
         taggerName: user.name,
-        taggedId: targetId,
+        taggedId: validatedTargetId,
         taggedName: taggedPlayer?.name,
         newItPlayerId: result.game.itPlayerId,
         tagTime: result.tagTime,
@@ -128,11 +129,11 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
       // Send push notification to the tagged player (they're now IT)
       if (taggedPlayer) {
-        pushService.sendToUser(targetId, pushService.notifications.youAreIt(user.name));
+        pushService.sendToUser(validatedTargetId, pushService.notifications.youAreIt(user.name));
 
         // Notify other players that someone was tagged
         result.game.players
-          .filter(p => p.id !== targetId && p.id !== user.id)
+          .filter(p => p.id !== validatedTargetId && p.id !== user.id)
           .forEach(p => {
             pushService.sendToUser(p.id, pushService.notifications.playerTagged(
               user.name,

@@ -40,15 +40,13 @@ function App() {
           const { user: authUser } = await api.login(existingToken);
           setUser(authUser);
 
-          // Connect socket
-          socketService.connect();
-
+          // Socket connection is handled by the useEffect that watches user state
           // Try to get current game if any
           try {
             const { game } = await api.getCurrentGame();
             if (game) {
               syncGameState(game);
-              socketService.joinGameRoom(game.id);
+              // Join game room after socket connects (handled in useEffect)
             }
           } catch (e) {
             // No current game, that's ok
@@ -73,8 +71,12 @@ function App() {
   useEffect(() => {
     if (user && !isInitializing) {
       socketService.connect();
+      // Join game room if there's an active game
+      if (currentGame?.id) {
+        socketService.joinGameRoom(currentGame.id);
+      }
     }
-  }, [user, isInitializing]);
+  }, [user, isInitializing, currentGame?.id]);
 
   // Request location permission and send updates
   useEffect(() => {
