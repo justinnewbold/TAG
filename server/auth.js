@@ -2,6 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { userDb } from './db/index.js';
+import { sanitize } from './utils/validation.js';
 
 const router = express.Router();
 
@@ -22,19 +23,23 @@ router.post('/register', async (req, res) => {
   try {
     const { name, avatar } = req.body;
 
-    if (!name || name.trim().length < 2) {
+    // Sanitize inputs
+    const cleanName = sanitize.playerName(name);
+    const cleanAvatar = sanitize.emoji(avatar);
+
+    if (!cleanName || cleanName.length < 2) {
       return res.status(400).json({ error: 'Name must be at least 2 characters' });
     }
 
-    if (name.trim().length > 30) {
+    if (cleanName.length > 30) {
       return res.status(400).json({ error: 'Name must be 30 characters or less' });
     }
 
     const id = uuidv4();
     const user = userDb.create({
       id,
-      name: name.trim(),
-      avatar: avatar || '😀',
+      name: cleanName,
+      avatar: cleanAvatar,
     });
 
     const token = generateToken(user);
@@ -100,9 +105,17 @@ router.put('/profile', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Sanitize inputs
+    const cleanName = name ? sanitize.playerName(name) : user.name;
+    const cleanAvatar = avatar ? sanitize.emoji(avatar) : user.avatar;
+
+    if (cleanName.length < 2 || cleanName.length > 30) {
+      return res.status(400).json({ error: 'Name must be 2-30 characters' });
+    }
+
     const updatedUser = userDb.update(user.id, {
-      name: name ? name.trim() : user.name,
-      avatar: avatar || user.avatar,
+      name: cleanName,
+      avatar: cleanAvatar,
     });
 
     res.json({

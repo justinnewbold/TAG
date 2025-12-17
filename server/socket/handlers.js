@@ -1,3 +1,5 @@
+import { validate } from '../utils/validation.js';
+
 export function setupSocketHandlers(io, socket, gameManager) {
   const user = socket.user;
 
@@ -28,13 +30,20 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
   // Update player location
   socket.on('location:update', (location) => {
-    const game = gameManager.updatePlayerLocation(user.id, location);
+    // Validate location data
+    const locationValidation = validate.location(location);
+    if (!locationValidation.valid) {
+      return; // Silently ignore invalid location data
+    }
+
+    const validLocation = { lat: locationValidation.lat, lng: locationValidation.lng };
+    const game = gameManager.updatePlayerLocation(user.id, validLocation);
 
     if (game && game.status === 'active') {
       // Broadcast location to other players in the game
       socket.to(`game:${game.id}`).emit('player:location', {
         playerId: user.id,
-        location,
+        location: validLocation,
         timestamp: Date.now(),
       });
 
@@ -47,7 +56,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
             id: p.id,
             name: p.name,
             distance: getDistance(
-              location.lat, location.lng,
+              validLocation.lat, validLocation.lng,
               p.location.lat, p.location.lng
             ),
           }))
@@ -62,7 +71,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
         const itPlayer = game.players.find(p => p.id === game.itPlayerId);
         if (itPlayer?.location) {
           const distance = getDistance(
-            location.lat, location.lng,
+            validLocation.lat, validLocation.lng,
             itPlayer.location.lat, itPlayer.location.lng
           );
 
@@ -80,13 +89,20 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
   // Tag attempt via WebSocket (alternative to REST)
   socket.on('tag:attempt', ({ targetId }) => {
+    // Validate targetId
+    const targetValidation = validate.uuid(targetId);
+    if (!targetValidation.valid) {
+      socket.emit('tag:result', { success: false, error: 'Invalid target' });
+      return;
+    }
+
     const game = gameManager.getPlayerGame(user.id);
     if (!game) {
       socket.emit('tag:result', { success: false, error: 'Not in a game' });
       return;
     }
 
-    const result = gameManager.tagPlayer(game.id, user.id, targetId);
+    const result = gameManager.tagPlayer(game.id, user.id, targetValidation.id);
 
     if (result.success) {
       // Notify all players in the game

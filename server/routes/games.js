@@ -1,4 +1,5 @@
 import express from 'express';
+import { validate } from '../utils/validation.js';
 
 const router = express.Router();
 
@@ -8,7 +9,13 @@ router.post('/', (req, res) => {
     const gameManager = req.app.get('gameManager');
     const { settings } = req.body;
 
-    const game = gameManager.createGame(req.user, settings || {});
+    // Validate game settings
+    const validation = validate.gameSettings(settings || {});
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.errors.join(', ') });
+    }
+
+    const game = gameManager.createGame(req.user, validation.settings);
 
     res.status(201).json({ game });
   } catch (error) {
@@ -38,7 +45,14 @@ router.get('/current', (req, res) => {
 router.get('/code/:code', (req, res) => {
   try {
     const gameManager = req.app.get('gameManager');
-    const game = gameManager.getGameByCode(req.params.code);
+
+    // Validate game code format
+    const codeValidation = validate.gameCode(req.params.code);
+    if (!codeValidation.valid) {
+      return res.status(400).json({ error: codeValidation.error });
+    }
+
+    const game = gameManager.getGameByCode(codeValidation.code);
 
     if (!game) {
       return res.status(404).json({ error: 'Game not found' });
@@ -72,7 +86,14 @@ router.get('/code/:code', (req, res) => {
 router.get('/:id', (req, res) => {
   try {
     const gameManager = req.app.get('gameManager');
-    const game = gameManager.getGame(req.params.id);
+
+    // Validate UUID format
+    const idValidation = validate.uuid(req.params.id);
+    if (!idValidation.valid) {
+      return res.status(400).json({ error: idValidation.error });
+    }
+
+    const game = gameManager.getGame(idValidation.id);
 
     if (!game) {
       return res.status(404).json({ error: 'Game not found' });
@@ -98,7 +119,13 @@ router.post('/join/:code', (req, res) => {
     const gameManager = req.app.get('gameManager');
     const io = req.app.get('io');
 
-    const result = gameManager.joinGame(req.params.code, req.user);
+    // Validate game code format
+    const codeValidation = validate.gameCode(req.params.code);
+    if (!codeValidation.valid) {
+      return res.status(400).json({ error: codeValidation.error });
+    }
+
+    const result = gameManager.joinGame(codeValidation.code, req.user);
 
     if (!result.success) {
       return res.status(400).json({ error: result.error });
@@ -159,7 +186,13 @@ router.post('/:id/start', (req, res) => {
     const gameManager = req.app.get('gameManager');
     const io = req.app.get('io');
 
-    const result = gameManager.startGame(req.params.id, req.user.id);
+    // Validate UUID format
+    const idValidation = validate.uuid(req.params.id);
+    if (!idValidation.valid) {
+      return res.status(400).json({ error: idValidation.error });
+    }
+
+    const result = gameManager.startGame(idValidation.id, req.user.id);
 
     if (!result.success) {
       return res.status(400).json({ error: result.error });
@@ -184,7 +217,13 @@ router.post('/:id/end', (req, res) => {
     const gameManager = req.app.get('gameManager');
     const io = req.app.get('io');
 
-    const result = gameManager.endGame(req.params.id, req.user.id);
+    // Validate UUID format
+    const idValidation = validate.uuid(req.params.id);
+    if (!idValidation.valid) {
+      return res.status(400).json({ error: idValidation.error });
+    }
+
+    const result = gameManager.endGame(idValidation.id, req.user.id);
 
     if (!result.success) {
       return res.status(400).json({ error: result.error });
@@ -214,7 +253,18 @@ router.post('/:id/tag/:targetId', (req, res) => {
     const gameManager = req.app.get('gameManager');
     const io = req.app.get('io');
 
-    const result = gameManager.tagPlayer(req.params.id, req.user.id, req.params.targetId);
+    // Validate UUIDs
+    const gameIdValidation = validate.uuid(req.params.id);
+    const targetIdValidation = validate.uuid(req.params.targetId);
+
+    if (!gameIdValidation.valid) {
+      return res.status(400).json({ error: 'Invalid game ID' });
+    }
+    if (!targetIdValidation.valid) {
+      return res.status(400).json({ error: 'Invalid target ID' });
+    }
+
+    const result = gameManager.tagPlayer(gameIdValidation.id, req.user.id, targetIdValidation.id);
 
     if (!result.success) {
       return res.status(400).json({ error: result.error, distance: result.distance });
@@ -224,8 +274,8 @@ router.post('/:id/tag/:targetId', (req, res) => {
     io.to(`game:${result.game.id}`).emit('player:tagged', {
       taggerId: req.user.id,
       taggerName: req.user.name,
-      taggedId: req.params.targetId,
-      taggedName: result.game.players.find(p => p.id === req.params.targetId)?.name,
+      taggedId: targetIdValidation.id,
+      taggedName: result.game.players.find(p => p.id === targetIdValidation.id)?.name,
       newItPlayerId: result.game.itPlayerId,
       tagTime: result.tagTime,
       tag: result.tag,
