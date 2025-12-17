@@ -105,6 +105,22 @@ export const validate = {
       validated.gameName = sanitize.gameName(settings.gameName);
     }
 
+    // Duration: null (unlimited) or 1 minute to 7 days
+    if (settings.duration !== undefined) {
+      if (settings.duration === null) {
+        validated.duration = null; // Unlimited duration
+      } else {
+        const duration = parseInt(settings.duration);
+        const minDuration = 60 * 1000; // 1 minute
+        const maxDuration = 7 * 24 * 60 * 60 * 1000; // 7 days
+        if (isNaN(duration) || duration < minDuration || duration > maxDuration) {
+          errors.push('Duration must be between 1 minute and 7 days');
+        } else {
+          validated.duration = duration;
+        }
+      }
+    }
+
     // No-tag zones (validate each zone, limit to 10)
     if (settings.noTagZones !== undefined) {
       if (!Array.isArray(settings.noTagZones)) {

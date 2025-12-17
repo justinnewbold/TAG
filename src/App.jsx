@@ -108,9 +108,19 @@ function App() {
   // Register service worker for PWA
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
-      });
+      const registerSW = () => {
+        navigator.serviceWorker.register('/sw.js').catch((err) => {
+          if (import.meta.env.DEV) console.warn('Service worker registration failed:', err);
+        });
+      };
+
+      // Register immediately if already loaded, otherwise wait for load
+      if (document.readyState === 'complete') {
+        registerSW();
+      } else {
+        window.addEventListener('load', registerSW);
+        return () => window.removeEventListener('load', registerSW);
+      }
     }
   }, []);
 

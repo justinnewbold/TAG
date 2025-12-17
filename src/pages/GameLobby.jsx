@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, Copy, Check, Play, UserPlus, Clock, Target, MapPin, Shield, Calendar, Share2, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { useStore, useSounds } from '../store';
@@ -17,9 +17,22 @@ function GameLobby() {
   const [isLeaving, setIsLeaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Refs for cleanup
+  const countdownIntervalRef = useRef(null);
+  const gameStartedRef = useRef(false);
+
   const isHost = currentGame?.host === user?.id;
   const playerCount = currentGame?.players?.length || 0;
   const canStart = playerCount >= 2;
+
+  // Clean up countdown interval on unmount
+  useEffect(() => {
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Listen for game started event (for non-host players)
   useEffect(() => {
@@ -45,7 +58,7 @@ function GameLobby() {
   };
 
   const handleStartGame = async () => {
-    if (!canStart || isStarting) return;
+    if (!canStart || isStarting || gameStartedRef.current) return;
 
     setIsStarting(true);
     setError('');
@@ -54,12 +67,16 @@ function GameLobby() {
     vibrate([100, 100, 100, 100, 100, 100, 300]);
 
     // Countdown animation
-    const countdownInterval = setInterval(() => {
+    countdownIntervalRef.current = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
-          clearInterval(countdownInterval);
-          // Actually start the game after countdown
-          doStartGame();
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+          // Actually start the game after countdown (only once)
+          if (!gameStartedRef.current) {
+            gameStartedRef.current = true;
+            doStartGame();
+          }
           return null;
         }
         playSound('tag');

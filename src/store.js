@@ -335,9 +335,14 @@ export const useStore = create(
       tagPlayer: (taggedPlayerId) => {
         const state = get();
         const currentGame = state.currentGame;
-        
+
         if (!currentGame || currentGame.status !== 'active') return { success: false };
-        
+
+        // Verify the current user is IT (only IT can tag)
+        if (currentGame.itPlayerId !== state.user?.id) {
+          return { success: false, reason: 'Only IT can tag' };
+        }
+
         // Check no-tag rules
         const tagger = currentGame.players.find(p => p.id === currentGame.itPlayerId);
         const target = currentGame.players.find(p => p.id === taggedPlayerId);
