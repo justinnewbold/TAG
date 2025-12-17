@@ -1,5 +1,6 @@
 import express from 'express';
 import { validate } from '../utils/validation.js';
+import { pushService } from '../services/push.js';
 
 const router = express.Router();
 
@@ -204,6 +205,19 @@ router.post('/:id/start', (req, res) => {
       itPlayerId: result.game.itPlayerId,
     });
 
+    // Send push notifications to all players
+    const itPlayer = result.game.players.find(p => p.id === result.game.itPlayerId);
+    result.game.players.forEach(player => {
+      if (player.id === result.game.itPlayerId) {
+        pushService.sendToUser(player.id, pushService.notifications.youAreIt());
+      } else {
+        pushService.sendToUser(player.id, pushService.notifications.gameStarting(
+          result.game.settings.gameName || 'TAG!',
+          itPlayer?.name || 'Someone'
+        ));
+      }
+    });
+
     res.json({ game: result.game });
   } catch (error) {
     console.error('Start game error:', error);
@@ -230,16 +244,24 @@ router.post('/:id/end', (req, res) => {
     }
 
     // Notify all players
+    const summary = gameManager.getGameSummary(result.game.id);
     io.to(`game:${result.game.id}`).emit('game:ended', {
       game: result.game,
       winnerId: result.game.winnerId,
       winnerName: result.game.winnerName,
-      summary: gameManager.getGameSummary(result.game.id),
+      summary,
+    });
+
+    // Send push notifications about game ending
+    result.game.players.forEach(player => {
+      pushService.sendToUser(player.id, pushService.notifications.gameEnded(
+        result.game.winnerName || 'Unknown'
+      ));
     });
 
     res.json({
       game: result.game,
-      summary: gameManager.getGameSummary(result.game.id),
+      summary,
     });
   } catch (error) {
     console.error('End game error:', error);
@@ -270,16 +292,33 @@ router.post('/:id/tag/:targetId', (req, res) => {
       return res.status(400).json({ error: result.error, distance: result.distance });
     }
 
+    const taggedPlayer = result.game.players.find(p => p.id === targetIdValidation.id);
+
     // Notify all players
     io.to(`game:${result.game.id}`).emit('player:tagged', {
       taggerId: req.user.id,
       taggerName: req.user.name,
       taggedId: targetIdValidation.id,
-      taggedName: result.game.players.find(p => p.id === targetIdValidation.id)?.name,
+      taggedName: taggedPlayer?.name,
       newItPlayerId: result.game.itPlayerId,
       tagTime: result.tagTime,
       tag: result.tag,
     });
+
+    // Send push notification to tagged player
+    if (taggedPlayer) {
+      pushService.sendToUser(targetIdValidation.id, pushService.notifications.youAreIt(req.user.name));
+
+      // Notify other players
+      result.game.players
+        .filter(p => p.id !== targetIdValidation.id && p.id !== req.user.id)
+        .forEach(p => {
+          pushService.sendToUser(p.id, pushService.notifications.playerTagged(
+            req.user.name,
+            taggedPlayer.name
+          ));
+        });
+    }
 
     res.json({
       success: true,

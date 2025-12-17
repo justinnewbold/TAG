@@ -7,11 +7,16 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { authRouter, authenticateToken, authenticateSocket } from './auth.js';
 import { gameRouter } from './routes/games.js';
+import { pushRouter } from './routes/push.js';
 import { GameManager } from './game/GameManager.js';
 import { setupSocketHandlers } from './socket/handlers.js';
 import { logger } from './utils/logger.js';
+import { sentry } from './services/sentry.js';
 
 dotenv.config();
+
+// Initialize error tracking (Sentry - optional)
+sentry.init();
 
 // Validate critical environment variables
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -116,6 +121,7 @@ app.get('/health', (req, res) => {
 // Routes with specific rate limits
 app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/games', authenticateToken, gameLimiter, gameRouter);
+app.use('/api/push', authenticateToken, pushRouter);
 
 // Socket.io authentication middleware
 io.use(authenticateSocket);
@@ -157,6 +163,9 @@ io.on('connection', (socket) => {
   });
 });
 
+// Sentry error handler (captures errors before responding)
+app.use(sentry.errorHandler());
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   logger.error('Request error', {
@@ -177,8 +186,12 @@ setInterval(() => {
 }, 60 * 60 * 1000);
 
 // Graceful shutdown
-const shutdown = () => {
+const shutdown = async () => {
   console.log('Shutting down gracefully...');
+
+  // Flush any pending error reports
+  await sentry.flush(2000);
+
   httpServer.close(() => {
     console.log('Server closed');
     process.exit(0);

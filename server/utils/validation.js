@@ -105,13 +105,12 @@ export const validate = {
       validated.gameName = sanitize.gameName(settings.gameName);
     }
 
-    // No-tag zones (validate each zone)
+    // No-tag zones (validate each zone, limit to 10)
     if (settings.noTagZones !== undefined) {
       if (!Array.isArray(settings.noTagZones)) {
         errors.push('No-tag zones must be an array');
-      } else if (settings.noTagZones.length > 10) {
-        errors.push('Maximum 10 no-tag zones allowed');
       } else {
+        // Truncate to max 10 zones silently
         validated.noTagZones = settings.noTagZones
           .slice(0, 10)
           .filter(zone => {

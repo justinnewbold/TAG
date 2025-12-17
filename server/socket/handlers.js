@@ -1,4 +1,5 @@
 import { validate } from '../utils/validation.js';
+import { pushService } from '../services/push.js';
 
 export function setupSocketHandlers(io, socket, gameManager) {
   const user = socket.user;
@@ -81,6 +82,11 @@ export function setupSocketHandlers(io, socket, gameManager) {
               distance,
               inRange: distance <= game.settings.tagRadius,
             });
+
+            // Send push notification when IT is very close (within 1.5x tag radius)
+            if (distance <= game.settings.tagRadius * 1.5) {
+              pushService.sendToUser(user.id, pushService.notifications.itNearby(Math.round(distance)));
+            }
           }
         }
       }
@@ -105,18 +111,35 @@ export function setupSocketHandlers(io, socket, gameManager) {
     const result = gameManager.tagPlayer(game.id, user.id, targetValidation.id);
 
     if (result.success) {
+      const taggedPlayer = result.game.players.find(p => p.id === targetId);
+
       // Notify all players in the game
       io.to(`game:${game.id}`).emit('player:tagged', {
         taggerId: user.id,
         taggerName: user.name,
         taggedId: targetId,
-        taggedName: result.game.players.find(p => p.id === targetId)?.name,
+        taggedName: taggedPlayer?.name,
         newItPlayerId: result.game.itPlayerId,
         tagTime: result.tagTime,
         tag: result.tag,
       });
 
       socket.emit('tag:result', { success: true, tagTime: result.tagTime });
+
+      // Send push notification to the tagged player (they're now IT)
+      if (taggedPlayer) {
+        pushService.sendToUser(targetId, pushService.notifications.youAreIt(user.name));
+
+        // Notify other players that someone was tagged
+        result.game.players
+          .filter(p => p.id !== targetId && p.id !== user.id)
+          .forEach(p => {
+            pushService.sendToUser(p.id, pushService.notifications.playerTagged(
+              user.name,
+              taggedPlayer.name
+            ));
+          });
+      }
     } else {
       socket.emit('tag:result', { success: false, error: result.error, distance: result.distance });
     }
