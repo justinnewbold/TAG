@@ -16,6 +16,7 @@ import Settings from './pages/Settings';
 import GameHistory from './pages/GameHistory';
 import Leaderboards from './pages/Leaderboards';
 import Achievements from './pages/Achievements';
+import NotFound from './pages/NotFound';
 
 // Components
 import Navigation from './components/Navigation';
@@ -54,7 +55,7 @@ function App() {
           }
         } catch (err) {
           // Token invalid, clear it
-          console.log('Auth token invalid, clearing');
+          if (import.meta.env.DEV) console.log('Auth token invalid, clearing');
           api.logout();
           setShowSignup(true);
         }
@@ -94,7 +95,7 @@ function App() {
             socketService.updateLocation(location);
           }
         },
-        (error) => console.log('Location error:', error),
+        (error) => { if (import.meta.env.DEV) console.log('Location error:', error); },
         { enableHighAccuracy: true, maximumAge: 5000 }
       );
 
@@ -142,12 +143,13 @@ function App() {
           <Route path="/join" element={user ? <JoinGame /> : <Navigate to="/" />} />
           <Route path="/lobby" element={currentGame ? <GameErrorBoundary><GameLobby /></GameErrorBoundary> : <Navigate to="/" />} />
           <Route path="/game" element={currentGame?.status === 'active' ? <GameErrorBoundary><ActiveGame /></GameErrorBoundary> : <Navigate to="/" />} />
-          <Route path="/stats" element={<Stats />} />
-          <Route path="/friends" element={<Friends />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/history" element={<GameHistory />} />
-          <Route path="/leaderboards" element={<Leaderboards />} />
-          <Route path="/achievements" element={<Achievements />} />
+          <Route path="/stats" element={<GameErrorBoundary><Stats /></GameErrorBoundary>} />
+          <Route path="/friends" element={<GameErrorBoundary><Friends /></GameErrorBoundary>} />
+          <Route path="/settings" element={<GameErrorBoundary><Settings /></GameErrorBoundary>} />
+          <Route path="/history" element={<GameErrorBoundary><GameHistory /></GameErrorBoundary>} />
+          <Route path="/leaderboards" element={<GameErrorBoundary><Leaderboards /></GameErrorBoundary>} />
+          <Route path="/achievements" element={<GameErrorBoundary><Achievements /></GameErrorBoundary>} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       

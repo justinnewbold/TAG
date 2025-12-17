@@ -14,7 +14,7 @@ class SocketService {
   connect() {
     const token = api.getToken();
     if (!token) {
-      console.warn('Cannot connect socket: no auth token');
+      if (import.meta.env.DEV) console.warn('Cannot connect socket: no auth token');
       return null;
     }
 
@@ -31,17 +31,17 @@ class SocketService {
     });
 
     this.socket.on('connect', () => {
-      console.log('Socket connected');
+      if (import.meta.env.DEV) console.log('Socket connected');
       this.reconnectAttempts = 0;
       this.emit('reconnect:game');
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('Socket disconnected:', reason);
+      if (import.meta.env.DEV) console.log('Socket disconnected:', reason);
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error.message);
+      if (import.meta.env.DEV) console.error('Socket connection error:', error.message);
       this.reconnectAttempts++;
     });
 
@@ -58,7 +58,7 @@ class SocketService {
   emit(event, data) {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
-    } else {
+    } else if (import.meta.env.DEV) {
       console.warn('Socket not connected, cannot emit:', event);
     }
   }

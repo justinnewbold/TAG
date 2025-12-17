@@ -39,7 +39,7 @@ class PushNotificationService {
   // Subscribe to push notifications
   async subscribe() {
     if (!this.supported) {
-      console.log('Push notifications not supported');
+      if (import.meta.env.DEV) console.log('Push notifications not supported');
       return false;
     }
 
@@ -47,21 +47,21 @@ class PushNotificationService {
       // Request permission first
       const permission = await this.requestPermission();
       if (permission !== 'granted') {
-        console.log('Push notification permission denied');
+        if (import.meta.env.DEV) console.log('Push notification permission denied');
         return false;
       }
 
       // Get VAPID public key from server
       const { publicKey, enabled } = await api.request('/push/vapid-public-key');
       if (!enabled || !publicKey) {
-        console.log('Push notifications not configured on server');
+        if (import.meta.env.DEV) console.log('Push notifications not configured on server');
         return false;
       }
 
       // Get service worker registration
       const registration = await this.getRegistration();
       if (!registration) {
-        console.log('Service worker not registered');
+        if (import.meta.env.DEV) console.log('Service worker not registered');
         return false;
       }
 
@@ -84,10 +84,10 @@ class PushNotificationService {
         body: JSON.stringify({ subscription: subscription.toJSON() }),
       });
 
-      console.log('Push notifications subscribed');
+      if (import.meta.env.DEV) console.log('Push notifications subscribed');
       return true;
     } catch (error) {
-      console.error('Failed to subscribe to push notifications:', error);
+      if (import.meta.env.DEV) console.error('Failed to subscribe to push notifications:', error);
       return false;
     }
   }
@@ -109,10 +109,10 @@ class PushNotificationService {
       await api.request('/push/unsubscribe', { method: 'POST' });
 
       this.subscription = null;
-      console.log('Push notifications unsubscribed');
+      if (import.meta.env.DEV) console.log('Push notifications unsubscribed');
       return true;
     } catch (error) {
-      console.error('Failed to unsubscribe from push notifications:', error);
+      if (import.meta.env.DEV) console.error('Failed to unsubscribe from push notifications:', error);
       return false;
     }
   }
@@ -159,14 +159,14 @@ class PushNotificationService {
       const registration = await this.getRegistration();
       if (registration) {
         await registration.showNotification(title, {
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/badge-72x72.png',
+          icon: '/icon.svg',
+          badge: '/icon.svg',
           ...options,
         });
         return true;
       }
     } catch (error) {
-      console.error('Failed to show notification:', error);
+      if (import.meta.env.DEV) console.error('Failed to show notification:', error);
     }
     return false;
   }

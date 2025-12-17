@@ -69,9 +69,10 @@ function GameEndSummary({ game, onClose }) {
   }, [isWinner]);
   
   const handleShare = async () => {
+    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
     const text = `I just ${isWinner ? 'won' : 'played'} TAG! 🏃‍♂️\n` +
       `Tags: ${userTags} | Duration: ${formatDuration(gameDuration)}\n` +
-      `Play with me: tag.newbold.cloud`;
+      `Play with me: ${appUrl}`;
     
     if (navigator.share) {
       try {
