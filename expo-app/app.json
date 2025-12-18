@@ -1,0 +1,68 @@
+{
+  "expo": {
+    "name": "TAG!",
+    "slug": "tag-gps-game",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "scheme": "tag",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0f"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tag.gpsgame",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "TAG! needs your location to show your position on the map and enable tagging other players.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "TAG! needs your location to track your position during games, even when the app is in the background.",
+        "UIBackgroundModes": ["location", "remote-notification"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0a0f"
+      },
+      "package": "com.tag.gpsgame",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "TAG! needs your location to track your position during games."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#00f5ff"
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "http://localhost:3001/api",
+      "socketUrl": "http://localhost:3001",
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
+  }
+}
