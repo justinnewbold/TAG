@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "TAG!",
-    "slug": "tag-gps-game",
+    "slug": "tag",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
