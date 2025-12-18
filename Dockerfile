@@ -49,6 +49,7 @@ COPY server/*.js ./server/
 COPY server/db ./server/db
 COPY server/game ./server/game
 COPY server/routes ./server/routes
+COPY server/services ./server/services
 COPY server/socket ./server/socket
 COPY server/utils ./server/utils
 
