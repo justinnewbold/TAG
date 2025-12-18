@@ -57,8 +57,8 @@
       ]
     ],
     "extra": {
-      "apiUrl": "http://localhost:3001/api",
-      "socketUrl": "http://localhost:3001",
+      "apiUrl": "https://tag-api-production.up.railway.app/api",
+      "socketUrl": "https://tag-api-production.up.railway.app",
       "eas": {
         "projectId": "2295cc18-d280-4dc3-aede-e6c7b5c7b40c"
       }
