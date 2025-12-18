@@ -69,6 +69,12 @@ class SocketService {
     }
 
     if (this.socket) {
+      // Prevent duplicate listeners
+      const existingListeners = this.listeners.get(event) || [];
+      if (existingListeners.includes(callback)) {
+        return; // Already registered
+      }
+
       this.socket.on(event, callback);
 
       // Track listeners for cleanup
@@ -125,14 +131,30 @@ class SocketService {
 
   ping() {
     return new Promise((resolve) => {
+      if (!this.socket?.connected) {
+        resolve(-1);
+        return;
+      }
+
       const start = Date.now();
-      this.socket?.emit('ping');
-      this.socket?.once('pong', () => {
-        resolve(Date.now() - start);
-      });
+      let resolved = false;
 
       // Timeout after 5 seconds
-      setTimeout(() => resolve(-1), 5000);
+      const timeoutId = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve(-1);
+        }
+      }, 5000);
+
+      this.socket.emit('ping');
+      this.socket.once('pong', () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeoutId);
+          resolve(Date.now() - start);
+        }
+      });
     });
   }
 

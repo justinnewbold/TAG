@@ -59,6 +59,16 @@ function ActiveGame() {
   const [noTagStatus, setNoTagStatus] = useState({ inZone: false, inTime: false });
   const intervalRef = useRef(null);
   const prevItRef = useRef(null);
+  const animationTimeoutRef = useRef(null);
+  const errorTimeoutRef = useRef(null);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current);
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+    };
+  }, []);
 
   // Send location updates via socket
   useEffect(() => {
@@ -108,7 +118,7 @@ function ActiveGame() {
           playSound('tag');
           vibrate([100, 50, 200]);
           setTagAnimation(true);
-          setTimeout(() => setTagAnimation(false), 500);
+          animationTimeoutRef.current = setTimeout(() => setTagAnimation(false), 500);
         }
       }
     }
@@ -195,7 +205,7 @@ function ActiveGame() {
       setTagError(tagCheck.reason);
       playSound('error');
       vibrate([100, 50, 100]);
-      setTimeout(() => setTagError(null), 3000);
+      errorTimeoutRef.current = setTimeout(() => setTagError(null), 3000);
       return;
     }
 
@@ -210,10 +220,10 @@ function ActiveGame() {
           playSound('tag');
           vibrate([100, 50, 200]);
           setTagAnimation(true);
-          setTimeout(() => setTagAnimation(false), 500);
+          animationTimeoutRef.current = setTimeout(() => setTagAnimation(false), 500);
         }
       } catch (err) {
-        console.error('Tag error:', err);
+        if (import.meta.env.DEV) console.error('Tag error:', err);
 
         // Fallback to local tag if server unavailable
         if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
@@ -222,13 +232,13 @@ function ActiveGame() {
             playSound('tag');
             vibrate([100, 50, 200]);
             setTagAnimation(true);
-            setTimeout(() => setTagAnimation(false), 500);
+            animationTimeoutRef.current = setTimeout(() => setTagAnimation(false), 500);
           }
         } else {
           setTagError(err.message || 'Failed to tag');
           playSound('error');
           vibrate([100, 50, 100]);
-          setTimeout(() => setTagError(null), 3000);
+          errorTimeoutRef.current = setTimeout(() => setTagError(null), 3000);
         }
       } finally {
         setIsTagging(false);
@@ -248,7 +258,7 @@ function ActiveGame() {
       setEndedGame(game);
       setShowEndSummary(true);
     } catch (err) {
-      console.error('End game error:', err);
+      if (import.meta.env.DEV) console.error('End game error:', err);
 
       // Fallback to local end
       endGame(isIt ? null : user?.id);

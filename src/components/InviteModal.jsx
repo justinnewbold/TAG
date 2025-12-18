@@ -14,9 +14,24 @@ function InviteModal({ gameCode, onClose }) {
   const shareText = `Join my TAG game! 🏃‍♂️\n\nGame Code: ${gameCode}\n\nJoin here: ${gameUrl}`;
   
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(inviteMethod === 'link' ? gameUrl : gameCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      const textToCopy = inviteMethod === 'link' ? gameUrl : gameCode;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        // Fallback for non-HTTPS contexts
+        const textArea = document.createElement('textarea');
+        textArea.value = textToCopy;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('Copy failed:', err);
+    }
   };
   
   const handleShare = async () => {
