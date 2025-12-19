@@ -5,7 +5,7 @@ import { pushService } from '../services/push.js';
 const router = express.Router();
 
 // Create a new game
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const gameManager = req.app.get('gameManager');
     const { settings } = req.body;
@@ -16,7 +16,7 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: validation.errors.join(', ') });
     }
 
-    const game = gameManager.createGame(req.user, validation.settings);
+    const game = await gameManager.createGame(req.user, validation.settings);
 
     res.status(201).json({ game });
   } catch (error) {
@@ -26,10 +26,10 @@ router.post('/', (req, res) => {
 });
 
 // Get current game for user
-router.get('/current', (req, res) => {
+router.get('/current', async (req, res) => {
   try {
     const gameManager = req.app.get('gameManager');
-    const game = gameManager.getPlayerGame(req.user.id);
+    const game = await gameManager.getPlayerGame(req.user.id);
 
     if (!game) {
       return res.status(404).json({ error: 'Not in a game' });
@@ -43,7 +43,7 @@ router.get('/current', (req, res) => {
 });
 
 // Get game by code (for joining)
-router.get('/code/:code', (req, res) => {
+router.get('/code/:code', async (req, res) => {
   try {
     const gameManager = req.app.get('gameManager');
 
@@ -53,7 +53,7 @@ router.get('/code/:code', (req, res) => {
       return res.status(400).json({ error: codeValidation.error });
     }
 
-    const game = gameManager.getGameByCode(codeValidation.code);
+    const game = await gameManager.getGameByCode(codeValidation.code);
 
     if (!game) {
       return res.status(404).json({ error: 'Game not found' });
@@ -84,7 +84,7 @@ router.get('/code/:code', (req, res) => {
 });
 
 // Get game by ID
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const gameManager = req.app.get('gameManager');
 
@@ -94,7 +94,7 @@ router.get('/:id', (req, res) => {
       return res.status(400).json({ error: idValidation.error });
     }
 
-    const game = gameManager.getGame(idValidation.id);
+    const game = await gameManager.getGame(idValidation.id);
 
     if (!game) {
       return res.status(404).json({ error: 'Game not found' });
@@ -115,7 +115,7 @@ router.get('/:id', (req, res) => {
 });
 
 // Join a game
-router.post('/join/:code', (req, res) => {
+router.post('/join/:code', async (req, res) => {
   try {
     const gameManager = req.app.get('gameManager');
     const io = req.app.get('io');
@@ -126,7 +126,7 @@ router.post('/join/:code', (req, res) => {
       return res.status(400).json({ error: codeValidation.error });
     }
 
-    const result = gameManager.joinGame(codeValidation.code, req.user);
+    const result = await gameManager.joinGame(codeValidation.code, req.user);
 
     if (!result.success) {
       return res.status(400).json({ error: result.error });
@@ -152,13 +152,13 @@ router.post('/join/:code', (req, res) => {
 });
 
 // Leave current game
-router.post('/leave', (req, res) => {
+router.post('/leave', async (req, res) => {
   try {
     const gameManager = req.app.get('gameManager');
     const io = req.app.get('io');
 
-    const currentGame = gameManager.getPlayerGame(req.user.id);
-    const result = gameManager.leaveGame(req.user.id);
+    const currentGame = await gameManager.getPlayerGame(req.user.id);
+    const result = await gameManager.leaveGame(req.user.id);
 
     if (!result.success) {
       return res.status(400).json({ error: result.error });
@@ -182,7 +182,7 @@ router.post('/leave', (req, res) => {
 });
 
 // Start game (host only)
-router.post('/:id/start', (req, res) => {
+router.post('/:id/start', async (req, res) => {
   try {
     const gameManager = req.app.get('gameManager');
     const io = req.app.get('io');
@@ -193,7 +193,7 @@ router.post('/:id/start', (req, res) => {
       return res.status(400).json({ error: idValidation.error });
     }
 
-    const result = gameManager.startGame(idValidation.id, req.user.id);
+    const result = await gameManager.startGame(idValidation.id, req.user.id);
 
     if (!result.success) {
       return res.status(400).json({ error: result.error });
@@ -227,7 +227,7 @@ router.post('/:id/start', (req, res) => {
 });
 
 // End game (host only)
-router.post('/:id/end', (req, res) => {
+router.post('/:id/end', async (req, res) => {
   try {
     const gameManager = req.app.get('gameManager');
     const io = req.app.get('io');
@@ -238,14 +238,14 @@ router.post('/:id/end', (req, res) => {
       return res.status(400).json({ error: idValidation.error });
     }
 
-    const result = gameManager.endGame(idValidation.id, req.user.id);
+    const result = await gameManager.endGame(idValidation.id, req.user.id);
 
     if (!result.success) {
       return res.status(400).json({ error: result.error });
     }
 
     // Notify all players
-    const summary = gameManager.getGameSummary(result.game.id);
+    const summary = await gameManager.getGameSummary(result.game.id);
     io.to(`game:${result.game.id}`).emit('game:ended', {
       game: result.game,
       winnerId: result.game.winnerId,
@@ -271,7 +271,7 @@ router.post('/:id/end', (req, res) => {
 });
 
 // Tag a player
-router.post('/:id/tag/:targetId', (req, res) => {
+router.post('/:id/tag/:targetId', async (req, res) => {
   try {
     const gameManager = req.app.get('gameManager');
     const io = req.app.get('io');
@@ -287,7 +287,7 @@ router.post('/:id/tag/:targetId', (req, res) => {
       return res.status(400).json({ error: 'Invalid target ID' });
     }
 
-    const result = gameManager.tagPlayer(gameIdValidation.id, req.user.id, targetIdValidation.id);
+    const result = await gameManager.tagPlayer(gameIdValidation.id, req.user.id, targetIdValidation.id);
 
     if (!result.success) {
       return res.status(400).json({ error: result.error, distance: result.distance });
