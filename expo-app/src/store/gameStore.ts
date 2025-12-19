@@ -203,8 +203,12 @@ export const useGameStore = create<GameState>()(
           return { success: false, reason: 'Invalid target' };
         }
 
+        // Send tag attempt to server via socket
+        socketService.attemptTag(targetId);
+
         const now = Date.now();
 
+        // Optimistically update local state (server will confirm via player:tagged event)
         set({
           currentGame: {
             ...currentGame,

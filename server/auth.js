@@ -875,12 +875,12 @@ export function authenticateSocket(socket, next) {
 
 // ============ HELPERS FOR OTHER MODULES ============
 
-export function getUser(userId) {
+export async function getUser(userId) {
   return userDb.getById(userId);
 }
 
-export function updateUserStats(userId, statsUpdate) {
-  userDb.updateStats(userId, statsUpdate);
+export async function updateUserStats(userId, statsUpdate) {
+  await userDb.updateStats(userId, statsUpdate);
   return userDb.getById(userId);
 }
 
