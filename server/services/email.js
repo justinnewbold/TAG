@@ -149,13 +149,17 @@ async function sendEmail(to, subject, html) {
     const fromEmail = process.env.EMAIL_FROM || 'TAG! <noreply@tag-game.app>';
 
     if (emailProvider === 'resend') {
-      const result = await emailClient.emails.send({
+      const { data, error } = await emailClient.emails.send({
         from: fromEmail,
         to: [to],
         subject,
         html,
       });
-      return { success: true, id: result.id };
+      if (error) {
+        console.error('Resend error:', error);
+        return { success: false, error: error.message };
+      }
+      return { success: true, id: data?.id };
     }
 
     if (emailProvider === 'sendgrid') {

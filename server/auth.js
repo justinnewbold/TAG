@@ -16,9 +16,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'tag-game-secret-key-change-in-prod
 const JWT_EXPIRES_IN = '15m'; // Short-lived access token
 const REFRESH_TOKEN_EXPIRES_DAYS = 30;
 
-// Initialize services
-email.init();
-sms.init();
+// Initialize services (async, but non-blocking - services check isConfigured before use)
+Promise.all([email.init(), sms.init()]).catch(err => {
+  console.error('Error initializing auth services:', err);
+});
 
 // ============ HELPERS ============
 
