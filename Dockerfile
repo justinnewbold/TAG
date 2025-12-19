@@ -26,7 +26,7 @@ WORKDIR /app/server
 COPY server/package*.json ./
 
 # Install server dependencies (production only)
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # Stage 3: Production image
 FROM node:20-alpine AS production
@@ -49,6 +49,7 @@ COPY server/*.js ./server/
 COPY server/db ./server/db
 COPY server/game ./server/game
 COPY server/routes ./server/routes
+COPY server/services ./server/services
 COPY server/socket ./server/socket
 COPY server/utils ./server/utils
 
