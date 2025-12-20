@@ -20,7 +20,11 @@ function Navigation() {
   }
   
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-dark-800/95 backdrop-blur-lg border-t border-white/10 pb-safe z-40">
+    <nav 
+      role="navigation" 
+      aria-label="Main navigation"
+      className="fixed bottom-0 left-0 right-0 bg-dark-800/95 backdrop-blur-lg border-t border-white/10 pb-safe z-40"
+    >
       <div className="flex items-center justify-around py-2">
         {tabs.map(({ path, icon: Icon, label }) => {
           const isActive = location.pathname === path;
@@ -29,10 +33,12 @@ function Navigation() {
             <button
               key={path}
               onClick={() => navigate(path)}
-              className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all ${
+              aria-label={label}
+              aria-current={isActive ? 'page' : undefined}
+              className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neon-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-dark-800 ${
                 isActive 
                   ? 'text-neon-cyan' 
-                  : 'text-white/40 hover:text-white/60'
+                  : 'text-white/50 hover:text-white/70'
               }`}
             >
               <Icon className={`w-6 h-6 ${isActive ? 'drop-shadow-[0_0_8px_rgba(0,245,255,0.5)]' : ''}`} />

@@ -5,6 +5,7 @@ import { useStore, useSounds, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import InviteModal from '../components/InviteModal';
+import { SkeletonLobbyPlayer } from '../components/Skeleton';
 
 function GameLobby() {
   const navigate = useNavigate();
@@ -355,6 +356,17 @@ function GameLobby() {
                 ) : (
                   <WifiOff className="w-4 h-4 text-white/30" />
                 )}
+              </div>
+            </div>
+          ))}
+          
+          {/* Empty slots as skeleton placeholders */}
+          {playerCount < minPlayers && [...Array(minPlayers - playerCount)].map((_, i) => (
+            <div key={`empty-${i}`} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-dashed border-white/10">
+              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white/30">?</div>
+              <div className="flex-1">
+                <p className="text-white/30 font-medium">Waiting for player...</p>
+                <p className="text-xs text-white/20">Invite friends to join!</p>
               </div>
             </div>
           ))}

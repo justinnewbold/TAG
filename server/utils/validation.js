@@ -70,6 +70,32 @@ export const validate = {
     const errors = [];
     const validated = {};
 
+    // Game mode: validate it's a known mode
+    const validModes = ['classic', 'freezeTag', 'infection', 'teamTag', 'manhunt', 'hotPotato', 'hideAndSeek'];
+    if (settings.gameMode !== undefined) {
+      if (validModes.includes(settings.gameMode)) {
+        validated.gameMode = settings.gameMode;
+      } else {
+        validated.gameMode = 'classic'; // Default to classic if invalid
+      }
+    }
+
+    // Hot potato timer (10-120 seconds)
+    if (settings.potatoTimer !== undefined) {
+      const timer = parseInt(settings.potatoTimer);
+      if (!isNaN(timer) && timer >= 10000 && timer <= 120000) {
+        validated.potatoTimer = timer;
+      }
+    }
+
+    // Hide and seek hide time (30 seconds to 10 minutes)
+    if (settings.hideTime !== undefined) {
+      const time = parseInt(settings.hideTime);
+      if (!isNaN(time) && time >= 30000 && time <= 600000) {
+        validated.hideTime = time;
+      }
+    }
+
     // GPS interval: 5 minutes to 24 hours
     if (settings.gpsInterval !== undefined) {
       const interval = parseInt(settings.gpsInterval);
@@ -105,16 +131,16 @@ export const validate = {
       validated.gameName = sanitize.gameName(settings.gameName);
     }
 
-    // Duration: null (unlimited) or 1 hour to 30 days
+    // Duration: null (unlimited) or 5 minutes to 30 days
     if (settings.duration !== undefined) {
       if (settings.duration === null) {
         validated.duration = null; // Unlimited duration
       } else {
         const duration = parseInt(settings.duration);
-        const minDuration = 60 * 60 * 1000; // 1 hour
+        const minDuration = 5 * 60 * 1000; // 5 minutes minimum
         const maxDuration = 30 * 24 * 60 * 60 * 1000; // 30 days
         if (isNaN(duration) || duration < minDuration || duration > maxDuration) {
-          errors.push('Duration must be between 1 hour and 30 days');
+          errors.push('Duration must be between 5 minutes and 30 days');
         } else {
           validated.duration = duration;
         }

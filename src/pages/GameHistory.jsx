@@ -1,12 +1,28 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trophy, Clock, Users, Target, Calendar, MapPin } from 'lucide-react';
+import { ArrowLeft, Trophy, Clock, Users, Target, Calendar, MapPin, RefreshCw } from 'lucide-react';
 import { useStore } from '../store';
 import { formatDistanceToNow, format } from 'date-fns';
+import { usePullToRefresh, PullToRefreshIndicator } from '../hooks/usePullToRefresh';
 
 function GameHistory() {
   const navigate = useNavigate();
   const { games, user } = useStore();
+  
+  // Pull-to-refresh handler
+  const handleRefresh = useCallback(async () => {
+    // Simulate refresh delay - in real app would fetch from server
+    await new Promise(resolve => setTimeout(resolve, 800));
+    // Data comes from local store, so we just need to trigger a re-render
+  }, []);
+  
+  const {
+    containerRef,
+    isPulling,
+    isRefreshing,
+    pullDistance,
+    progress,
+  } = usePullToRefresh(handleRefresh);
   
   // Filter only ended games and sort by date
   const completedGames = games
@@ -29,7 +45,15 @@ function GameHistory() {
   };
   
   return (
-    <div className="min-h-screen p-6">
+    <div ref={containerRef} className="min-h-screen p-6 overflow-y-auto">
+      {/* Pull-to-refresh indicator */}
+      <PullToRefreshIndicator
+        isVisible={isPulling}
+        progress={progress}
+        isRefreshing={isRefreshing}
+        pullDistance={pullDistance}
+      />
+      
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <button
@@ -38,10 +62,13 @@ function GameHistory() {
         >
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-display font-bold">Game History</h1>
           <p className="text-sm text-white/50">{completedGames.length} games played</p>
         </div>
+        {isRefreshing && (
+          <RefreshCw className="w-5 h-5 text-neon-cyan animate-spin" />
+        )}
       </div>
       
       {/* Games List */}

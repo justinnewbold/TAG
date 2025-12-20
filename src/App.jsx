@@ -1,33 +1,49 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { useStore } from './store';
 import { api } from './services/api';
 import { socketService } from './services/socket';
 
-// Pages
+// Eagerly loaded pages (for fast initial render)
 import Home from './pages/Home';
-import CreateGame from './pages/CreateGame';
-import JoinGame from './pages/JoinGame';
-import GameLobby from './pages/GameLobby';
-import ActiveGame from './pages/ActiveGame';
-import Stats from './pages/Stats';
-import Friends from './pages/Friends';
-import Settings from './pages/Settings';
-import GameHistory from './pages/GameHistory';
-import Leaderboards from './pages/Leaderboards';
-import Achievements from './pages/Achievements';
 import NotFound from './pages/NotFound';
+
+// Lazy loaded pages (heavy components with maps)
+const CreateGame = lazy(() => import('./pages/CreateGame'));
+const JoinGame = lazy(() => import('./pages/JoinGame'));
+const GameLobby = lazy(() => import('./pages/GameLobby'));
+const ActiveGame = lazy(() => import('./pages/ActiveGame'));
+const Stats = lazy(() => import('./pages/Stats'));
+const Friends = lazy(() => import('./pages/Friends'));
+const Settings = lazy(() => import('./pages/Settings'));
+const GameHistory = lazy(() => import('./pages/GameHistory'));
+const Leaderboards = lazy(() => import('./pages/Leaderboards'));
+const Achievements = lazy(() => import('./pages/Achievements'));
 
 // Components
 import Navigation from './components/Navigation';
 import SignupModal from './components/SignupModal';
 import AchievementToast from './components/AchievementToast';
+import OnboardingTutorial from './components/OnboardingTutorial';
 import { GameErrorBoundary } from './components/ErrorBoundary';
 
+// Loading fallback for lazy loaded pages
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-10 h-10 border-2 border-neon-cyan border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-white/50 text-sm">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
 function App() {
-  const { user, currentGame, setUser, syncGameState } = useStore();
+  const { user, currentGame, setUser, syncGameState, settings, updateSettings } = useStore();
   const [showSignup, setShowSignup] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Try to re-authenticate with existing token on app load
   useEffect(() => {
@@ -149,27 +165,49 @@ function App() {
       
       {/* Main content */}
       <main className="relative pb-24">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/create" element={user ? <CreateGame /> : <Navigate to="/" />} />
-          <Route path="/join" element={user ? <JoinGame /> : <Navigate to="/" />} />
-          <Route path="/lobby" element={currentGame ? <GameErrorBoundary><GameLobby /></GameErrorBoundary> : <Navigate to="/" />} />
-          <Route path="/game" element={currentGame?.status === 'active' ? <GameErrorBoundary><ActiveGame /></GameErrorBoundary> : <Navigate to="/" />} />
-          <Route path="/stats" element={<GameErrorBoundary><Stats /></GameErrorBoundary>} />
-          <Route path="/friends" element={<GameErrorBoundary><Friends /></GameErrorBoundary>} />
-          <Route path="/settings" element={<GameErrorBoundary><Settings /></GameErrorBoundary>} />
-          <Route path="/history" element={<GameErrorBoundary><GameHistory /></GameErrorBoundary>} />
-          <Route path="/leaderboards" element={<GameErrorBoundary><Leaderboards /></GameErrorBoundary>} />
-          <Route path="/achievements" element={<GameErrorBoundary><Achievements /></GameErrorBoundary>} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/create" element={user ? <CreateGame /> : <Navigate to="/" />} />
+            <Route path="/join" element={user ? <JoinGame /> : <Navigate to="/" />} />
+            <Route path="/lobby" element={currentGame ? <GameErrorBoundary><GameLobby /></GameErrorBoundary> : <Navigate to="/" />} />
+            <Route path="/game" element={currentGame?.status === 'active' ? <GameErrorBoundary><ActiveGame /></GameErrorBoundary> : <Navigate to="/" />} />
+            <Route path="/stats" element={<GameErrorBoundary><Stats /></GameErrorBoundary>} />
+            <Route path="/friends" element={<GameErrorBoundary><Friends /></GameErrorBoundary>} />
+            <Route path="/settings" element={<GameErrorBoundary><Settings /></GameErrorBoundary>} />
+            <Route path="/history" element={<GameErrorBoundary><GameHistory /></GameErrorBoundary>} />
+            <Route path="/leaderboards" element={<GameErrorBoundary><Leaderboards /></GameErrorBoundary>} />
+            <Route path="/achievements" element={<GameErrorBoundary><Achievements /></GameErrorBoundary>} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
       </main>
       
       {/* Navigation */}
       {user && <Navigation />}
       
       {/* Signup Modal */}
-      {showSignup && <SignupModal onClose={() => setShowSignup(false)} />}
+      {showSignup && (
+        <SignupModal 
+          onClose={() => {
+            setShowSignup(false);
+            // Show onboarding after signup for new users
+            if (!settings.hasSeenOnboarding) {
+              setShowOnboarding(true);
+            }
+          }} 
+        />
+      )}
+      
+      {/* Onboarding Tutorial */}
+      {showOnboarding && (
+        <OnboardingTutorial 
+          onComplete={() => {
+            setShowOnboarding(false);
+            updateSettings({ hasSeenOnboarding: true });
+          }} 
+        />
+      )}
     </div>
   );
 }

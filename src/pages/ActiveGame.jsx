@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Target, Users, Clock, X, Zap, AlertTriangle, Flag, Shield, Calendar, Loader2, Snowflake, Skull, Heart } from 'lucide-react';
+import { Target, Users, Clock, X, Zap, AlertTriangle, Flag, Shield, Calendar, Loader2, Snowflake, Skull, Heart, Signal, SignalLow, SignalMedium, SignalHigh } from 'lucide-react';
 import { useStore, useSounds, isInNoTagTime, isInNoTagZone, canTagNow, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
@@ -57,10 +57,23 @@ function ActiveGame() {
   const [isTagging, setIsTagging] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [noTagStatus, setNoTagStatus] = useState({ inZone: false, inTime: false });
+  const [gpsAccuracy, setGpsAccuracy] = useState(null);
   const intervalRef = useRef(null);
   const prevItRef = useRef(null);
   const animationTimeoutRef = useRef(null);
   const errorTimeoutRef = useRef(null);
+  const lastProximityZoneRef = useRef(null);
+  const [timeRemaining, setTimeRemaining] = useState(null);
+  const [showCountdownWarning, setShowCountdownWarning] = useState(false);
+
+  // Get GPS accuracy quality level
+  const getGpsQuality = (accuracy) => {
+    if (!accuracy) return { level: 'unknown', color: 'text-white/40', label: 'GPS...' };
+    if (accuracy <= 10) return { level: 'excellent', color: 'text-green-400', label: `±${accuracy}m` };
+    if (accuracy <= 25) return { level: 'good', color: 'text-neon-cyan', label: `±${accuracy}m` };
+    if (accuracy <= 50) return { level: 'fair', color: 'text-yellow-400', label: `±${accuracy}m` };
+    return { level: 'poor', color: 'text-red-400', label: `±${Math.round(accuracy)}m` };
+  };
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -69,6 +82,37 @@ function ActiveGame() {
       if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
     };
   }, []);
+
+  // Proximity haptic feedback - escalating vibration as IT gets closer
+  useEffect(() => {
+    if (!isIt || noTagStatus.inZone || noTagStatus.inTime) return;
+    
+    // Determine proximity zone
+    let zone = null;
+    if (nearestDistance <= 10) zone = 'critical';
+    else if (nearestDistance <= 25) zone = 'close';
+    else if (nearestDistance <= 50) zone = 'near';
+    else if (nearestDistance <= 100) zone = 'approaching';
+    
+    // Only vibrate when entering a new zone
+    if (zone && zone !== lastProximityZoneRef.current) {
+      switch (zone) {
+        case 'critical':
+          vibrate([50, 30, 50, 30, 100]); // Rapid pulses
+          break;
+        case 'close':
+          vibrate([80, 40, 80]); // Strong double pulse
+          break;
+        case 'near':
+          vibrate([60, 60]); // Medium pulse
+          break;
+        case 'approaching':
+          vibrate([40]); // Light pulse
+          break;
+      }
+    }
+    lastProximityZoneRef.current = zone;
+  }, [isIt, Math.floor(nearestDistance / 5), noTagStatus.inZone, noTagStatus.inTime]);
 
   // Send location updates via socket
   useEffect(() => {
@@ -125,20 +169,34 @@ function ActiveGame() {
     prevItRef.current = currentGame?.itPlayerId;
   }, [currentGame?.itPlayerId, user?.id]);
 
-  // Check game duration - uses interval instead of depending on gameTime to avoid re-renders
+  // Check game duration with countdown warnings
   useEffect(() => {
     if (!currentGame?.settings?.duration || !currentGame?.startedAt) return;
 
     const checkDuration = () => {
       const remaining = currentGame.settings.duration - (Date.now() - currentGame.startedAt);
+      setTimeRemaining(remaining);
+      
+      // Show warning when under 1 minute
+      setShowCountdownWarning(remaining <= 60000 && remaining > 0);
+      
+      // Countdown beeps in final 10 seconds
+      if (remaining <= 10000 && remaining > 0) {
+        const secondsLeft = Math.ceil(remaining / 1000);
+        if (secondsLeft <= 5) {
+          playSound('countdown');
+          vibrate([100]);
+        }
+      }
+      
       if (remaining <= 0) {
         handleEndGame();
       }
     };
 
-    // Check immediately and then every 5 seconds
+    // Check immediately and then every second for accurate countdown
     checkDuration();
-    const intervalId = setInterval(checkDuration, 5000);
+    const intervalId = setInterval(checkDuration, 1000);
 
     return () => clearInterval(intervalId);
   }, [currentGame?.settings?.duration, currentGame?.startedAt]);
@@ -351,9 +409,16 @@ function ActiveGame() {
                 <Users className="w-4 h-4 text-white/50" />
                 <span>{currentGame.players?.length || 0}</span>
               </div>
-              <div className="flex items-center gap-1 text-xs text-white/40">
-                <span>GPS: {formatInterval(currentGame.settings?.gpsInterval)}</span>
-              </div>
+              {/* GPS Accuracy Indicator */}
+              {(() => {
+                const quality = getGpsQuality(user?.location?.accuracy);
+                return (
+                  <div className={`flex items-center gap-1 text-xs ${quality.color}`} title={`GPS Accuracy: ${quality.label}`}>
+                    <Signal className="w-3 h-3" />
+                    <span>{quality.label}</span>
+                  </div>
+                );
+              })()}
             </div>
             
             <button onClick={() => setShowEndConfirm(true)} className="p-2 hover:bg-white/10 rounded-lg">
@@ -376,6 +441,25 @@ function ActiveGame() {
                   <span className="text-xs text-green-400">In Safe Zone</span>
                 </div>
               )}
+            </div>
+          )}
+          
+          {/* Countdown Warning Banner */}
+          {showCountdownWarning && timeRemaining > 0 && (
+            <div className={`mt-2 flex items-center justify-center gap-2 p-3 rounded-lg ${
+              timeRemaining <= 10000 
+                ? 'bg-red-500/30 border border-red-500/50 animate-pulse' 
+                : timeRemaining <= 30000
+                ? 'bg-amber-500/30 border border-amber-500/50'
+                : 'bg-amber-500/20 border border-amber-500/30'
+            }`}>
+              <Clock className={`w-5 h-5 ${timeRemaining <= 10000 ? 'text-red-400' : 'text-amber-400'}`} />
+              <span className={`font-mono font-bold text-lg ${timeRemaining <= 10000 ? 'text-red-400' : 'text-amber-400'}`}>
+                {Math.ceil(timeRemaining / 1000)}s
+              </span>
+              <span className={`text-sm ${timeRemaining <= 10000 ? 'text-red-300' : 'text-amber-300'}`}>
+                {timeRemaining <= 10000 ? 'ENDING!' : 'remaining'}
+              </span>
             </div>
           )}
           

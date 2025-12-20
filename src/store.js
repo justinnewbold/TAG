@@ -248,6 +248,7 @@ const initialState = {
     highAccuracyGPS: true,
     darkMode: true,
     showDistance: true,
+    hasSeenOnboarding: false,
   },
   pendingInvites: [],
 };
@@ -294,12 +295,14 @@ export const useStore = create(
       createGame: (settings) => {
         const gameCode = generateGameCode();
         const user = get().user;
+        const gameMode = settings.gameMode || 'classic';
         const game = {
           id: generateId(),
           code: gameCode,
           host: user?.id,
           hostName: user?.name,
           status: 'waiting',
+          gameMode: gameMode,
           settings: {
             gpsInterval: settings.gpsInterval || 5 * 60 * 1000, // Default 5 minutes
             tagRadius: settings.tagRadius || 20,
@@ -308,17 +311,25 @@ export const useStore = create(
             gameName: settings.gameName || `${user?.name}'s Game`,
             noTagZones: settings.noTagZones || [],
             noTagTimes: settings.noTagTimes || [],
+            potatoTimer: settings.potatoTimer || 45000,
+            hideTime: settings.hideTime || 120000,
           },
           players: [{
             ...user,
             isIt: false,
+            isFrozen: false,
+            isEliminated: false,
+            team: null,
             joinedAt: Date.now(),
             tagCount: 0,
             survivalTime: 0,
           }],
           itPlayerId: null,
+          itPlayerIds: [],
           startedAt: null,
           endedAt: null,
+          hidePhaseEndAt: null,
+          potatoExpiresAt: null,
           tags: [],
           createdAt: Date.now(),
         };
@@ -936,6 +947,21 @@ export const useSounds = () => {
           gainNode.gain.value = 0.2;
           oscillator.start();
           oscillator.stop(ctx.currentTime + 0.2);
+          break;
+        case 'countdown':
+          oscillator.type = 'sine';
+          oscillator.frequency.value = 880;
+          gainNode.gain.value = 0.25;
+          oscillator.start();
+          oscillator.stop(ctx.currentTime + 0.15);
+          break;
+        case 'warning':
+          oscillator.type = 'sawtooth';
+          oscillator.frequency.value = 440;
+          gainNode.gain.value = 0.15;
+          oscillator.start();
+          oscillator.frequency.linearRampToValueAtTime(220, ctx.currentTime + 0.3);
+          oscillator.stop(ctx.currentTime + 0.3);
           break;
         default:
           oscillator.frequency.value = 440;

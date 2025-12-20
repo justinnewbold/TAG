@@ -55,7 +55,13 @@ function JoinGame() {
       console.error('Join game error:', err);
 
       // Fallback to local-only mode if server is unavailable
-      if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
+      const isNetworkError = 
+        err.message === 'Failed to fetch' || 
+        err.message.includes('NetworkError') ||
+        err.message.includes('Unable to connect') ||
+        err.message.includes('fetch');
+        
+      if (isNetworkError) {
         // Try local games
         const localGame = games.find(g => g.code === code.toUpperCase() && g.status === 'waiting');
 
@@ -67,7 +73,7 @@ function JoinGame() {
             return;
           }
         }
-        setError('Game not found. Make sure the server is running or try a local game.');
+        setError('Server offline. Local games only available on this device.');
       } else {
         setError(err.message || 'Failed to join game');
       }

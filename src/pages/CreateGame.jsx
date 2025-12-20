@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Circle, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin, Calendar, Plus, X, Shield, Map, Crosshair, Loader2, Zap } from 'lucide-react';
+import { ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin, Calendar, Plus, X, Shield, Map, Crosshair, Loader2, Zap, ChevronDown, ChevronUp, Settings } from 'lucide-react';
 import { useStore, useSounds, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
@@ -85,6 +85,8 @@ function CreateGame() {
   const [userLocation, setUserLocation] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
+  const [selectedPreset, setSelectedPreset] = useState(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [settings, setSettings] = useState({
     gameName: `${user?.name || 'Player'}'s Game`,
     gameMode: 'classic',
@@ -99,6 +101,76 @@ function CreateGame() {
     potatoTimer: 45000, // 45 seconds for hot potato
     hideTime: 120000, // 2 minutes for hide and seek
   });
+
+  // Game presets for quick setup
+  const GAME_PRESETS = [
+    {
+      id: 'quick',
+      name: 'Quick Game',
+      icon: '⚡',
+      desc: 'Fast-paced, close range',
+      color: 'neon-cyan',
+      settings: {
+        gameMode: 'classic',
+        gpsInterval: 5 * 60 * 1000,
+        tagRadius: 25,
+        duration: 30 * 60 * 1000, // 30 minutes
+        maxPlayers: 6,
+      },
+    },
+    {
+      id: 'neighborhood',
+      name: 'Neighborhood',
+      icon: '🏘️',
+      desc: 'Play around the block',
+      color: 'neon-purple',
+      settings: {
+        gameMode: 'classic',
+        gpsInterval: 15 * 60 * 1000,
+        tagRadius: 100,
+        duration: 2 * 60 * 60 * 1000, // 2 hours
+        maxPlayers: 10,
+      },
+    },
+    {
+      id: 'citywide',
+      name: 'City-Wide',
+      icon: '🌆',
+      desc: 'Extended hunt across town',
+      color: 'neon-orange',
+      settings: {
+        gameMode: 'manhunt',
+        gpsInterval: 30 * 60 * 1000,
+        tagRadius: 250,
+        duration: 24 * 60 * 60 * 1000, // 1 day
+        maxPlayers: 20,
+      },
+    },
+    {
+      id: 'custom',
+      name: 'Custom',
+      icon: '🎛️',
+      desc: 'Configure everything',
+      color: 'white',
+      settings: null, // Use current settings
+    },
+  ];
+
+  const applyPreset = (preset) => {
+    setSelectedPreset(preset.id);
+    vibrate([30]);
+    
+    if (preset.settings) {
+      setSettings(prev => ({
+        ...prev,
+        ...preset.settings,
+        gameName: prev.gameName, // Keep custom name
+      }));
+      setShowAdvanced(false);
+    } else {
+      setShowAdvanced(true);
+    }
+  };
 
   const [showCustomInterval, setShowCustomInterval] = useState(false);
   const [showAddZone, setShowAddZone] = useState(false);
@@ -286,10 +358,19 @@ function CreateGame() {
       console.error('Create game error:', err);
 
       // Fallback to local-only mode if server is unavailable
-      if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
+      const isNetworkError = 
+        err.message === 'Failed to fetch' || 
+        err.message.includes('NetworkError') ||
+        err.message.includes('Unable to connect') ||
+        err.message.includes('fetch');
+        
+      if (isNetworkError) {
+        console.log('Server unavailable, creating local game...');
         const game = createGame(settings);
         if (game) {
           navigate('/lobby');
+        } else {
+          setError('Failed to create local game');
         }
       } else {
         setError(err.message || 'Failed to create game');
@@ -317,6 +398,49 @@ function CreateGame() {
       </div>
       
       <div className="space-y-6">
+        {/* Quick Start Presets */}
+        <div className="card p-4">
+          <div className="flex items-center gap-3 mb-4">
+            <Zap className="w-5 h-5 text-neon-purple" />
+            <div>
+              <h3 className="font-medium">Quick Start</h3>
+              <p className="text-xs text-white/50">Choose a preset or customize</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+            {GAME_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                onClick={() => applyPreset(preset)}
+                className={`p-3 rounded-xl text-left transition-all ${
+                  selectedPreset === preset.id
+                    ? 'bg-neon-purple/20 border-2 border-neon-purple'
+                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xl">{preset.icon}</span>
+                  <span className={`font-bold text-sm ${selectedPreset === preset.id ? 'text-neon-purple' : ''}`}>
+                    {preset.name}
+                  </span>
+                </div>
+                <p className="text-xs text-white/50 line-clamp-2">{preset.desc}</p>
+                {preset.id !== 'custom' && preset.settings && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <span className="px-1.5 py-0.5 bg-white/10 rounded text-[10px]">
+                      {preset.settings.maxPlayers} players
+                    </span>
+                    <span className="px-1.5 py-0.5 bg-white/10 rounded text-[10px]">
+                      {Math.floor(preset.settings.duration / 60000)}min
+                    </span>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Game Mode Selection */}
         <div className="card p-4">
           <div className="flex items-center justify-between mb-4">
@@ -602,48 +726,71 @@ function CreateGame() {
           </div>
         </div>
         
-        {/* No-Tag Zones */}
+        {/* Advanced Settings Toggle */}
         <div className="card p-4">
-          <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+            className="w-full flex items-center justify-between"
+          >
             <div className="flex items-center gap-3">
-              <Shield className="w-5 h-5 text-green-400" />
-              <div>
-                <h3 className="font-medium">No-Tag Zones</h3>
-                <p className="text-xs text-white/50">Safe areas where tagging is disabled</p>
+              <Settings className="w-5 h-5 text-white/50" />
+              <div className="text-left">
+                <h3 className="font-medium">Advanced Settings</h3>
+                <p className="text-xs text-white/50">Safe zones, time restrictions</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowAddZone(true)}
-              className="p-2 bg-green-400/20 rounded-lg text-green-400 hover:bg-green-400/30 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          </div>
-          
-          {settings.noTagZones.length > 0 ? (
-            <div className="space-y-2">
-              {settings.noTagZones.map((zone) => (
-                <div key={zone.id} className="flex items-center justify-between p-3 bg-green-400/10 rounded-xl border border-green-400/20">
-                  <div className="flex items-center gap-3">
-                    <MapPin className="w-4 h-4 text-green-400" />
-                    <div>
-                      <p className="font-medium text-sm">{zone.name}</p>
-                      <p className="text-xs text-white/50">{formatRadius(zone.radius)} radius</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveZone(zone.id)}
-                    className="p-1 hover:bg-white/10 rounded"
-                  >
-                    <X className="w-4 h-4 text-white/50" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-white/40 text-center py-4">No safe zones added</p>
-          )}
+            {showAdvancedSettings ? (
+              <ChevronUp className="w-5 h-5 text-white/50" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-white/50" />
+            )}
+          </button>
         </div>
+        
+        {showAdvancedSettings && (
+          <>
+            {/* No-Tag Zones */}
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Shield className="w-5 h-5 text-green-400" />
+                  <div>
+                    <h3 className="font-medium">No-Tag Zones</h3>
+                    <p className="text-xs text-white/50">Safe areas where tagging is disabled</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAddZone(true)}
+                  className="p-2 bg-green-400/20 rounded-lg text-green-400 hover:bg-green-400/30 transition-colors"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {settings.noTagZones.length > 0 ? (
+                <div className="space-y-2">
+                  {settings.noTagZones.map((zone) => (
+                    <div key={zone.id} className="flex items-center justify-between p-3 bg-green-400/10 rounded-xl border border-green-400/20">
+                      <div className="flex items-center gap-3">
+                        <MapPin className="w-4 h-4 text-green-400" />
+                        <div>
+                          <p className="font-medium text-sm">{zone.name}</p>
+                          <p className="text-xs text-white/50">{formatRadius(zone.radius)} radius</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveZone(zone.id)}
+                        className="p-1 hover:bg-white/10 rounded"
+                      >
+                        <X className="w-4 h-4 text-white/50" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-white/40 text-center py-4">No safe zones added</p>
+              )}
+            </div>
         
         {/* No-Tag Times */}
         <div className="card p-4">
@@ -689,6 +836,8 @@ function CreateGame() {
             <p className="text-sm text-white/40 text-center py-4">No time restrictions added</p>
           )}
         </div>
+          </>
+        )}
         
         {/* Error Display */}
         {error && (
