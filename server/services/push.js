@@ -98,10 +98,10 @@ export const pushService = {
       };
     },
 
-    youAreIt() {
+    youAreIt(taggerName = null) {
       return {
         title: "You're IT!",
-        body: 'You were tagged! Time to chase!',
+        body: taggerName ? `${taggerName} tagged you! Time to chase!` : 'You were tagged! Time to chase!',
         icon: '/icons/icon-192x192.png',
         badge: '/icons/badge-72x72.png',
         tag: 'tagged',

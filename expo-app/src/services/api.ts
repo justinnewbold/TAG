@@ -79,7 +79,7 @@ class ApiService {
   async createGame(settings: GameSettings) {
     return this.request<{ game: Game }>('/games', {
       method: 'POST',
-      body: JSON.stringify(settings),
+      body: JSON.stringify({ settings }),
     });
   }
 

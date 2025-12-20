@@ -295,11 +295,12 @@ export const authDb = {
     if (updates.appleId !== undefined) { fields.push(usePostgres ? `apple_id = $${idx++}` : 'apple_id = ?'); values.push(updates.appleId); }
     if (updates.authProvider !== undefined) { fields.push(usePostgres ? `auth_provider = $${idx++}` : 'auth_provider = ?'); values.push(updates.authProvider); }
 
+    // No actual updates provided
+    if (fields.length === 0) return userDb.getById(userId);
+
     fields.push(usePostgres ? `updated_at = $${idx++}` : 'updated_at = ?');
     values.push(Date.now());
     values.push(userId);
-
-    if (fields.length === 0) return;
 
     if (usePostgres) {
       await db.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${idx}`, values);

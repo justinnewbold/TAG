@@ -136,6 +136,11 @@ if (usePostgres) {
         id: user.id,
         name: user.name,
         avatar: user.avatar,
+        email: user.email,
+        emailVerified: !!user.email_verified,
+        phone: user.phone,
+        phoneVerified: !!user.phone_verified,
+        authProvider: user.auth_provider,
         createdAt: parseInt(user.created_at),
         stats: {
           gamesPlayed: user.games_played,
@@ -472,7 +477,13 @@ if (usePostgres) {
       ).all(id).map(a => a.achievement_id);
 
       return {
-        id: user.id, name: user.name, avatar: user.avatar, createdAt: user.created_at,
+        id: user.id, name: user.name, avatar: user.avatar,
+        email: user.email,
+        emailVerified: !!user.email_verified,
+        phone: user.phone,
+        phoneVerified: !!user.phone_verified,
+        authProvider: user.auth_provider,
+        createdAt: user.created_at,
         stats: {
           gamesPlayed: user.games_played, gamesWon: user.games_won,
           totalTags: user.total_tags, timesTagged: user.times_tagged,

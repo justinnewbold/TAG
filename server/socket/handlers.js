@@ -4,16 +4,18 @@ import { pushService } from '../services/push.js';
 export function setupSocketHandlers(io, socket, gameManager) {
   const user = socket.user;
 
-  // Join game room when connecting
-  const currentGame = gameManager.getPlayerGame(user.id);
-  if (currentGame) {
-    socket.join(`game:${currentGame.id}`);
-    console.log(`${user.name} rejoined game room: ${currentGame.code}`);
-  }
+  // Join game room when connecting (async IIFE for initial setup)
+  (async () => {
+    const currentGame = await gameManager.getPlayerGame(user.id);
+    if (currentGame) {
+      socket.join(`game:${currentGame.id}`);
+      console.log(`${user.name} rejoined game room: ${currentGame.code}`);
+    }
+  })();
 
   // Join a game room
-  socket.on('game:join', (gameId) => {
-    const game = gameManager.getGame(gameId);
+  socket.on('game:join', async (gameId) => {
+    const game = await gameManager.getGame(gameId);
     if (game && game.players.some(p => p.id === user.id)) {
       socket.join(`game:${gameId}`);
       console.log(`${user.name} joined game room: ${game.code}`);
@@ -29,7 +31,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
     console.log(`${user.name} left game room`);
   });
 
-  // Update player location
+  // Update player location (synchronous for performance - uses cache only)
   socket.on('location:update', (location) => {
     // Validate location data
     const locationValidation = validate.location(location);
@@ -95,7 +97,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
   });
 
   // Tag attempt via WebSocket (alternative to REST)
-  socket.on('tag:attempt', ({ targetId }) => {
+  socket.on('tag:attempt', async ({ targetId }) => {
     // Validate targetId
     const targetValidation = validate.uuid(targetId);
     if (!targetValidation.valid) {
@@ -103,13 +105,13 @@ export function setupSocketHandlers(io, socket, gameManager) {
       return;
     }
 
-    const game = gameManager.getPlayerGame(user.id);
+    const game = await gameManager.getPlayerGame(user.id);
     if (!game) {
       socket.emit('tag:result', { success: false, error: 'Not in a game' });
       return;
     }
 
-    const result = gameManager.tagPlayer(game.id, user.id, targetValidation.id);
+    const result = await gameManager.tagPlayer(game.id, user.id, targetValidation.id);
 
     if (result.success) {
       const validatedTargetId = targetValidation.id;
@@ -149,8 +151,8 @@ export function setupSocketHandlers(io, socket, gameManager) {
   });
 
   // Request current game state
-  socket.on('game:sync', () => {
-    const game = gameManager.getPlayerGame(user.id);
+  socket.on('game:sync', async () => {
+    const game = await gameManager.getPlayerGame(user.id);
     if (game) {
       socket.emit('game:state', { game });
     } else {
@@ -164,10 +166,10 @@ export function setupSocketHandlers(io, socket, gameManager) {
   });
 
   // Handle disconnect
-  socket.on('disconnect', (reason) => {
+  socket.on('disconnect', async (reason) => {
     console.log(`User disconnected: ${user.name} (${reason})`);
 
-    const game = gameManager.getPlayerGame(user.id);
+    const game = await gameManager.getPlayerGame(user.id);
     if (game && game.status === 'active') {
       // Notify other players that this player went offline
       socket.to(`game:${game.id}`).emit('player:offline', {
@@ -178,8 +180,8 @@ export function setupSocketHandlers(io, socket, gameManager) {
   });
 
   // Reconnection handling
-  socket.on('reconnect:game', () => {
-    const game = gameManager.getPlayerGame(user.id);
+  socket.on('reconnect:game', async () => {
+    const game = await gameManager.getPlayerGame(user.id);
     if (game) {
       socket.join(`game:${game.id}`);
       socket.emit('game:state', { game });

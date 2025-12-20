@@ -184,8 +184,12 @@ app.use((err, req, res, next) => {
 });
 
 // Periodic cleanup of old games (every hour)
-setInterval(() => {
-  gameManager.cleanupOldGames();
+setInterval(async () => {
+  try {
+    await gameManager.cleanupOldGames();
+  } catch (error) {
+    console.error('Game cleanup error:', error);
+  }
 }, 60 * 60 * 1000);
 
 // Graceful shutdown

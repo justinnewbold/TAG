@@ -42,24 +42,35 @@ export default function LobbyScreen() {
     };
 
     // Listen for player joined
-    const handlePlayerJoined = ({ game }: { game: any }) => {
+    const handlePlayerJoined = ({ player, playerCount }: { player: any; playerCount: number }) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      syncGameState(game);
+      // Request fresh game state from server
+      socketService.syncGame();
     };
 
     // Listen for player left
-    const handlePlayerLeft = ({ game }: { game: any }) => {
-      syncGameState(game);
+    const handlePlayerLeft = ({ playerId, playerCount }: { playerId: string; playerCount: number }) => {
+      // Request fresh game state from server
+      socketService.syncGame();
+    };
+
+    // Listen for game state sync response
+    const handleGameState = ({ game }: { game: any }) => {
+      if (game) {
+        syncGameState(game);
+      }
     };
 
     socketService.on('game:started', handleGameStarted);
     socketService.on('player:joined', handlePlayerJoined);
     socketService.on('player:left', handlePlayerLeft);
+    socketService.on('game:state', handleGameState);
 
     return () => {
       socketService.off('game:started', handleGameStarted);
       socketService.off('player:joined', handlePlayerJoined);
       socketService.off('player:left', handlePlayerLeft);
+      socketService.off('game:state', handleGameState);
     };
   }, [currentGame]);
 
