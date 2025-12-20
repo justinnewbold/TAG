@@ -70,11 +70,11 @@ export const validate = {
     const errors = [];
     const validated = {};
 
-    // GPS interval: 1 second to 30 minutes
+    // GPS interval: 5 minutes to 24 hours
     if (settings.gpsInterval !== undefined) {
       const interval = parseInt(settings.gpsInterval);
-      if (isNaN(interval) || interval < 1000 || interval > 30 * 60 * 1000) {
-        errors.push('GPS interval must be between 1 second and 30 minutes');
+      if (isNaN(interval) || interval < 5 * 60 * 1000 || interval > 24 * 60 * 60 * 1000) {
+        errors.push('GPS interval must be between 5 minutes and 24 hours');
       } else {
         validated.gpsInterval = interval;
       }
@@ -105,16 +105,16 @@ export const validate = {
       validated.gameName = sanitize.gameName(settings.gameName);
     }
 
-    // Duration: null (unlimited) or 1 minute to 7 days
+    // Duration: null (unlimited) or 1 hour to 30 days
     if (settings.duration !== undefined) {
       if (settings.duration === null) {
         validated.duration = null; // Unlimited duration
       } else {
         const duration = parseInt(settings.duration);
-        const minDuration = 60 * 1000; // 1 minute
-        const maxDuration = 7 * 24 * 60 * 60 * 1000; // 7 days
+        const minDuration = 60 * 60 * 1000; // 1 hour
+        const maxDuration = 30 * 24 * 60 * 60 * 1000; // 30 days
         if (isNaN(duration) || duration < minDuration || duration > maxDuration) {
-          errors.push('Duration must be between 1 minute and 7 days');
+          errors.push('Duration must be between 1 hour and 30 days');
         } else {
           validated.duration = duration;
         }
