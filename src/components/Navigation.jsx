@@ -1,10 +1,20 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, Users, BarChart3, Settings, Trophy } from 'lucide-react';
+import { useStore } from '../store';
 
 function Navigation() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { settings } = useStore();
+  
+  // Haptic feedback on tab change
+  const handleTabPress = (path) => {
+    if ('vibrate' in navigator && settings?.vibration !== false) {
+      navigator.vibrate(10);
+    }
+    navigate(path);
+  };
   
   const tabs = [
     { path: '/', icon: Home, label: 'Home' },
@@ -23,28 +33,34 @@ function Navigation() {
     <nav 
       role="navigation" 
       aria-label="Main navigation"
-      className="fixed bottom-0 left-0 right-0 bg-dark-800/95 backdrop-blur-lg border-t border-white/10 pb-safe z-40"
+      className="fixed bottom-0 left-0 right-0 bg-dark-800/95 backdrop-blur-lg border-t border-white/10 z-40"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      <div className="flex items-center justify-around py-2">
+      <div className="flex items-center justify-around py-1">
         {tabs.map(({ path, icon: Icon, label }) => {
           const isActive = location.pathname === path;
           
           return (
             <button
               key={path}
-              onClick={() => navigate(path)}
+              onClick={() => handleTabPress(path)}
               aria-label={label}
               aria-current={isActive ? 'page' : undefined}
-              className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neon-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-dark-800 ${
+              className={`relative flex flex-col items-center justify-center min-w-[64px] min-h-[56px] rounded-2xl transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-neon-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-dark-800 ${
                 isActive 
-                  ? 'text-neon-cyan' 
-                  : 'text-white/50 hover:text-white/70'
+                  ? 'text-neon-cyan bg-neon-cyan/10' 
+                  : 'text-white/50 hover:text-white/70 hover:bg-white/5'
               }`}
             >
-              <Icon className={`w-6 h-6 ${isActive ? 'drop-shadow-[0_0_8px_rgba(0,245,255,0.5)]' : ''}`} />
-              <span className="text-xs font-medium">{label}</span>
+              <Icon 
+                className={`w-6 h-6 transition-transform ${isActive ? 'scale-110 drop-shadow-[0_0_8px_rgba(0,245,255,0.5)]' : ''}`} 
+                strokeWidth={isActive ? 2.5 : 2}
+              />
+              <span className={`text-[10px] font-medium mt-0.5 ${isActive ? 'font-bold' : ''}`}>
+                {label}
+              </span>
               {isActive && (
-                <div className="absolute bottom-1 w-1 h-1 rounded-full bg-neon-cyan" />
+                <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-gradient-to-r from-neon-cyan to-neon-purple" />
               )}
             </button>
           );

@@ -1,12 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trophy, Target, Shield, Clock, Medal, Crown, Users } from 'lucide-react';
+import { ArrowLeft, Trophy, Target, Shield, Clock, Medal, Crown, Users, RefreshCw, Share2 } from 'lucide-react';
 import { useStore } from '../store';
+import { useSwipe, usePullToRefresh } from '../hooks/useGestures';
 
 function Leaderboards() {
   const navigate = useNavigate();
   const { games, user, friends } = useStore();
   const [activeTab, setActiveTab] = useState('allTime');
+  const [activeBoard, setActiveBoard] = useState('wins');
+  
+  // Swipe gestures
+  const swipeHandlers = useSwipe({
+    onSwipeRight: () => navigate(-1),
+    onSwipeLeft: () => {
+      const boards = ['wins', 'tags', 'survival', 'games'];
+      const currentIndex = boards.indexOf(activeBoard);
+      if (currentIndex < boards.length - 1) {
+        setActiveBoard(boards[currentIndex + 1]);
+      }
+    },
+    threshold: 80,
+  });
+  
+  // Pull to refresh
+  const handleRefresh = useCallback(async () => {
+    await new Promise(resolve => setTimeout(resolve, 800));
+  }, []);
+  
+  const { pullHandlers, isPulling, isRefreshing, pullProgress } = usePullToRefresh(handleRefresh);
   
   // Calculate player stats from all games
   const calculatePlayerStats = () => {
@@ -59,8 +81,6 @@ function Leaderboards() {
     games: [...allPlayerStats].sort((a, b) => b.gamesPlayed - a.gamesPlayed),
   };
   
-  const [activeBoard, setActiveBoard] = useState('wins');
-  
   const formatTime = (ms) => {
     const seconds = Math.floor(ms / 1000);
     const mins = Math.floor(seconds / 60);
@@ -97,158 +117,233 @@ function Leaderboards() {
   const BoardIcon = boardIcons[activeBoard];
   
   return (
-    <div className="min-h-screen p-6">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => navigate(-1)}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+    <div 
+      className="min-h-screen pb-32 overflow-y-auto"
+      {...swipeHandlers}
+      {...pullHandlers}
+    >
+      {/* Pull-to-refresh indicator */}
+      {isPulling && (
+        <div 
+          className="fixed top-0 left-0 right-0 flex justify-center py-4 z-50 transition-transform"
+          style={{ transform: `translateY(${Math.min(pullProgress * 60, 60)}px)` }}
         >
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-display font-bold">Leaderboards</h1>
-          <p className="text-sm text-white/50">See who's on top</p>
+          <div className={`p-3 rounded-full bg-dark-800 shadow-lg ${isRefreshing ? 'animate-spin' : ''}`}>
+            <RefreshCw className={`w-6 h-6 ${pullProgress >= 1 ? 'text-neon-cyan' : 'text-white/40'}`} />
+          </div>
+        </div>
+      )}
+      
+      {/* Header - Compact */}
+      <div className="sticky top-0 z-40 bg-dark-900/95 backdrop-blur-sm p-4 border-b border-white/10">
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-3 hover:bg-white/10 rounded-xl transition-colors min-h-[48px] min-w-[48px] flex items-center justify-center"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <div className="flex-1">
+            <h1 className="text-xl font-display font-bold">Leaderboards</h1>
+            <p className="text-xs text-white/50">See who's on top</p>
+          </div>
+          {isRefreshing && (
+            <RefreshCw className="w-5 h-5 text-neon-cyan animate-spin" />
+          )}
+        </div>
+        
+        {/* Board Type Tabs - Large touch targets, horizontal scroll */}
+        <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+          {[
+            { key: 'wins', icon: Trophy, label: 'Wins' },
+            { key: 'tags', icon: Target, label: 'Tags' },
+            { key: 'survival', icon: Shield, label: 'Survival' },
+            { key: 'games', icon: Users, label: 'Games' },
+          ].map(({ key, icon: Icon, label }) => (
+            <button
+              key={key}
+              onClick={() => setActiveBoard(key)}
+              className={`flex-shrink-0 py-3 px-5 rounded-xl flex items-center gap-2 transition-all min-h-[56px] ${
+                activeBoard === key
+                  ? 'bg-neon-cyan/20 border border-neon-cyan/50 text-neon-cyan'
+                  : 'bg-white/5 border border-white/10 text-white/60'
+              }`}
+            >
+              <Icon className="w-5 h-5" />
+              <span className="text-sm font-medium">{label}</span>
+            </button>
+          ))}
         </div>
       </div>
       
-      {/* Board Type Tabs */}
-      <div className="grid grid-cols-4 gap-2 mb-6">
-        {[
-          { key: 'wins', icon: Trophy, label: 'Wins' },
-          { key: 'tags', icon: Target, label: 'Tags' },
-          { key: 'survival', icon: Shield, label: 'Survival' },
-          { key: 'games', icon: Users, label: 'Games' },
-        ].map(({ key, icon: Icon, label }) => (
-          <button
-            key={key}
-            onClick={() => setActiveBoard(key)}
-            className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${
-              activeBoard === key
-                ? 'bg-neon-cyan/20 border border-neon-cyan/50 text-neon-cyan'
-                : 'bg-white/5 border border-white/10 text-white/60 hover:bg-white/10'
-            }`}
-          >
-            <Icon className="w-5 h-5" />
-            <span className="text-xs font-medium">{label}</span>
-          </button>
-        ))}
+      {/* Swipe hint */}
+      <div className="px-4 py-2 text-center">
+        <span className="text-xs text-white/30">← Swipe to navigate between boards →</span>
       </div>
       
       {/* Leaderboard */}
-      {leaderboards[activeBoard].length > 0 ? (
-        <div className="space-y-3">
-          {/* Top 3 */}
-          <div className="grid grid-cols-3 gap-2 mb-6">
-            {leaderboards[activeBoard].slice(0, 3).map((player, index) => {
-              const positions = [
-                { bg: 'bg-amber-500/20', border: 'border-amber-500/50', text: 'text-amber-400', crown: '👑' },
-                { bg: 'bg-gray-400/20', border: 'border-gray-400/50', text: 'text-gray-300', crown: '🥈' },
-                { bg: 'bg-amber-700/20', border: 'border-amber-700/50', text: 'text-amber-600', crown: '🥉' },
-              ];
-              const pos = positions[index];
+      <div className="px-4">
+        {leaderboards[activeBoard].length > 0 ? (
+          <div className="space-y-3">
+            {/* Top 3 - Podium style, centered */}
+            <div className="flex items-end justify-center gap-2 mb-6 pt-4">
+              {/* 2nd Place */}
+              {leaderboards[activeBoard][1] && (
+                <div className="flex-1 max-w-[120px]">
+                  <div className="bg-gray-400/20 border border-gray-400/50 rounded-xl p-3 text-center">
+                    <div className="text-2xl mb-1">🥈</div>
+                    <div className={`text-3xl mb-1 ${leaderboards[activeBoard][1].id === user?.id ? 'ring-2 ring-neon-cyan rounded-full inline-block p-1' : ''}`}>
+                      {leaderboards[activeBoard][1].avatar}
+                    </div>
+                    <h3 className="font-medium text-gray-300 truncate text-sm">
+                      {leaderboards[activeBoard][1].name}
+                    </h3>
+                    <div className="mt-1 text-xl font-bold">
+                      {getStatValue(leaderboards[activeBoard][1])}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* 1st Place - Tallest */}
+              {leaderboards[activeBoard][0] && (
+                <div className="flex-1 max-w-[140px]">
+                  <div className="bg-amber-500/20 border border-amber-500/50 rounded-xl p-4 text-center -mt-6">
+                    <div className="text-3xl mb-1">👑</div>
+                    <div className={`text-4xl mb-1 ${leaderboards[activeBoard][0].id === user?.id ? 'ring-2 ring-neon-cyan rounded-full inline-block p-1' : ''}`}>
+                      {leaderboards[activeBoard][0].avatar}
+                    </div>
+                    <h3 className="font-semibold text-amber-400 truncate">
+                      {leaderboards[activeBoard][0].name}
+                    </h3>
+                    <div className="mt-2 text-2xl font-bold">
+                      {getStatValue(leaderboards[activeBoard][0])}
+                    </div>
+                    <p className="text-xs text-white/40">{getStatLabel()}</p>
+                  </div>
+                </div>
+              )}
+              
+              {/* 3rd Place */}
+              {leaderboards[activeBoard][2] && (
+                <div className="flex-1 max-w-[120px]">
+                  <div className="bg-amber-700/20 border border-amber-700/50 rounded-xl p-3 text-center mt-4">
+                    <div className="text-2xl mb-1">🥉</div>
+                    <div className={`text-3xl mb-1 ${leaderboards[activeBoard][2].id === user?.id ? 'ring-2 ring-neon-cyan rounded-full inline-block p-1' : ''}`}>
+                      {leaderboards[activeBoard][2].avatar}
+                    </div>
+                    <h3 className="font-medium text-amber-600 truncate text-sm">
+                      {leaderboards[activeBoard][2].name}
+                    </h3>
+                    <div className="mt-1 text-xl font-bold">
+                      {getStatValue(leaderboards[activeBoard][2])}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Rest of Leaderboard - Large touch targets */}
+            {leaderboards[activeBoard].slice(3).map((player, index) => {
               const isUser = player.id === user?.id;
               
               return (
                 <div
                   key={player.id}
-                  className={`${pos.bg} border ${pos.border} rounded-xl p-4 text-center ${
-                    index === 0 ? 'col-span-3 sm:col-span-1 sm:order-2' : ''
-                  } ${index === 1 ? 'sm:order-1' : ''} ${index === 2 ? 'sm:order-3' : ''}`}
+                  className={`card p-4 flex items-center gap-4 min-h-[72px] ${
+                    isUser ? 'border border-neon-cyan/30 bg-neon-cyan/5' : ''
+                  }`}
                 >
-                  <div className="text-3xl mb-2">{pos.crown}</div>
-                  <div className={`text-2xl mb-1 ${isUser ? 'ring-2 ring-neon-cyan rounded-full inline-block p-1' : ''}`}>
-                    {player.avatar}
+                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-lg font-bold">
+                    {index + 4}
                   </div>
-                  <h3 className={`font-semibold ${pos.text} truncate`}>
-                    {player.name}
-                    {isUser && ' (You)'}
-                  </h3>
-                  <div className="mt-2 text-2xl font-bold">
-                    {getStatValue(player)}
+                  <div className="text-3xl">{player.avatar}</div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium truncate">
+                      {player.name}
+                      {isUser && <span className="text-neon-cyan ml-2">(You)</span>}
+                    </h3>
+                    <p className="text-xs text-white/40">
+                      {player.gamesPlayed} games • {player.wins} wins
+                    </p>
                   </div>
-                  <p className="text-xs text-white/40">{getStatLabel()}</p>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold">{getStatValue(player)}</p>
+                    <p className="text-xs text-white/40">{getStatLabel()}</p>
+                  </div>
                 </div>
               );
             })}
           </div>
-          
-          {/* Rest of Leaderboard */}
-          {leaderboards[activeBoard].slice(3).map((player, index) => {
-            const isUser = player.id === user?.id;
-            
-            return (
-              <div
-                key={player.id}
-                className={`card p-4 flex items-center gap-4 ${
-                  isUser ? 'border border-neon-cyan/30 bg-neon-cyan/5' : ''
-                }`}
-              >
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold">
-                  {index + 4}
-                </div>
-                <div className="text-2xl">{player.avatar}</div>
-                <div className="flex-1">
-                  <h3 className="font-medium">
-                    {player.name}
-                    {isUser && <span className="text-neon-cyan ml-2">(You)</span>}
-                  </h3>
-                  <p className="text-xs text-white/40">
-                    {player.gamesPlayed} games • {player.wins} wins
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold">{getStatValue(player)}</p>
-                  <p className="text-xs text-white/40">{getStatLabel()}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="text-center py-16">
-          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
-            <BoardIcon className="w-10 h-10 text-white/20" />
+        ) : (
+          <div className="text-center py-16">
+            <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
+              <BoardIcon className="w-12 h-12 text-white/20" />
+            </div>
+            <h3 className="text-lg font-medium text-white/60 mb-2">No Data Yet</h3>
+            <p className="text-sm text-white/40 mb-6">
+              Play games to see leaderboard rankings!
+            </p>
           </div>
-          <h3 className="text-lg font-medium text-white/60 mb-2">No Data Yet</h3>
-          <p className="text-sm text-white/40 mb-6">
-            Play games to see leaderboard rankings!
-          </p>
-          <button
-            onClick={() => navigate('/create')}
-            className="btn-primary"
-          >
-            Start Playing
-          </button>
+        )}
+      </div>
+      
+      {/* Your Rank Card - Fixed at bottom for easy access */}
+      {user && allPlayerStats.length > 0 && (
+        <div className="fixed bottom-20 left-4 right-4 z-40">
+          <div className="card-glow p-4 bg-dark-800/95 backdrop-blur-sm">
+            <div className="flex items-center gap-3 mb-3">
+              <Medal className="w-5 h-5 text-neon-cyan" />
+              <span className="font-semibold">Your Rankings</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {['wins', 'tags', 'survival', 'games'].map((board) => {
+                const sorted = leaderboards[board];
+                const userRank = sorted.findIndex(p => p.id === user.id) + 1;
+                const Icon = boardIcons[board];
+                
+                return (
+                  <button
+                    key={board}
+                    onClick={() => setActiveBoard(board)}
+                    className={`text-center p-3 rounded-xl min-h-[64px] transition-all ${
+                      activeBoard === board 
+                        ? 'bg-neon-cyan/20 border border-neon-cyan/50' 
+                        : 'bg-white/5'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 mx-auto mb-1 ${activeBoard === board ? 'text-neon-cyan' : 'text-white/40'}`} />
+                    <p className={`text-lg font-bold ${activeBoard === board ? 'text-neon-cyan' : ''}`}>
+                      {userRank > 0 ? `#${userRank}` : '-'}
+                    </p>
+                    <p className="text-xs text-white/40 capitalize">{board}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
       
-      {/* Your Rank Card */}
-      {user && allPlayerStats.length > 0 && (
-        <div className="mt-8 card-glow p-4">
-          <h3 className="font-semibold mb-3 flex items-center gap-2">
-            <Medal className="w-5 h-5 text-neon-cyan" />
-            Your Rankings
-          </h3>
-          <div className="grid grid-cols-4 gap-3">
-            {['wins', 'tags', 'survival', 'games'].map((board) => {
-              const sorted = leaderboards[board];
-              const userRank = sorted.findIndex(p => p.id === user.id) + 1;
-              const Icon = boardIcons[board];
-              
-              return (
-                <div key={board} className="text-center p-2 bg-white/5 rounded-lg">
-                  <Icon className="w-4 h-4 mx-auto text-white/40 mb-1" />
-                  <p className="text-lg font-bold">
-                    {userRank > 0 ? `#${userRank}` : '-'}
-                  </p>
-                  <p className="text-xs text-white/40 capitalize">{board}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Bottom FAB - Share */}
+      <div className="fixed bottom-24 right-4 z-50">
+        <button
+          onClick={() => {
+            // Share leaderboard
+            if (navigator.share) {
+              navigator.share({
+                title: 'TAG Leaderboards',
+                text: `Check out the ${activeBoard} leaderboard on TAG!`,
+              });
+            }
+          }}
+          className="w-14 h-14 rounded-full bg-gradient-to-r from-neon-purple to-neon-cyan shadow-lg shadow-neon-purple/30 flex items-center justify-center active:scale-95 transition-transform"
+          aria-label="Share leaderboard"
+        >
+          <Share2 className="w-6 h-6 text-dark-900" />
+        </button>
+      </div>
     </div>
   );
 }

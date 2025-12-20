@@ -14,6 +14,7 @@ const JoinGame = lazy(() => import('./pages/JoinGame'));
 const GameLobby = lazy(() => import('./pages/GameLobby'));
 const ActiveGame = lazy(() => import('./pages/ActiveGame'));
 const Stats = lazy(() => import('./pages/Stats'));
+const EnhancedStats = lazy(() => import('./pages/EnhancedStats'));
 const Friends = lazy(() => import('./pages/Friends'));
 const Settings = lazy(() => import('./pages/Settings'));
 const GameHistory = lazy(() => import('./pages/GameHistory'));
@@ -173,6 +174,7 @@ function App() {
             <Route path="/lobby" element={currentGame ? <GameErrorBoundary><GameLobby /></GameErrorBoundary> : <Navigate to="/" />} />
             <Route path="/game" element={currentGame?.status === 'active' ? <GameErrorBoundary><ActiveGame /></GameErrorBoundary> : <Navigate to="/" />} />
             <Route path="/stats" element={<GameErrorBoundary><Stats /></GameErrorBoundary>} />
+            <Route path="/stats/enhanced" element={<GameErrorBoundary><EnhancedStats /></GameErrorBoundary>} />
             <Route path="/friends" element={<GameErrorBoundary><Friends /></GameErrorBoundary>} />
             <Route path="/settings" element={<GameErrorBoundary><Settings /></GameErrorBoundary>} />
             <Route path="/history" element={<GameErrorBoundary><GameHistory /></GameErrorBoundary>} />

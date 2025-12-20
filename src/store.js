@@ -238,6 +238,16 @@ const initialState = {
     uniqueFriendsPlayed: 0,
     fastestTag: null,
     playedAtNight: false,
+    // New stats
+    currentWinStreak: 0,
+    bestWinStreak: 0,
+    currentDailyStreak: 0,
+    bestDailyStreak: 0,
+    lastPlayDate: null,
+    mostTagsInGame: 0,
+    longestGamePlayed: 0,
+    powerupsUsed: 0,
+    powerupsCollected: 0,
   },
   achievements: [],
   newAchievement: null,
@@ -249,8 +259,29 @@ const initialState = {
     darkMode: true,
     showDistance: true,
     hasSeenOnboarding: false,
+    // Battery optimization
+    batteryMode: 'balanced', // 'power-save', 'balanced', 'high-accuracy'
+    // Accessibility
+    colorblindMode: 'none',
+    largeText: false,
+    reducedMotion: false,
+    largeTouchTargets: false,
+    audioCues: true,
+    voiceAnnouncements: false,
+    strongHaptics: false,
+    // Game preferences
+    autoJoinRematch: false,
+    showSpectatorCount: true,
+    enablePowerups: true,
+    enableChat: true,
   },
   pendingInvites: [],
+  // Power-ups
+  powerupInventory: [],
+  activePowerupEffects: [],
+  // Game pause state
+  isPaused: false,
+  pausedAt: null,
 };
 
 export const useStore = create(
@@ -674,6 +705,117 @@ export const useStore = create(
         games: state.games.filter(g => g.id === state.currentGame?.id),
       })),
       
+      // Game pause functionality
+      pauseGame: () => set((state) => ({
+        isPaused: true,
+        pausedAt: Date.now(),
+      })),
+      
+      resumeGame: () => set((state) => ({
+        isPaused: false,
+        pausedAt: null,
+      })),
+      
+      // Power-up actions
+      addPowerup: (powerup) => set((state) => ({
+        powerupInventory: [...state.powerupInventory, {
+          ...powerup,
+          instanceId: `${powerup.id}_${Date.now()}`,
+          acquiredAt: Date.now(),
+        }],
+        stats: {
+          ...state.stats,
+          powerupsCollected: state.stats.powerupsCollected + 1,
+        },
+      })),
+      
+      usePowerup: (powerupId) => {
+        const state = get();
+        const powerupIndex = state.powerupInventory.findIndex(p => p.id === powerupId);
+        if (powerupIndex === -1) return { success: false, reason: 'Not in inventory' };
+        
+        const powerup = state.powerupInventory[powerupIndex];
+        
+        set((state) => {
+          const newInventory = [...state.powerupInventory];
+          newInventory.splice(powerupIndex, 1);
+          
+          const newEffects = powerup.duration > 0 
+            ? [...state.activePowerupEffects, {
+                ...powerup,
+                startedAt: Date.now(),
+                expiresAt: Date.now() + powerup.duration,
+              }]
+            : state.activePowerupEffects;
+          
+          return {
+            powerupInventory: newInventory,
+            activePowerupEffects: newEffects,
+            stats: {
+              ...state.stats,
+              powerupsUsed: state.stats.powerupsUsed + 1,
+            },
+          };
+        });
+        
+        return { success: true, effect: powerup.effect, duration: powerup.duration };
+      },
+      
+      removePowerupEffect: (instanceId) => set((state) => ({
+        activePowerupEffects: state.activePowerupEffects.filter(e => e.instanceId !== instanceId),
+      })),
+      
+      hasPowerupEffect: (effectType) => {
+        const state = get();
+        return state.activePowerupEffects.some(
+          e => e.effect === effectType && Date.now() < e.expiresAt
+        );
+      },
+      
+      // Update streaks
+      updateStreaks: (won) => set((state) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayMs = today.getTime();
+        
+        const lastPlay = state.stats.lastPlayDate;
+        const lastPlayDate = lastPlay ? new Date(lastPlay) : null;
+        lastPlayDate?.setHours(0, 0, 0, 0);
+        
+        let newDailyStreak = state.stats.currentDailyStreak;
+        let newWinStreak = state.stats.currentWinStreak;
+        
+        // Check daily streak
+        if (!lastPlayDate || lastPlayDate.getTime() < todayMs) {
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          
+          if (lastPlayDate && lastPlayDate.getTime() === yesterday.getTime()) {
+            newDailyStreak = state.stats.currentDailyStreak + 1;
+          } else if (!lastPlayDate || lastPlayDate.getTime() < yesterday.getTime()) {
+            newDailyStreak = 1;
+          }
+        }
+        
+        // Check win streak
+        if (won) {
+          newWinStreak = state.stats.currentWinStreak + 1;
+        } else {
+          newWinStreak = 0;
+        }
+        
+        return {
+          stats: {
+            ...state.stats,
+            currentWinStreak: newWinStreak,
+            bestWinStreak: Math.max(state.stats.bestWinStreak, newWinStreak),
+            currentDailyStreak: newDailyStreak,
+            bestDailyStreak: Math.max(state.stats.bestDailyStreak, newDailyStreak),
+            lastPlayDate: Date.now(),
+          },
+        };
+      }),
+      
       reset: () => set(initialState),
       
       logout: () => set({
@@ -962,6 +1104,45 @@ export const useSounds = () => {
           oscillator.start();
           oscillator.frequency.linearRampToValueAtTime(220, ctx.currentTime + 0.3);
           oscillator.stop(ctx.currentTime + 0.3);
+          break;
+        case 'powerup':
+          oscillator.type = 'triangle';
+          oscillator.frequency.value = 600;
+          gainNode.gain.value = 0.2;
+          oscillator.start();
+          oscillator.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.15);
+          oscillator.stop(ctx.currentTime + 0.2);
+          break;
+        case 'chat':
+          oscillator.type = 'sine';
+          oscillator.frequency.value = 1000;
+          gainNode.gain.value = 0.1;
+          oscillator.start();
+          oscillator.stop(ctx.currentTime + 0.05);
+          break;
+        case 'emote':
+          oscillator.type = 'sine';
+          oscillator.frequency.value = 700;
+          gainNode.gain.value = 0.15;
+          oscillator.start();
+          oscillator.frequency.setValueAtTime(900, ctx.currentTime + 0.05);
+          oscillator.stop(ctx.currentTime + 0.1);
+          break;
+        case 'pause':
+          oscillator.type = 'sine';
+          oscillator.frequency.value = 500;
+          gainNode.gain.value = 0.2;
+          oscillator.start();
+          oscillator.frequency.linearRampToValueAtTime(300, ctx.currentTime + 0.2);
+          oscillator.stop(ctx.currentTime + 0.25);
+          break;
+        case 'resume':
+          oscillator.type = 'sine';
+          oscillator.frequency.value = 300;
+          gainNode.gain.value = 0.2;
+          oscillator.start();
+          oscillator.frequency.linearRampToValueAtTime(600, ctx.currentTime + 0.2);
+          oscillator.stop(ctx.currentTime + 0.25);
           break;
         default:
           oscillator.frequency.value = 440;

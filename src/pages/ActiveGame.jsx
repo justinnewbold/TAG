@@ -1,12 +1,20 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Target, Users, Clock, X, Zap, AlertTriangle, Flag, Shield, Calendar, Loader2, Snowflake, Skull, Heart, Signal, SignalLow, SignalMedium, SignalHigh } from 'lucide-react';
+import { Target, Users, Clock, X, Zap, AlertTriangle, Flag, Shield, Calendar, Loader2, Snowflake, Skull, Heart, Signal, MessageCircle, Gift, Eye, ChevronUp, ChevronDown, Menu } from 'lucide-react';
 import { useStore, useSounds, isInNoTagTime, isInNoTagZone, canTagNow, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import GameEndSummary from '../components/GameEndSummary';
+import { useSwipe } from '../hooks/useGestures';
+
+// Lazy load new feature components
+const SafetyControls = lazy(() => import('../components/SafetyControls'));
+const GameChat = lazy(() => import('../components/GameChat'));
+const PowerupInventory = lazy(() => import('../components/PowerupInventory'));
+const SpectatorMode = lazy(() => import('../components/SpectatorMode'));
+const QuickActionMenu = lazy(() => import('../components/QuickActionMenu'));
 
 // Custom marker icons
 const createIcon = (color, isIt = false, emoji = '📍') => {
@@ -46,7 +54,7 @@ function MapController({ center }) {
 
 function ActiveGame() {
   const navigate = useNavigate();
-  const { currentGame, user, tagPlayer, endGame, updatePlayerLocation, syncGameState, games } = useStore();
+  const { currentGame, user, tagPlayer, endGame, updatePlayerLocation, syncGameState, games, powerups, pauseGame, resumeGame, usePowerup, addChatMessage, chatMessages, spectating, setSpectating } = useStore();
   const { playSound, vibrate } = useSounds();
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showEndSummary, setShowEndSummary] = useState(false);
@@ -58,6 +66,13 @@ function ActiveGame() {
   const [isEnding, setIsEnding] = useState(false);
   const [noTagStatus, setNoTagStatus] = useState({ inZone: false, inTime: false });
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
+  const [showChat, setShowChat] = useState(false);
+  const [showPowerups, setShowPowerups] = useState(false);
+  const [showSafety, setShowSafety] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [showQuickMenu, setShowQuickMenu] = useState(false);
+  const [hudExpanded, setHudExpanded] = useState(false);
+  const [swipeProgress, setSwipeProgress] = useState(0);
   const intervalRef = useRef(null);
   const prevItRef = useRef(null);
   const animationTimeoutRef = useRef(null);
@@ -65,6 +80,27 @@ function ActiveGame() {
   const lastProximityZoneRef = useRef(null);
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [showCountdownWarning, setShowCountdownWarning] = useState(false);
+
+  // Swipe-to-tag gesture handler
+  const { handlers: swipeHandlers, swiping, swipeDistance } = useSwipe({
+    onSwipeUp: ({ distance, velocity }) => {
+      // Swipe up to tag when in range
+      if (inTagRange && tagCheck.allowed && !isTagging && distance > 80) {
+        handleTag();
+      }
+    },
+    onSwipeMove: ({ y }) => {
+      // Show progress indicator when swiping up to tag
+      if (inTagRange && tagCheck.allowed && y < 0) {
+        setSwipeProgress(Math.min(Math.abs(y) / 100, 1));
+      }
+    },
+    onSwipeEnd: () => {
+      setSwipeProgress(0);
+    },
+    threshold: 60,
+    preventScroll: true
+  });
 
   // Get GPS accuracy quality level
   const getGpsQuality = (accuracy) => {
@@ -394,225 +430,160 @@ function ActiveGame() {
   const userLocation = user?.location || { lat: 37.7749, lng: -122.4194 };
   const noTagZones = currentGame.settings?.noTagZones || [];
   
+  // Quick action menu items
+  const quickActions = [
+    { id: 'chat', icon: MessageCircle, label: 'Chat', onAction: () => setShowChat(true) },
+    { id: 'safety', icon: Shield, label: 'Safety', onAction: () => setShowSafety(true) },
+    ...(powerups?.length > 0 ? [{ id: 'powerups', icon: Gift, label: 'Powerups', onAction: () => setShowPowerups(true) }] : []),
+    { id: 'end', icon: Flag, label: 'End Game', onAction: () => setShowEndConfirm(true) },
+  ];
+  
   return (
-    <div className="fixed inset-0 flex flex-col">
-      {/* Header */}
-      <div className="relative z-10 bg-dark-900/90 backdrop-blur-sm">
-        <div className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-white/50" />
-                <span className="font-mono text-lg font-bold">{formatTime(gameTime)}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-white/50" />
-                <span>{currentGame.players?.length || 0}</span>
-              </div>
-              {/* GPS Accuracy Indicator */}
-              {(() => {
-                const quality = getGpsQuality(user?.location?.accuracy);
-                return (
-                  <div className={`flex items-center gap-1 text-xs ${quality.color}`} title={`GPS Accuracy: ${quality.label}`}>
-                    <Signal className="w-3 h-3" />
-                    <span>{quality.label}</span>
-                  </div>
-                );
-              })()}
+    <div className="fixed inset-0 flex flex-col" {...(isIt && inTagRange ? swipeHandlers : {})}>
+      {/* Swipe-to-tag progress indicator */}
+      {swipeProgress > 0 && isIt && inTagRange && (
+        <div 
+          className="fixed inset-x-0 bottom-0 z-50 pointer-events-none"
+          style={{ height: `${swipeProgress * 40}%` }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-t from-neon-orange/50 to-transparent" />
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 text-center">
+            <p className="text-2xl font-bold text-white text-high-contrast animate-pulse">
+              {swipeProgress >= 0.8 ? '🎯 RELEASE TO TAG!' : '⬆️ SWIPE UP TO TAG'}
+            </p>
+          </div>
+        </div>
+      )}
+      
+      {/* Collapsible Header HUD */}
+      <div className={`relative z-10 bg-dark-900/95 backdrop-blur-md transition-all duration-300 ${hudExpanded ? '' : ''}`}>
+        {/* Minimal Header - Always visible */}
+        <div className="p-3 flex items-center justify-between">
+          {/* Left: Essential info */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full">
+              <Clock className="w-4 h-4 text-white/60" />
+              <span className="font-mono text-base font-bold">{formatTime(gameTime)}</span>
             </div>
+            <div className="flex items-center gap-1.5 text-sm text-white/60">
+              <Users className="w-4 h-4" />
+              <span>{currentGame.players?.length || 0}</span>
+            </div>
+          </div>
+          
+          {/* Right: Actions */}
+          <div className="flex items-center gap-2">
+            {/* GPS indicator - compact */}
+            {(() => {
+              const quality = getGpsQuality(user?.location?.accuracy);
+              return (
+                <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${quality.level === 'poor' ? 'bg-red-500/20' : 'bg-white/10'} ${quality.color}`}>
+                  <Signal className="w-3 h-3" />
+                </div>
+              );
+            })()}
             
-            <button onClick={() => setShowEndConfirm(true)} className="p-2 hover:bg-white/10 rounded-lg">
-              <Flag className="w-5 h-5 text-white/50" />
+            {/* Expand/Collapse HUD */}
+            <button 
+              onClick={() => setHudExpanded(!hudExpanded)} 
+              className="btn-icon w-10 h-10"
+            >
+              {hudExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </button>
+            
+            {/* Quick Menu */}
+            <button 
+              onClick={() => setShowQuickMenu(!showQuickMenu)}
+              className="btn-icon w-10 h-10 bg-neon-purple/20"
+            >
+              <Menu className="w-5 h-5 text-neon-purple" />
             </button>
           </div>
-          
-          {/* No-Tag Status Banners */}
-          {(noTagStatus.inTime || noTagStatus.inZone) && (
-            <div className="mt-2 flex gap-2">
-              {noTagStatus.inTime && (
-                <div className="flex-1 flex items-center gap-2 p-2 bg-blue-500/20 border border-blue-500/30 rounded-lg">
-                  <Calendar className="w-4 h-4 text-blue-400" />
-                  <span className="text-xs text-blue-400">No-Tag Time Active</span>
-                </div>
-              )}
-              {noTagStatus.inZone && (
-                <div className="flex-1 flex items-center gap-2 p-2 bg-green-500/20 border border-green-500/30 rounded-lg">
-                  <Shield className="w-4 h-4 text-green-400" />
-                  <span className="text-xs text-green-400">In Safe Zone</span>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Countdown Warning Banner */}
-          {showCountdownWarning && timeRemaining > 0 && (
-            <div className={`mt-2 flex items-center justify-center gap-2 p-3 rounded-lg ${
-              timeRemaining <= 10000 
-                ? 'bg-red-500/30 border border-red-500/50 animate-pulse' 
-                : timeRemaining <= 30000
-                ? 'bg-amber-500/30 border border-amber-500/50'
-                : 'bg-amber-500/20 border border-amber-500/30'
-            }`}>
-              <Clock className={`w-5 h-5 ${timeRemaining <= 10000 ? 'text-red-400' : 'text-amber-400'}`} />
-              <span className={`font-mono font-bold text-lg ${timeRemaining <= 10000 ? 'text-red-400' : 'text-amber-400'}`}>
-                {Math.ceil(timeRemaining / 1000)}s
-              </span>
-              <span className={`text-sm ${timeRemaining <= 10000 ? 'text-red-300' : 'text-amber-300'}`}>
-                {timeRemaining <= 10000 ? 'ENDING!' : 'remaining'}
-              </span>
-            </div>
-          )}
-          
-          {/* Game Mode Badge */}
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-lg">{modeConfig.icon}</span>
-            <span className="text-sm font-medium text-white/70">{modeConfig.name}</span>
+        </div>
+        
+        {/* Expanded HUD Content */}
+        {hudExpanded && (
+          <div className="px-3 pb-3 space-y-2 animate-slide-down">
+            {/* No-Tag Status Banners */}
+            {(noTagStatus.inTime || noTagStatus.inZone) && (
+              <div className="flex gap-2">
+                {noTagStatus.inTime && (
+                  <div className="flex-1 flex items-center gap-2 p-2 bg-blue-500/20 border border-blue-500/30 rounded-lg">
+                    <Calendar className="w-4 h-4 text-blue-400" />
+                    <span className="text-xs text-blue-400">No-Tag Time</span>
+                  </div>
+                )}
+                {noTagStatus.inZone && (
+                  <div className="flex-1 flex items-center gap-2 p-2 bg-green-500/20 border border-green-500/30 rounded-lg">
+                    <Shield className="w-4 h-4 text-green-400" />
+                    <span className="text-xs text-green-400">Safe Zone</span>
+                  </div>
+                )}
+              </div>
+            )}
             
-            {/* Mode-specific stats */}
-            {gameMode === 'freezeTag' && (
-              <span className="text-xs text-blue-400 ml-auto">
-                <Snowflake className="w-3 h-3 inline mr-1" />
-                {frozenCount} frozen
+            {/* Countdown Warning */}
+            {showCountdownWarning && timeRemaining > 0 && (
+              <div className={`flex items-center justify-center gap-2 p-2 rounded-lg ${
+                timeRemaining <= 10000 
+                  ? 'bg-red-500/30 border border-red-500/50 animate-pulse' 
+                  : 'bg-amber-500/20 border border-amber-500/30'
+              }`}>
+                <Clock className={`w-4 h-4 ${timeRemaining <= 10000 ? 'text-red-400' : 'text-amber-400'}`} />
+                <span className={`font-mono font-bold ${timeRemaining <= 10000 ? 'text-red-400' : 'text-amber-400'}`}>
+                  {Math.ceil(timeRemaining / 1000)}s
+                </span>
+              </div>
+            )}
+            
+            {/* Game Mode Badge */}
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-lg">{modeConfig.icon}</span>
+              <span className="text-white/70">{modeConfig.name}</span>
+              
+              {/* Mode-specific stats */}
+              {gameMode === 'freezeTag' && (
+                <span className="text-xs text-blue-400 ml-auto">
+                  <Snowflake className="w-3 h-3 inline mr-1" />
+                  {frozenCount} frozen
+                </span>
+              )}
+              {gameMode === 'infection' && (
+                <span className="text-xs text-green-400 ml-auto">
+                  🧟 {infectedCount} / {survivorCount}
+                </span>
+              )}
+              {gameMode === 'teamTag' && (
+                <span className="text-xs ml-auto">
+                  <span className="text-red-400">🔴 {redTeamAlive}</span>
+                  <span className="mx-1 text-white/40">vs</span>
+                  <span className="text-blue-400">🔵 {blueTeamAlive}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Always show critical status when not expanded */}
+        {!hudExpanded && (noTagStatus.inTime || noTagStatus.inZone || (showCountdownWarning && timeRemaining > 0)) && (
+          <div className="px-3 pb-2 flex gap-2">
+            {noTagStatus.inZone && (
+              <span className="text-xs text-green-400 flex items-center gap-1">
+                <Shield className="w-3 h-3" /> Safe
               </span>
             )}
-            {gameMode === 'infection' && (
-              <span className="text-xs text-green-400 ml-auto">
-                🧟 {infectedCount} infected • {survivorCount} survivors
+            {noTagStatus.inTime && (
+              <span className="text-xs text-blue-400 flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> No-Tag
               </span>
             )}
-            {gameMode === 'teamTag' && (
-              <span className="text-xs ml-auto">
-                <span className="text-red-400">🔴 {redTeamAlive}</span>
-                <span className="mx-1">vs</span>
-                <span className="text-blue-400">🔵 {blueTeamAlive}</span>
-              </span>
-            )}
-            {gameMode === 'hotPotato' && isIt && (
-              <span className={`text-xs ml-auto font-mono font-bold ${potatoTimeLeft < 10000 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>
-                🥔 {Math.ceil(potatoTimeLeft / 1000)}s
+            {showCountdownWarning && timeRemaining > 0 && (
+              <span className={`text-xs font-mono font-bold ml-auto ${timeRemaining <= 10000 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>
+                {Math.ceil(timeRemaining / 1000)}s
               </span>
             )}
           </div>
-          
-          {/* Hide and Seek - Hiding Phase Banner */}
-          {isHidingPhase && (
-            <div className="mt-2 p-3 bg-pink-500/20 border border-pink-500/30 rounded-xl">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">👀</span>
-                  <span className="font-bold text-pink-400">
-                    {isIt ? 'Close your eyes!' : 'Hide now!'}
-                  </span>
-                </div>
-                <span className="font-mono font-bold text-pink-400">
-                  {formatTime(hideTimeLeft)}
-                </span>
-              </div>
-              <p className="text-xs text-white/50 mt-1">
-                {isIt ? 'Seeking begins when timer ends' : 'Find a good hiding spot!'}
-              </p>
-            </div>
-          )}
-          
-          {/* Player Status - Frozen/Eliminated */}
-          {isFrozen && (
-            <div className="mt-2 p-3 bg-blue-500/20 border border-blue-500/30 rounded-xl flex items-center gap-3">
-              <Snowflake className="w-6 h-6 text-blue-400 animate-pulse" />
-              <div>
-                <p className="font-bold text-blue-400">YOU'RE FROZEN!</p>
-                <p className="text-xs text-white/50">Wait for a teammate to unfreeze you</p>
-              </div>
-            </div>
-          )}
-          
-          {isEliminated && (
-            <div className="mt-2 p-3 bg-red-500/20 border border-red-500/30 rounded-xl flex items-center gap-3">
-              <Skull className="w-6 h-6 text-red-400" />
-              <div>
-                <p className="font-bold text-red-400">ELIMINATED!</p>
-                <p className="text-xs text-white/50">Watch the remaining players</p>
-              </div>
-            </div>
-          )}
-          
-          {/* Team indicator for team tag */}
-          {gameMode === 'teamTag' && !isEliminated && (
-            <div className={`mt-2 p-3 rounded-xl flex items-center justify-between ${
-              playerTeam === 'red' 
-                ? 'bg-red-500/20 border border-red-500/30' 
-                : 'bg-blue-500/20 border border-blue-500/30'
-            }`}>
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{playerTeam === 'red' ? '🔴' : '🔵'}</span>
-                <div>
-                  <p className={`font-bold ${playerTeam === 'red' ? 'text-red-400' : 'text-blue-400'}`}>
-                    Team {playerTeam === 'red' ? 'Red' : 'Blue'}
-                  </p>
-                  <p className="text-xs text-white/50">Tag the opposing team!</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* IT Status - Classic modes */}
-          {!isHidingPhase && !isEliminated && gameMode !== 'teamTag' && (
-            <div className={`mt-3 p-3 rounded-xl flex items-center justify-between ${
-              isIt 
-                ? 'bg-neon-orange/20 border border-neon-orange/30' 
-                : 'bg-neon-cyan/10 border border-neon-cyan/30'
-            }`}>
-              <div className="flex items-center gap-3">
-                {isIt ? (
-                  <>
-                    <Target className="w-6 h-6 text-neon-orange animate-pulse" />
-                    <div>
-                      <p className="font-display font-bold text-neon-orange">
-                        {gameMode === 'infection' ? "YOU'RE INFECTED!" : 
-                         gameMode === 'hotPotato' ? "YOU HAVE THE POTATO!" :
-                         gameMode === 'manhunt' ? "YOU'RE THE HUNTER!" :
-                         gameMode === 'freezeTag' ? "YOU'RE IT!" :
-                         gameMode === 'hideAndSeek' ? "YOU'RE THE SEEKER!" :
-                         "YOU'RE IT!"}
-                      </p>
-                      <p className="text-xs text-white/50">
-                        {gameMode === 'infection' ? 'Spread the infection!' :
-                         gameMode === 'hotPotato' ? 'Pass it before time runs out!' :
-                         gameMode === 'manhunt' ? 'Hunt down the runners!' :
-                         gameMode === 'freezeTag' ? 'Freeze the other players!' :
-                         gameMode === 'hideAndSeek' ? 'Find the hiders!' :
-                         'Tag someone to pass it on!'}
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle className="w-6 h-6 text-neon-cyan" />
-                    <div>
-                      <p className="font-display font-bold text-neon-cyan">
-                        {gameMode === 'infection' ? `${infectedCount} infected!` :
-                         gameMode === 'manhunt' ? `${itPlayer?.name} is hunting!` :
-                         `${itPlayer?.name} is IT!`}
-                      </p>
-                      <p className="text-xs text-white/50">
-                        {gameMode === 'freezeTag' && isFrozen ? 'Wait for rescue!' :
-                         gameMode === 'freezeTag' ? 'Avoid IT or unfreeze teammates!' :
-                         'Run and hide!'}
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-          
-          {/* Tag Error Message */}
-          {tagError && (
-            <div className="mt-2 p-2 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center gap-2 animate-slide-down">
-              <X className="w-4 h-4 text-red-400" />
-              <span className="text-sm text-red-400">{tagError}</span>
-            </div>
-          )}
-        </div>
+        )}
       </div>
       
       {/* Map */}
@@ -804,65 +775,21 @@ function ActiveGame() {
         )}
       </div>
       
-      {/* Action Button - varies by game mode */}
-      {!isEliminated && !isFrozen && (
-        <div className="absolute bottom-24 left-0 right-0 flex justify-center z-10">
-          {/* TAG Button for IT players / Team Tag / Freeze Tag unfreeze */}
-          {(isIt || (gameMode === 'teamTag' && nearestPlayer) || (gameMode === 'freezeTag' && !isIt && nearestPlayer?.isFrozen)) && (
-            <button
-              onClick={handleTag}
-              disabled={!inTagRange || isTagging || isHidingPhase}
-              className={`w-32 h-32 rounded-full font-display font-bold text-2xl transition-all transform ${
-                isHidingPhase
-                  ? 'bg-pink-500/50 text-pink-200'
-                  : canTag && !isTagging
-                  ? gameMode === 'freezeTag' && !isIt
-                    ? 'bg-gradient-to-br from-blue-400 to-cyan-500 shadow-lg shadow-blue-400/50 animate-pulse hover:scale-105 active:scale-95'
-                    : gameMode === 'hotPotato'
-                    ? 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-400/50 animate-pulse hover:scale-105 active:scale-95'
-                    : 'bg-gradient-to-br from-neon-orange to-red-500 shadow-lg shadow-neon-orange/50 animate-pulse hover:scale-105 active:scale-95'
-                  : inTagRange && !tagCheck.allowed
-                  ? 'bg-yellow-500/50 text-yellow-200'
-                  : 'bg-white/10 text-white/30'
-              } ${tagAnimation ? 'scale-110' : ''}`}
-            >
-              {isTagging ? (
-                <Loader2 className="w-10 h-10 animate-spin mx-auto" />
-              ) : isHidingPhase ? (
-                '👀'
-              ) : !inTagRange ? (
-                gameMode === 'freezeTag' && !isIt ? '❄️' :
-                gameMode === 'hotPotato' ? '🥔' :
-                gameMode === 'infection' ? '🧟' :
-                'TAG!'
-              ) : !tagCheck.allowed ? (
-                '🛡️'
-              ) : (
-                gameMode === 'freezeTag' && !isIt ? 'FREE!' :
-                gameMode === 'freezeTag' && isIt ? 'FREEZE!' :
-                gameMode === 'hotPotato' ? 'PASS!' :
-                gameMode === 'infection' ? 'INFECT!' :
-                'TAG!'
-              )}
-            </button>
-          )}
-        </div>
-      )}
-      
-      {/* Distance to IT (non-IT players in classic modes) */}
-      {!isIt && !isEliminated && !isFrozen && itPlayer?.location && user?.location && gameMode !== 'teamTag' && (
-        <div className="absolute bottom-24 left-4 right-4 z-10">
-          <div className="card p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Target className="w-6 h-6 text-neon-orange" />
-              <span className="font-medium">
+      {/* Bottom Action Zone - Thumb Friendly */}
+      <div className="absolute bottom-0 left-0 right-0 z-10 pb-safe">
+        {/* Distance/Status Bar for non-IT */}
+        {!isIt && !isEliminated && !isFrozen && itPlayer?.location && user?.location && gameMode !== 'teamTag' && (
+          <div className="mx-4 mb-3 card p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Target className="w-5 h-5 text-neon-orange" />
+              <span className="text-sm font-medium">
                 {gameMode === 'infection' ? `${infectedCount} infected` :
-                 gameMode === 'manhunt' ? `${itPlayer.name} hunting` :
-                 `${itPlayer.name} is IT`}
+                 gameMode === 'manhunt' ? `Hunting you` :
+                 `${itPlayer.name?.split(' ')[0]} is IT`}
               </span>
             </div>
             <div className="text-right">
-              <p className="font-bold text-lg">
+              <p className="font-bold text-lg text-high-contrast">
                 {(() => {
                   const dist = getDistance(
                     user.location.lat, user.location.lng,
@@ -877,12 +804,153 @@ function ActiveGame() {
                   );
                 })()}
               </p>
-              <p className="text-xs text-white/50">
-                {noTagStatus.inZone || noTagStatus.inTime ? '🛡️ Protected' : 'away'}
-              </p>
             </div>
           </div>
-        </div>
+        )}
+        
+        {/* TAG Button Zone - Large touch target */}
+        {!isEliminated && !isFrozen && (
+          <div className="flex justify-center pb-4">
+            {/* TAG Button for IT players / Team Tag / Freeze Tag unfreeze */}
+            {(isIt || (gameMode === 'teamTag' && nearestPlayer) || (gameMode === 'freezeTag' && !isIt && nearestPlayer?.isFrozen)) && (
+              <div className="relative">
+                {/* Swipe hint when in range */}
+                {inTagRange && tagCheck.allowed && !isTagging && (
+                  <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-center animate-bounce">
+                    <span className="text-xs text-white/60">⬆️ Swipe or tap</span>
+                  </div>
+                )}
+                
+                <button
+                  onClick={handleTag}
+                  disabled={!inTagRange || isTagging || isHidingPhase}
+                  className={`w-28 h-28 rounded-full font-display font-bold text-2xl transition-all transform touch-manipulation ${
+                    isHidingPhase
+                      ? 'bg-pink-500/50 text-pink-200'
+                      : canTag && !isTagging
+                      ? gameMode === 'freezeTag' && !isIt
+                        ? 'bg-gradient-to-br from-blue-400 to-cyan-500 shadow-lg shadow-blue-400/50 animate-pulse active:scale-90'
+                        : gameMode === 'hotPotato'
+                        ? 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-400/50 animate-pulse active:scale-90'
+                        : 'bg-gradient-to-br from-neon-orange to-red-500 shadow-lg shadow-neon-orange/50 animate-pulse active:scale-90'
+                      : inTagRange && !tagCheck.allowed
+                      ? 'bg-yellow-500/50 text-yellow-200'
+                      : 'bg-white/10 text-white/30'
+                  } ${tagAnimation ? 'scale-110' : ''}`}
+                >
+                  {isTagging ? (
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto" />
+                  ) : isHidingPhase ? (
+                    '👀'
+                  ) : !inTagRange ? (
+                    <span className="text-4xl">
+                      {gameMode === 'freezeTag' && !isIt ? '❄️' :
+                       gameMode === 'hotPotato' ? '🥔' :
+                       gameMode === 'infection' ? '🧟' :
+                       '🏃'}
+                    </span>
+                  ) : !tagCheck.allowed ? (
+                    '🛡️'
+                  ) : (
+                    <span className="text-xl">
+                      {gameMode === 'freezeTag' && !isIt ? 'FREE!' :
+                       gameMode === 'freezeTag' && isIt ? 'FREEZE!' :
+                       gameMode === 'hotPotato' ? 'PASS!' :
+                       gameMode === 'infection' ? 'INFECT!' :
+                       'TAG!'}
+                    </span>
+                  )}
+                </button>
+                
+                {/* Range indicator */}
+                {nearestPlayer && (
+                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-center whitespace-nowrap">
+                    <span className={`text-xs font-mono ${inTagRange ? 'text-neon-orange' : 'text-white/40'}`}>
+                      {nearestDistance < 1000 ? `${Math.round(nearestDistance)}m` : `${(nearestDistance / 1000).toFixed(1)}km`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Quick Action Menu */}
+      {showQuickMenu && (
+        <Suspense fallback={null}>
+          <QuickActionMenu 
+            isOpen={showQuickMenu}
+            onClose={() => setShowQuickMenu(false)}
+            actions={quickActions}
+            position="right"
+          />
+        </Suspense>
+      )}
+      
+      {/* Chat Panel */}
+      {showChat && (
+        <Suspense fallback={<div className="fixed bottom-20 right-4 z-50 card p-4">Loading chat...</div>}>
+          <div className="fixed bottom-20 right-4 z-50 w-80">
+            <GameChat 
+              gameId={currentGame?.id}
+              onClose={() => setShowChat(false)}
+            />
+          </div>
+        </Suspense>
+      )}
+      
+      {/* Powerups Panel */}
+      {showPowerups && powerups?.length > 0 && (
+        <Suspense fallback={<div className="fixed bottom-20 right-4 z-50 card p-4">Loading powerups...</div>}>
+          <div className="fixed bottom-20 right-4 z-50">
+            <PowerupInventory 
+              powerups={powerups}
+              onUsePowerup={(id) => {
+                usePowerup(id);
+                playSound('powerup');
+                vibrate([50, 30, 100]);
+              }}
+              onClose={() => setShowPowerups(false)}
+            />
+          </div>
+        </Suspense>
+      )}
+      
+      {/* Safety Controls Panel */}
+      {showSafety && (
+        <Suspense fallback={<div className="fixed bottom-20 left-4 right-4 z-50 card p-4">Loading safety...</div>}>
+          <div className="fixed bottom-20 left-4 right-4 z-50">
+            <SafetyControls 
+              onPause={() => {
+                pauseGame();
+                setIsPaused(true);
+                playSound('pause');
+                vibrate([100, 50, 100]);
+              }}
+              onResume={() => {
+                resumeGame();
+                setIsPaused(false);
+                playSound('resume');
+                vibrate([100]);
+              }}
+              isPaused={isPaused}
+              gameId={currentGame?.id}
+              onClose={() => setShowSafety(false)}
+            />
+          </div>
+        </Suspense>
+      )}
+      
+      {/* Spectator Mode Overlay (for eliminated players) */}
+      {isEliminated && spectating && (
+        <Suspense fallback={<div className="absolute inset-0 z-40 bg-dark-900/90 flex items-center justify-center">Loading spectator mode...</div>}>
+          <SpectatorMode 
+            game={currentGame}
+            players={currentGame?.players || []}
+            onClose={() => setSpectating(false)}
+          />
+        </Suspense>
       )}
       
       {/* End Game Confirmation */}

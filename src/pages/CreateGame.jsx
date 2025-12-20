@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Circle, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin, Calendar, Plus, X, Shield, Map, Crosshair, Loader2, Zap, ChevronDown, ChevronUp, Settings } from 'lucide-react';
+import { ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin, Calendar, Plus, X, Shield, Map, Crosshair, Loader2, Zap, ChevronDown, ChevronUp, Settings, MapPinned, Grip } from 'lucide-react';
 import { useStore, useSounds, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
+import BottomSheet from '../components/BottomSheet';
+import { useDragToClose } from '../hooks/useGestures';
+
+// Lazy load boundary editor
+const BoundaryEditor = lazy(() => import('../components/BoundaryEditor'));
 
 // Map click handler component
 function MapClickHandler({ onLocationSelect, isSelectingZone }) {
@@ -97,6 +102,7 @@ function CreateGame() {
     maxPlayers: 10,
     noTagZones: [],
     noTagTimes: [],
+    customBoundary: null, // Custom play area boundary
     // Game mode specific settings
     potatoTimer: 45000, // 45 seconds for hot potato
     hideTime: 120000, // 2 minutes for hide and seek
@@ -179,6 +185,7 @@ function CreateGame() {
   const [isSelectingZoneLocation, setIsSelectingZoneLocation] = useState(false);
   const [selectedZoneLocation, setSelectedZoneLocation] = useState(null);
   const [showModeInfo, setShowModeInfo] = useState(false);
+  const [showBoundaryEditor, setShowBoundaryEditor] = useState(false);
   
   // New zone form
   const [newZone, setNewZone] = useState({ name: '', radius: 100, lat: null, lng: null });
@@ -384,28 +391,43 @@ function CreateGame() {
     if (meters >= 1000) return `${(meters / 1000).toFixed(1)}km`;
     return `${meters}m`;
   };
+
+  // Advanced settings state
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [showAdvancedSheet, setShowAdvancedSheet] = useState(false);
   
   return (
-    <div className="min-h-screen p-6 pb-32">
-      <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate('/')} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-display font-bold">Create Game</h1>
-          <p className="text-sm text-white/50">Set up your hunt</p>
+    <div className="min-h-screen flex flex-col">
+      {/* Compact Header - Smaller for more content space */}
+      <div className="sticky top-0 z-40 bg-dark-900/95 backdrop-blur-sm border-b border-white/10 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => navigate('/')} 
+            className="touch-target-48 flex items-center justify-center hover:bg-white/10 rounded-xl transition-colors"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <div className="flex-1">
+            <h1 className="text-xl font-display font-bold">Create Game</h1>
+            <p className="text-xs text-white/50">Set up your hunt</p>
+          </div>
+          {/* Quick settings toggle */}
+          <button
+            onClick={() => setShowAdvancedSheet(true)}
+            className="touch-target-48 flex items-center justify-center bg-white/5 rounded-xl"
+          >
+            <Settings className="w-5 h-5 text-white/70" />
+          </button>
         </div>
       </div>
       
-      <div className="space-y-6">
-        {/* Quick Start Presets */}
+      {/* Scrollable content - ends above the fixed bottom bar */}
+      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-36 space-y-4">
+        {/* Quick Start Presets - Large touch targets */}
         <div className="card p-4">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-3">
             <Zap className="w-5 h-5 text-neon-purple" />
-            <div>
-              <h3 className="font-medium">Quick Start</h3>
-              <p className="text-xs text-white/50">Choose a preset or customize</p>
-            </div>
+            <h3 className="font-medium">Quick Start</h3>
           </div>
           
           <div className="grid grid-cols-2 gap-3">
@@ -413,50 +435,29 @@ function CreateGame() {
               <button
                 key={preset.id}
                 onClick={() => applyPreset(preset)}
-                className={`p-3 rounded-xl text-left transition-all ${
+                className={`touch-target-48 p-4 rounded-xl text-left transition-all ${
                   selectedPreset === preset.id
-                    ? 'bg-neon-purple/20 border-2 border-neon-purple'
-                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                    ? 'bg-neon-purple/20 border-2 border-neon-purple scale-[1.02]'
+                    : 'bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xl">{preset.icon}</span>
-                  <span className={`font-bold text-sm ${selectedPreset === preset.id ? 'text-neon-purple' : ''}`}>
+                  <span className="text-2xl">{preset.icon}</span>
+                  <span className={`font-bold ${selectedPreset === preset.id ? 'text-neon-purple' : ''}`}>
                     {preset.name}
                   </span>
                 </div>
-                <p className="text-xs text-white/50 line-clamp-2">{preset.desc}</p>
-                {preset.id !== 'custom' && preset.settings && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    <span className="px-1.5 py-0.5 bg-white/10 rounded text-[10px]">
-                      {preset.settings.maxPlayers} players
-                    </span>
-                    <span className="px-1.5 py-0.5 bg-white/10 rounded text-[10px]">
-                      {Math.floor(preset.settings.duration / 60000)}min
-                    </span>
-                  </div>
-                )}
+                <p className="text-xs text-white/50 line-clamp-1">{preset.desc}</p>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Game Mode Selection */}
+        {/* Game Mode Selection - Larger cards */}
         <div className="card p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Zap className="w-5 h-5 text-neon-cyan" />
-              <div>
-                <h3 className="font-medium">Game Mode</h3>
-                <p className="text-xs text-white/50">Choose how to play</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowModeInfo(!showModeInfo)}
-              className="text-xs text-neon-cyan hover:underline"
-            >
-              {showModeInfo ? 'Hide details' : 'Learn more'}
-            </button>
+          <div className="flex items-center gap-3 mb-3">
+            <Zap className="w-5 h-5 text-neon-cyan" />
+            <h3 className="font-medium">Game Mode</h3>
           </div>
           
           <div className="grid grid-cols-2 gap-3">
@@ -464,136 +465,49 @@ function CreateGame() {
               <button
                 key={mode.id}
                 onClick={() => setSettings({ ...settings, gameMode: mode.id })}
-                className={`p-3 rounded-xl text-left transition-all ${
+                className={`touch-target-48 p-4 rounded-xl text-left transition-all ${
                   settings.gameMode === mode.id
-                    ? `bg-${mode.color}/20 border-2 border-${mode.color}`
-                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                    ? 'bg-neon-cyan/20 border-2 border-neon-cyan scale-[1.02]'
+                    : 'bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xl">{mode.icon}</span>
-                  <span className={`font-bold text-sm ${settings.gameMode === mode.id ? `text-${mode.color}` : ''}`}>
+                  <span className="text-2xl">{mode.icon}</span>
+                  <span className={`font-bold text-sm ${settings.gameMode === mode.id ? 'text-neon-cyan' : ''}`}>
                     {mode.name}
                   </span>
                 </div>
-                <p className="text-xs text-white/50 line-clamp-2">{mode.description}</p>
+                <p className="text-xs text-white/50 line-clamp-1">{mode.description}</p>
               </button>
             ))}
           </div>
-          
-          {showModeInfo && settings.gameMode && (
-            <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-2xl">{GAME_MODES[settings.gameMode].icon}</span>
-                <div>
-                  <h4 className="font-bold">{GAME_MODES[settings.gameMode].name}</h4>
-                  <p className="text-xs text-white/50">Min {GAME_MODES[settings.gameMode].minPlayers} players</p>
-                </div>
-              </div>
-              <ul className="space-y-1">
-                {GAME_MODES[settings.gameMode].features.map((feature, i) => (
-                  <li key={i} className="text-xs text-white/70 flex items-center gap-2">
-                    <span className="w-1 h-1 bg-neon-cyan rounded-full"></span>
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
 
-        {/* Game Mode Specific Settings */}
-        {settings.gameMode === 'hotPotato' && (
-          <div className="card p-4">
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-xl">🥔</span>
-              <div>
-                <h3 className="font-medium">Potato Timer</h3>
-                <p className="text-xs text-white/50">Time before the potato explodes</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {[30000, 45000, 60000, 90000].map((ms) => (
-                <button
-                  key={ms}
-                  onClick={() => setSettings({ ...settings, potatoTimer: ms })}
-                  className={`p-3 rounded-xl text-center transition-all ${
-                    settings.potatoTimer === ms
-                      ? 'bg-amber-400/20 border-2 border-amber-400 text-amber-400'
-                      : 'bg-white/5 border border-white/10 hover:bg-white/10'
-                  }`}
-                >
-                  <p className="font-bold text-sm">{ms / 1000}s</p>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {settings.gameMode === 'hideAndSeek' && (
-          <div className="card p-4">
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-xl">👀</span>
-              <div>
-                <h3 className="font-medium">Hiding Time</h3>
-                <p className="text-xs text-white/50">Time for players to hide before seeking begins</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {[60000, 120000, 180000, 300000].map((ms) => (
-                <button
-                  key={ms}
-                  onClick={() => setSettings({ ...settings, hideTime: ms })}
-                  className={`p-3 rounded-xl text-center transition-all ${
-                    settings.hideTime === ms
-                      ? 'bg-pink-400/20 border-2 border-pink-400 text-pink-400'
-                      : 'bg-white/5 border border-white/10 hover:bg-white/10'
-                  }`}
-                >
-                  <p className="font-bold text-sm">{ms / 60000}m</p>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Game Name */}
+        {/* Game Name - Larger input */}
         <div className="card p-4">
-          <label className="label">Game Name</label>
+          <label className="label text-sm mb-2 block">Game Name</label>
           <input
             type="text"
             value={settings.gameName}
             onChange={(e) => setSettings({ ...settings, gameName: e.target.value })}
             placeholder="Enter game name"
-            className="input-field"
+            className="input-field text-lg py-4"
             maxLength={30}
           />
         </div>
         
-        {/* Tag Radius with Map */}
+        {/* Tag Radius - Big slider, thumb-friendly */}
         <div className="card p-4">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <Target className="w-5 h-5 text-neon-purple" />
-              <div>
-                <h3 className="font-medium">Tag Radius</h3>
-                <p className="text-xs text-white/50">Distance to tag someone</p>
-              </div>
+              <h3 className="font-medium">Tag Radius</h3>
             </div>
-            <button
-              onClick={() => setShowRadiusMap(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-neon-purple/20 rounded-lg text-neon-purple text-sm hover:bg-neon-purple/30 transition-colors"
-            >
-              <Map className="w-4 h-4" />
-              View on Map
-            </button>
+            <span className="text-2xl font-bold text-neon-purple">{formatRadius(settings.tagRadius)}</span>
           </div>
           
-          {/* Radius Slider */}
-          <div className="mb-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-2xl font-bold text-neon-purple">{formatRadius(settings.tagRadius)}</span>
-            </div>
+          {/* Large thumb-friendly slider */}
+          <div className="py-2">
             <input
               type="range"
               min="10"
@@ -601,123 +515,71 @@ function CreateGame() {
               step="10"
               value={settings.tagRadius}
               onChange={(e) => setSettings({ ...settings, tagRadius: parseInt(e.target.value) })}
-              className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-neon-purple"
+              className="w-full h-3 bg-white/10 rounded-lg appearance-none cursor-pointer accent-neon-purple slider-thumb-large"
+              style={{
+                background: `linear-gradient(to right, #a855f7 ${(settings.tagRadius - 10) / 990 * 100}%, rgba(255,255,255,0.1) ${(settings.tagRadius - 10) / 990 * 100}%)`
+              }}
             />
-            <div className="flex justify-between text-xs text-white/40 mt-1">
-              <span>10m</span>
-              <span>500m</span>
-              <span>1km</span>
-            </div>
           </div>
           
-          {/* Quick Select Buttons */}
-          <div className="grid grid-cols-4 gap-2">
-            {radiusOptions.slice(0, 4).map((opt) => (
+          {/* Quick select chips */}
+          <div className="flex gap-2 mt-3 overflow-x-auto pb-1 -mx-1 px-1">
+            {[25, 50, 100, 250, 500].map((r) => (
               <button
-                key={opt.value}
-                onClick={() => setSettings({ ...settings, tagRadius: opt.value })}
-                className={`p-2 rounded-xl text-center transition-all text-sm ${
-                  settings.tagRadius === opt.value
-                    ? 'bg-neon-purple/20 border-2 border-neon-purple text-neon-purple'
-                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                key={r}
+                onClick={() => setSettings({ ...settings, tagRadius: r })}
+                className={`touch-target-48 px-4 py-2 rounded-full whitespace-nowrap transition-all ${
+                  settings.tagRadius === r
+                    ? 'bg-neon-purple text-white'
+                    : 'bg-white/10 hover:bg-white/20 active:scale-95'
                 }`}
               >
-                {opt.label}
+                {formatRadius(r)}
               </button>
             ))}
           </div>
         </div>
         
-        {/* GPS Update Interval */}
+        {/* GPS Interval - Horizontal scroll chips */}
         <div className="card p-4">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-3">
             <Clock className="w-5 h-5 text-neon-cyan" />
-            <div>
-              <h3 className="font-medium">GPS Update Interval</h3>
-              <p className="text-xs text-white/50">How often locations update</p>
-            </div>
+            <h3 className="font-medium">GPS Updates</h3>
           </div>
-          <div className="grid grid-cols-4 gap-2">
-            {gpsOptions.map((opt) => (
+          
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            {gpsOptions.slice(0, 6).map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => handleGpsSelect(opt.value)}
-                className={`p-3 rounded-xl text-center transition-all ${
-                  (settings.gpsInterval === opt.value || (opt.value === 'custom' && showCustomInterval))
+                className={`touch-target-48 px-4 py-3 rounded-xl text-center whitespace-nowrap transition-all flex-shrink-0 ${
+                  settings.gpsInterval === opt.value
                     ? 'bg-neon-cyan/20 border-2 border-neon-cyan text-neon-cyan'
-                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                    : 'bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95'
                 }`}
               >
-                <p className="font-bold text-sm">{opt.label}</p>
-                <p className="text-xs opacity-60">{opt.desc}</p>
+                <p className="font-bold">{opt.label}</p>
               </button>
             ))}
+          </div>
+        </div>
+        
+        {/* Max Players - Large touch chips */}
+        <div className="card p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <Users className="w-5 h-5 text-amber-400" />
+            <h3 className="font-medium">Max Players</h3>
           </div>
           
-          {showCustomInterval && (
-            <div className="mt-4 p-3 bg-white/5 rounded-xl">
-              <label className="label">Custom Interval (minutes)</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={settings.customInterval}
-                  onChange={(e) => handleCustomIntervalChange(e.target.value)}
-                  placeholder="Enter minutes (min: 5)"
-                  className="input-field flex-1"
-                  min="5"
-                />
-                <span className="text-white/50">min</span>
-              </div>
-              <p className="text-xs text-white/40 mt-2">Minimum interval is 5 minutes</p>
-            </div>
-          )}
-        </div>
-        
-        {/* Game Duration */}
-        <div className="card p-4">
-          <div className="flex items-center gap-3 mb-4">
-            <Timer className="w-5 h-5 text-neon-orange" />
-            <div>
-              <h3 className="font-medium">Game Duration</h3>
-              <p className="text-xs text-white/50">Time limit for the game</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {durationOptions.map((opt) => (
-              <button
-                key={opt.value || 'none'}
-                onClick={() => setSettings({ ...settings, duration: opt.value })}
-                className={`p-3 rounded-xl text-center transition-all ${
-                  settings.duration === opt.value
-                    ? 'bg-neon-orange/20 border-2 border-neon-orange text-neon-orange'
-                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
-                }`}
-              >
-                <p className="font-bold text-sm">{opt.label}</p>
-                <p className="text-xs opacity-60">{opt.desc}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-        
-        {/* Max Players */}
-        <div className="card p-4">
-          <div className="flex items-center gap-3 mb-4">
-            <Users className="w-5 h-5 text-amber-400" />
-            <div>
-              <h3 className="font-medium">Max Players</h3>
-              <p className="text-xs text-white/50">Maximum players allowed</p>
-            </div>
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {[2, 4, 6, 8, 10, 15, 20, 50].map((num) => (
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            {[4, 6, 8, 10, 15, 20].map((num) => (
               <button
                 key={num}
                 onClick={() => setSettings({ ...settings, maxPlayers: num })}
-                className={`px-4 py-2 rounded-xl text-center transition-all flex-shrink-0 ${
+                className={`touch-target-48 w-14 h-14 rounded-xl flex items-center justify-center text-lg font-bold transition-all flex-shrink-0 ${
                   settings.maxPlayers === num
                     ? 'bg-amber-400/20 border-2 border-amber-400 text-amber-400'
-                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                    : 'bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95'
                 }`}
               >
                 {num}
@@ -725,148 +587,193 @@ function CreateGame() {
             ))}
           </div>
         </div>
-        
-        {/* Advanced Settings Toggle */}
-        <div className="card p-4">
-          <button
-            onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-            className="w-full flex items-center justify-between"
-          >
-            <div className="flex items-center gap-3">
-              <Settings className="w-5 h-5 text-white/50" />
-              <div className="text-left">
-                <h3 className="font-medium">Advanced Settings</h3>
-                <p className="text-xs text-white/50">Safe zones, time restrictions</p>
-              </div>
-            </div>
-            {showAdvancedSettings ? (
-              <ChevronUp className="w-5 h-5 text-white/50" />
-            ) : (
-              <ChevronDown className="w-5 h-5 text-white/50" />
-            )}
-          </button>
-        </div>
-        
-        {showAdvancedSettings && (
-          <>
-            {/* No-Tag Zones */}
-            <div className="card p-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <Shield className="w-5 h-5 text-green-400" />
-                  <div>
-                    <h3 className="font-medium">No-Tag Zones</h3>
-                    <p className="text-xs text-white/50">Safe areas where tagging is disabled</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowAddZone(true)}
-                  className="p-2 bg-green-400/20 rounded-lg text-green-400 hover:bg-green-400/30 transition-colors"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </div>
-              
-              {settings.noTagZones.length > 0 ? (
-                <div className="space-y-2">
-                  {settings.noTagZones.map((zone) => (
-                    <div key={zone.id} className="flex items-center justify-between p-3 bg-green-400/10 rounded-xl border border-green-400/20">
-                      <div className="flex items-center gap-3">
-                        <MapPin className="w-4 h-4 text-green-400" />
-                        <div>
-                          <p className="font-medium text-sm">{zone.name}</p>
-                          <p className="text-xs text-white/50">{formatRadius(zone.radius)} radius</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveZone(zone.id)}
-                        className="p-1 hover:bg-white/10 rounded"
-                      >
-                        <X className="w-4 h-4 text-white/50" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-white/40 text-center py-4">No safe zones added</p>
-              )}
-            </div>
-        
-        {/* No-Tag Times */}
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Calendar className="w-5 h-5 text-blue-400" />
-              <div>
-                <h3 className="font-medium">No-Tag Times</h3>
-                <p className="text-xs text-white/50">Time periods when tagging is disabled</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowAddTime(true)}
-              className="p-2 bg-blue-400/20 rounded-lg text-blue-400 hover:bg-blue-400/30 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          </div>
-          
-          {settings.noTagTimes.length > 0 ? (
-            <div className="space-y-2">
-              {settings.noTagTimes.map((time) => (
-                <div key={time.id} className="flex items-center justify-between p-3 bg-blue-400/10 rounded-xl border border-blue-400/20">
-                  <div className="flex items-center gap-3">
-                    <Clock className="w-4 h-4 text-blue-400" />
-                    <div>
-                      <p className="font-medium text-sm">{time.name}</p>
-                      <p className="text-xs text-white/50">
-                        {time.startTime} - {time.endTime} • {time.days.length === 7 ? 'Every day' : time.days.map(d => daysOfWeek[d]).join(', ')}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveTime(time.id)}
-                    className="p-1 hover:bg-white/10 rounded"
-                  >
-                    <X className="w-4 h-4 text-white/50" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-white/40 text-center py-4">No time restrictions added</p>
-          )}
-        </div>
-          </>
-        )}
-        
+
         {/* Error Display */}
         {error && (
-          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+          <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
             {error}
           </div>
         )}
 
-        {/* Create Button */}
-        <button
-          onClick={handleCreate}
-          disabled={isCreating}
-          className="btn-primary w-full flex items-center justify-center gap-2 py-4 disabled:opacity-50"
-        >
-          {isCreating ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Creating Game...
-            </>
-          ) : (
-            <>
-              <Gamepad2 className="w-5 h-5" />
-              Create Game
-            </>
-          )}
-        </button>
+        {/* Spacer for floating button */}
+        <div className="h-8" />
       </div>
       
-      {/* Tag Radius Map Modal */}
+      {/* Fixed Bottom Action Bar - Thumb zone */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-dark-900/95 backdrop-blur-xl border-t border-white/10 p-4 pb-safe">
+        <div className="flex gap-3">
+          {/* Advanced settings button */}
+          <button
+            onClick={() => setShowAdvancedSheet(true)}
+            className="touch-target-48 w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center"
+          >
+            <Settings className="w-6 h-6" />
+          </button>
+          
+          {/* Main create button - Takes most space */}
+          <button
+            onClick={handleCreate}
+            disabled={isCreating}
+            className="flex-1 h-14 btn-primary flex items-center justify-center gap-3 text-lg font-bold disabled:opacity-50 active:scale-95 transition-transform"
+          >
+            {isCreating ? (
+              <>
+                <Loader2 className="w-6 h-6 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Gamepad2 className="w-6 h-6" />
+                Create Game
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Advanced Settings Bottom Sheet */}
+      <BottomSheet 
+        isOpen={showAdvancedSheet} 
+        onClose={() => setShowAdvancedSheet(false)}
+        title="Advanced Settings"
+      >
+        <div className="space-y-4 pb-8">
+          {/* Game Duration */}
+          <div className="card p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Timer className="w-5 h-5 text-neon-orange" />
+              <h3 className="font-medium">Game Duration</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {durationOptions.map((opt) => (
+                <button
+                  key={opt.value || 'none'}
+                  onClick={() => setSettings({ ...settings, duration: opt.value })}
+                  className={`touch-target-48 p-4 rounded-xl text-center transition-all ${
+                    settings.duration === opt.value
+                      ? 'bg-neon-orange/20 border-2 border-neon-orange text-neon-orange'
+                      : 'bg-white/5 border border-white/10 active:scale-95'
+                  }`}
+                >
+                  <p className="font-bold">{opt.label}</p>
+                  <p className="text-xs opacity-60">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* No-Tag Zones */}
+          <div className="card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <Shield className="w-5 h-5 text-green-400" />
+                <h3 className="font-medium">Safe Zones</h3>
+              </div>
+              <button
+                onClick={() => setShowAddZone(true)}
+                className="touch-target-48 p-2 bg-green-400/20 rounded-lg text-green-400"
+              >
+                <Plus className="w-6 h-6" />
+              </button>
+            </div>
+            
+            {settings.noTagZones.length > 0 ? (
+              <div className="space-y-2">
+                {settings.noTagZones.map((zone) => (
+                  <div key={zone.id} className="flex items-center justify-between p-3 bg-green-400/10 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <MapPin className="w-5 h-5 text-green-400" />
+                      <div>
+                        <p className="font-medium">{zone.name}</p>
+                        <p className="text-xs text-white/50">{formatRadius(zone.radius)} radius</p>
+                      </div>
+                    </div>
+                    <button onClick={() => handleRemoveZone(zone.id)} className="touch-target-48 p-2">
+                      <X className="w-5 h-5 text-white/50" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-white/40 text-center py-4">No safe zones added</p>
+            )}
+          </div>
+
+          {/* No-Tag Times */}
+          <div className="card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <Calendar className="w-5 h-5 text-blue-400" />
+                <h3 className="font-medium">Time Restrictions</h3>
+              </div>
+              <button
+                onClick={() => setShowAddTime(true)}
+                className="touch-target-48 p-2 bg-blue-400/20 rounded-lg text-blue-400"
+              >
+                <Plus className="w-6 h-6" />
+              </button>
+            </div>
+            
+            {settings.noTagTimes.length > 0 ? (
+              <div className="space-y-2">
+                {settings.noTagTimes.map((time) => (
+                  <div key={time.id} className="flex items-center justify-between p-3 bg-blue-400/10 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <Clock className="w-5 h-5 text-blue-400" />
+                      <div>
+                        <p className="font-medium">{time.name}</p>
+                        <p className="text-xs text-white/50">{time.startTime} - {time.endTime}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => handleRemoveTime(time.id)} className="touch-target-48 p-2">
+                      <X className="w-5 h-5 text-white/50" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-white/40 text-center py-4">No time restrictions</p>
+            )}
+          </div>
+
+          {/* Custom Boundary */}
+          <div className="card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <MapPinned className="w-5 h-5 text-purple-400" />
+                <h3 className="font-medium">Play Boundary</h3>
+              </div>
+              <button
+                onClick={() => setShowBoundaryEditor(true)}
+                className="touch-target-48 p-2 bg-purple-400/20 rounded-lg text-purple-400"
+              >
+                {settings.customBoundary ? <Settings className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
+              </button>
+            </div>
+            
+            {settings.customBoundary ? (
+              <div className="flex items-center justify-between p-3 bg-purple-400/10 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <Map className="w-5 h-5 text-purple-400" />
+                  <div>
+                    <p className="font-medium">Boundary Set</p>
+                    <p className="text-xs text-white/50">
+                      {settings.customBoundary.type === 'circle' 
+                        ? `Circle: ${formatRadius(settings.customBoundary.radius)}`
+                        : 'Custom area'}
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setSettings({ ...settings, customBoundary: null })} className="touch-target-48 p-2">
+                  <X className="w-5 h-5 text-white/50" />
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-white/40 text-center py-4">No boundary - unlimited area</p>
+            )}
+          </div>
+        </div>
+      </BottomSheet>
       {showRadiusMap && userLocation && (
         <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col">
           <div className="p-4 bg-dark-900 border-b border-white/10">
@@ -1204,6 +1111,25 @@ function CreateGame() {
             </div>
           </div>
         </div>
+      )}
+      
+      {/* Boundary Editor Modal */}
+      {showBoundaryEditor && userLocation && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
+          </div>
+        }>
+          <BoundaryEditor 
+            initialCenter={userLocation}
+            initialBoundary={settings.customBoundary}
+            onSave={(boundary) => {
+              setSettings({ ...settings, customBoundary: boundary });
+              setShowBoundaryEditor(false);
+            }}
+            onClose={() => setShowBoundaryEditor(false)}
+          />
+        </Suspense>
       )}
     </div>
   );
