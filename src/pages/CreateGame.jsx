@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Circle, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin, Calendar, Plus, X, Shield, Map, Crosshair, Loader2 } from 'lucide-react';
-import { useStore, useSounds } from '../store';
+import { ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin, Calendar, Plus, X, Shield, Map, Crosshair, Loader2, Zap } from 'lucide-react';
+import { useStore, useSounds, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 
@@ -87,6 +87,7 @@ function CreateGame() {
   const [error, setError] = useState('');
   const [settings, setSettings] = useState({
     gameName: `${user?.name || 'Player'}'s Game`,
+    gameMode: 'classic',
     gpsInterval: 5 * 60 * 1000, // 5 minutes default
     customInterval: '',
     tagRadius: 50,
@@ -94,6 +95,9 @@ function CreateGame() {
     maxPlayers: 10,
     noTagZones: [],
     noTagTimes: [],
+    // Game mode specific settings
+    potatoTimer: 45000, // 45 seconds for hot potato
+    hideTime: 120000, // 2 minutes for hide and seek
   });
 
   const [showCustomInterval, setShowCustomInterval] = useState(false);
@@ -102,6 +106,7 @@ function CreateGame() {
   const [showRadiusMap, setShowRadiusMap] = useState(false);
   const [isSelectingZoneLocation, setIsSelectingZoneLocation] = useState(false);
   const [selectedZoneLocation, setSelectedZoneLocation] = useState(null);
+  const [showModeInfo, setShowModeInfo] = useState(false);
   
   // New zone form
   const [newZone, setNewZone] = useState({ name: '', radius: 100, lat: null, lng: null });
@@ -312,6 +317,122 @@ function CreateGame() {
       </div>
       
       <div className="space-y-6">
+        {/* Game Mode Selection */}
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Zap className="w-5 h-5 text-neon-cyan" />
+              <div>
+                <h3 className="font-medium">Game Mode</h3>
+                <p className="text-xs text-white/50">Choose how to play</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowModeInfo(!showModeInfo)}
+              className="text-xs text-neon-cyan hover:underline"
+            >
+              {showModeInfo ? 'Hide details' : 'Learn more'}
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+            {Object.values(GAME_MODES).map((mode) => (
+              <button
+                key={mode.id}
+                onClick={() => setSettings({ ...settings, gameMode: mode.id })}
+                className={`p-3 rounded-xl text-left transition-all ${
+                  settings.gameMode === mode.id
+                    ? `bg-${mode.color}/20 border-2 border-${mode.color}`
+                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xl">{mode.icon}</span>
+                  <span className={`font-bold text-sm ${settings.gameMode === mode.id ? `text-${mode.color}` : ''}`}>
+                    {mode.name}
+                  </span>
+                </div>
+                <p className="text-xs text-white/50 line-clamp-2">{mode.description}</p>
+              </button>
+            ))}
+          </div>
+          
+          {showModeInfo && settings.gameMode && (
+            <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-2xl">{GAME_MODES[settings.gameMode].icon}</span>
+                <div>
+                  <h4 className="font-bold">{GAME_MODES[settings.gameMode].name}</h4>
+                  <p className="text-xs text-white/50">Min {GAME_MODES[settings.gameMode].minPlayers} players</p>
+                </div>
+              </div>
+              <ul className="space-y-1">
+                {GAME_MODES[settings.gameMode].features.map((feature, i) => (
+                  <li key={i} className="text-xs text-white/70 flex items-center gap-2">
+                    <span className="w-1 h-1 bg-neon-cyan rounded-full"></span>
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* Game Mode Specific Settings */}
+        {settings.gameMode === 'hotPotato' && (
+          <div className="card p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-xl">🥔</span>
+              <div>
+                <h3 className="font-medium">Potato Timer</h3>
+                <p className="text-xs text-white/50">Time before the potato explodes</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {[30000, 45000, 60000, 90000].map((ms) => (
+                <button
+                  key={ms}
+                  onClick={() => setSettings({ ...settings, potatoTimer: ms })}
+                  className={`p-3 rounded-xl text-center transition-all ${
+                    settings.potatoTimer === ms
+                      ? 'bg-amber-400/20 border-2 border-amber-400 text-amber-400'
+                      : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  <p className="font-bold text-sm">{ms / 1000}s</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {settings.gameMode === 'hideAndSeek' && (
+          <div className="card p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-xl">👀</span>
+              <div>
+                <h3 className="font-medium">Hiding Time</h3>
+                <p className="text-xs text-white/50">Time for players to hide before seeking begins</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {[60000, 120000, 180000, 300000].map((ms) => (
+                <button
+                  key={ms}
+                  onClick={() => setSettings({ ...settings, hideTime: ms })}
+                  className={`p-3 rounded-xl text-center transition-all ${
+                    settings.hideTime === ms
+                      ? 'bg-pink-400/20 border-2 border-pink-400 text-pink-400'
+                      : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  <p className="font-bold text-sm">{ms / 60000}m</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Game Name */}
         <div className="card p-4">
           <label className="label">Game Name</label>

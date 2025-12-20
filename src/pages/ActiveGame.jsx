@@ -2,8 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Target, Users, Clock, X, Zap, AlertTriangle, Flag, Shield, Calendar, Loader2 } from 'lucide-react';
-import { useStore, useSounds, isInNoTagTime, isInNoTagZone, canTagNow } from '../store';
+import { Target, Users, Clock, X, Zap, AlertTriangle, Flag, Shield, Calendar, Loader2, Snowflake, Skull, Heart } from 'lucide-react';
+import { useStore, useSounds, isInNoTagTime, isInNoTagZone, canTagNow, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import GameEndSummary from '../components/GameEndSummary';
@@ -143,7 +143,8 @@ function ActiveGame() {
     return () => clearInterval(intervalId);
   }, [currentGame?.settings?.duration, currentGame?.startedAt]);
   
-  if (!currentGame || currentGame.status !== 'active') {
+  // Allow hiding phase for hide and seek
+  if (!currentGame || (currentGame.status !== 'active' && currentGame.status !== 'hiding')) {
     const lastGame = games.filter(g => g.status === 'ended').sort((a, b) => b.endedAt - a.endedAt)[0];
     if (lastGame && Date.now() - lastGame.endedAt < 5000) {
       return <GameEndSummary game={lastGame} onClose={() => navigate('/')} />;
@@ -151,10 +152,37 @@ function ActiveGame() {
     navigate('/');
     return null;
   }
+
+  // Game mode info
+  const gameMode = currentGame.gameMode || 'classic';
+  const modeConfig = GAME_MODES[gameMode] || GAME_MODES.classic;
   
-  const isIt = currentGame.itPlayerId === user?.id;
+  // Mode-specific player state
+  const currentPlayer = currentGame.players?.find(p => p.id === user?.id);
+  const isIt = gameMode === 'teamTag' 
+    ? true // Everyone can tag in team mode
+    : gameMode === 'infection'
+    ? currentPlayer?.isIt
+    : currentGame.itPlayerId === user?.id;
+  const isFrozen = currentPlayer?.isFrozen;
+  const isEliminated = currentPlayer?.isEliminated;
+  const playerTeam = currentPlayer?.team;
   const itPlayer = currentGame.players?.find((p) => p.id === currentGame.itPlayerId);
   const otherPlayers = currentGame.players?.filter((p) => p.id !== user?.id) || [];
+  
+  // Get counts for game modes
+  const frozenCount = currentGame.players?.filter(p => p.isFrozen && !p.isIt).length || 0;
+  const infectedCount = currentGame.players?.filter(p => p.isIt).length || 0;
+  const survivorCount = currentGame.players?.filter(p => !p.isIt && !p.isEliminated).length || 0;
+  const redTeamAlive = currentGame.players?.filter(p => p.team === 'red' && !p.isEliminated).length || 0;
+  const blueTeamAlive = currentGame.players?.filter(p => p.team === 'blue' && !p.isEliminated).length || 0;
+  
+  // Hot potato timer
+  const potatoTimeLeft = currentGame.potatoExpiresAt ? Math.max(0, currentGame.potatoExpiresAt - Date.now()) : 0;
+  
+  // Hide and seek hiding phase
+  const isHidingPhase = currentGame.status === 'hiding';
+  const hideTimeLeft = currentGame.hidePhaseEndAt ? Math.max(0, currentGame.hidePhaseEndAt - Date.now()) : 0;
   
   const getDistance = (lat1, lng1, lat2, lng2) => {
     const R = 6371e3;
@@ -170,13 +198,36 @@ function ActiveGame() {
   };
   
   const getNearestTaggable = () => {
-    if (!isIt || !user?.location) return { player: null, distance: Infinity };
+    if (!user?.location) return { player: null, distance: Infinity };
+    
+    // Determine which players can be tagged based on game mode
+    const canTagPlayer = (player) => {
+      if (!player.location) return false;
+      if (player.isEliminated) return false;
+      
+      switch (gameMode) {
+        case 'teamTag':
+          return player.team !== playerTeam && !player.isEliminated;
+        case 'infection':
+          return !player.isIt; // Can only tag non-infected
+        case 'freezeTag':
+          if (isIt) return !player.isFrozen && !player.isIt; // IT freezes unfrozen players
+          return player.isFrozen && !player.isIt; // Non-IT unfreezes frozen teammates
+        case 'manhunt':
+          return isIt && !player.isEliminated;
+        case 'hotPotato':
+          return isIt && !player.isEliminated;
+        case 'classic':
+        default:
+          return isIt;
+      }
+    };
     
     let nearest = null;
     let nearestDist = Infinity;
     
     otherPlayers.forEach((player) => {
-      if (player.location) {
+      if (canTagPlayer(player)) {
         const dist = getDistance(
           user.location.lat, user.location.lng,
           player.location.lat, player.location.lng
@@ -328,32 +379,147 @@ function ActiveGame() {
             </div>
           )}
           
-          {/* IT Status */}
-          <div className={`mt-3 p-3 rounded-xl flex items-center justify-between ${
-            isIt 
-              ? 'bg-neon-orange/20 border border-neon-orange/30' 
-              : 'bg-neon-cyan/10 border border-neon-cyan/30'
-          }`}>
-            <div className="flex items-center gap-3">
-              {isIt ? (
-                <>
-                  <Target className="w-6 h-6 text-neon-orange animate-pulse" />
-                  <div>
-                    <p className="font-display font-bold text-neon-orange">YOU'RE IT!</p>
-                    <p className="text-xs text-white/50">Tag someone to pass it on!</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <AlertTriangle className="w-6 h-6 text-neon-cyan" />
-                  <div>
-                    <p className="font-display font-bold text-neon-cyan">{itPlayer?.name} is IT!</p>
-                    <p className="text-xs text-white/50">Run and hide!</p>
-                  </div>
-                </>
-              )}
-            </div>
+          {/* Game Mode Badge */}
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-lg">{modeConfig.icon}</span>
+            <span className="text-sm font-medium text-white/70">{modeConfig.name}</span>
+            
+            {/* Mode-specific stats */}
+            {gameMode === 'freezeTag' && (
+              <span className="text-xs text-blue-400 ml-auto">
+                <Snowflake className="w-3 h-3 inline mr-1" />
+                {frozenCount} frozen
+              </span>
+            )}
+            {gameMode === 'infection' && (
+              <span className="text-xs text-green-400 ml-auto">
+                🧟 {infectedCount} infected • {survivorCount} survivors
+              </span>
+            )}
+            {gameMode === 'teamTag' && (
+              <span className="text-xs ml-auto">
+                <span className="text-red-400">🔴 {redTeamAlive}</span>
+                <span className="mx-1">vs</span>
+                <span className="text-blue-400">🔵 {blueTeamAlive}</span>
+              </span>
+            )}
+            {gameMode === 'hotPotato' && isIt && (
+              <span className={`text-xs ml-auto font-mono font-bold ${potatoTimeLeft < 10000 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>
+                🥔 {Math.ceil(potatoTimeLeft / 1000)}s
+              </span>
+            )}
           </div>
+          
+          {/* Hide and Seek - Hiding Phase Banner */}
+          {isHidingPhase && (
+            <div className="mt-2 p-3 bg-pink-500/20 border border-pink-500/30 rounded-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">👀</span>
+                  <span className="font-bold text-pink-400">
+                    {isIt ? 'Close your eyes!' : 'Hide now!'}
+                  </span>
+                </div>
+                <span className="font-mono font-bold text-pink-400">
+                  {formatTime(hideTimeLeft)}
+                </span>
+              </div>
+              <p className="text-xs text-white/50 mt-1">
+                {isIt ? 'Seeking begins when timer ends' : 'Find a good hiding spot!'}
+              </p>
+            </div>
+          )}
+          
+          {/* Player Status - Frozen/Eliminated */}
+          {isFrozen && (
+            <div className="mt-2 p-3 bg-blue-500/20 border border-blue-500/30 rounded-xl flex items-center gap-3">
+              <Snowflake className="w-6 h-6 text-blue-400 animate-pulse" />
+              <div>
+                <p className="font-bold text-blue-400">YOU'RE FROZEN!</p>
+                <p className="text-xs text-white/50">Wait for a teammate to unfreeze you</p>
+              </div>
+            </div>
+          )}
+          
+          {isEliminated && (
+            <div className="mt-2 p-3 bg-red-500/20 border border-red-500/30 rounded-xl flex items-center gap-3">
+              <Skull className="w-6 h-6 text-red-400" />
+              <div>
+                <p className="font-bold text-red-400">ELIMINATED!</p>
+                <p className="text-xs text-white/50">Watch the remaining players</p>
+              </div>
+            </div>
+          )}
+          
+          {/* Team indicator for team tag */}
+          {gameMode === 'teamTag' && !isEliminated && (
+            <div className={`mt-2 p-3 rounded-xl flex items-center justify-between ${
+              playerTeam === 'red' 
+                ? 'bg-red-500/20 border border-red-500/30' 
+                : 'bg-blue-500/20 border border-blue-500/30'
+            }`}>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{playerTeam === 'red' ? '🔴' : '🔵'}</span>
+                <div>
+                  <p className={`font-bold ${playerTeam === 'red' ? 'text-red-400' : 'text-blue-400'}`}>
+                    Team {playerTeam === 'red' ? 'Red' : 'Blue'}
+                  </p>
+                  <p className="text-xs text-white/50">Tag the opposing team!</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* IT Status - Classic modes */}
+          {!isHidingPhase && !isEliminated && gameMode !== 'teamTag' && (
+            <div className={`mt-3 p-3 rounded-xl flex items-center justify-between ${
+              isIt 
+                ? 'bg-neon-orange/20 border border-neon-orange/30' 
+                : 'bg-neon-cyan/10 border border-neon-cyan/30'
+            }`}>
+              <div className="flex items-center gap-3">
+                {isIt ? (
+                  <>
+                    <Target className="w-6 h-6 text-neon-orange animate-pulse" />
+                    <div>
+                      <p className="font-display font-bold text-neon-orange">
+                        {gameMode === 'infection' ? "YOU'RE INFECTED!" : 
+                         gameMode === 'hotPotato' ? "YOU HAVE THE POTATO!" :
+                         gameMode === 'manhunt' ? "YOU'RE THE HUNTER!" :
+                         gameMode === 'freezeTag' ? "YOU'RE IT!" :
+                         gameMode === 'hideAndSeek' ? "YOU'RE THE SEEKER!" :
+                         "YOU'RE IT!"}
+                      </p>
+                      <p className="text-xs text-white/50">
+                        {gameMode === 'infection' ? 'Spread the infection!' :
+                         gameMode === 'hotPotato' ? 'Pass it before time runs out!' :
+                         gameMode === 'manhunt' ? 'Hunt down the runners!' :
+                         gameMode === 'freezeTag' ? 'Freeze the other players!' :
+                         gameMode === 'hideAndSeek' ? 'Find the hiders!' :
+                         'Tag someone to pass it on!'}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="w-6 h-6 text-neon-cyan" />
+                    <div>
+                      <p className="font-display font-bold text-neon-cyan">
+                        {gameMode === 'infection' ? `${infectedCount} infected!` :
+                         gameMode === 'manhunt' ? `${itPlayer?.name} is hunting!` :
+                         `${itPlayer?.name} is IT!`}
+                      </p>
+                      <p className="text-xs text-white/50">
+                        {gameMode === 'freezeTag' && isFrozen ? 'Wait for rescue!' :
+                         gameMode === 'freezeTag' ? 'Avoid IT or unfreeze teammates!' :
+                         'Run and hide!'}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           
           {/* Tag Error Message */}
           {tagError && (
@@ -423,32 +589,70 @@ function ActiveGame() {
             <Marker
               position={[user.location.lat, user.location.lng]}
               icon={createIcon(
-                noTagStatus.inZone ? '#22c55e' : (isIt ? '#f97316' : '#00f5ff'),
-                isIt && !noTagStatus.inZone,
-                user.avatar || '🏃'
+                isFrozen ? '#60a5fa' :
+                isEliminated ? '#666' :
+                noTagStatus.inZone ? '#22c55e' : 
+                playerTeam === 'red' ? '#ef4444' :
+                playerTeam === 'blue' ? '#3b82f6' :
+                isIt ? '#f97316' : '#00f5ff',
+                isIt && !noTagStatus.inZone && !isFrozen && !isEliminated,
+                isFrozen ? '🧊' : isEliminated ? '💀' : user.avatar || '🏃'
               )}
             >
-              <Popup>You {isIt ? '(IT!)' : ''} {noTagStatus.inZone ? '(Safe)' : ''}</Popup>
+              <Popup>
+                You 
+                {isIt ? ' (IT!)' : ''} 
+                {isFrozen ? ' (Frozen)' : ''} 
+                {isEliminated ? ' (Out)' : ''} 
+                {playerTeam ? ` (${playerTeam})` : ''}
+                {noTagStatus.inZone ? ' (Safe)' : ''}
+              </Popup>
             </Marker>
           )}
           
           {/* Other players */}
           {otherPlayers.map((player) => {
             if (!player.location) return null;
-            const isPlayerIt = player.id === currentGame.itPlayerId;
+            // Hide non-IT player locations during hide and seek hiding phase if you're the seeker
+            if (isHidingPhase && isIt && !player.isIt) return null;
+            
+            const isPlayerIt = gameMode === 'infection' 
+              ? player.isIt 
+              : player.id === currentGame.itPlayerId;
             const playerInZone = isInNoTagZone(player.location, noTagZones);
+            const isPlayerFrozen = player.isFrozen;
+            const isPlayerEliminated = player.isEliminated;
+            
+            // Determine marker color based on game mode
+            let markerColor;
+            if (isPlayerFrozen) markerColor = '#60a5fa';
+            else if (isPlayerEliminated) markerColor = '#666';
+            else if (playerInZone) markerColor = '#22c55e';
+            else if (gameMode === 'teamTag') markerColor = player.team === 'red' ? '#ef4444' : '#3b82f6';
+            else if (gameMode === 'infection' && player.isIt) markerColor = '#22c55e'; // Infected = green/zombie
+            else if (isPlayerIt) markerColor = '#f97316';
+            else markerColor = '#22c55e';
+            
             return (
               <Marker
                 key={player.id}
                 position={[player.location.lat, player.location.lng]}
                 icon={createIcon(
-                  playerInZone ? '#22c55e' : (isPlayerIt ? '#f97316' : '#22c55e'),
-                  isPlayerIt && !playerInZone,
+                  markerColor,
+                  isPlayerIt && !playerInZone && !isPlayerFrozen && !isPlayerEliminated,
+                  isPlayerFrozen ? '🧊' : 
+                  isPlayerEliminated ? '💀' : 
+                  (gameMode === 'infection' && player.isIt) ? '🧟' :
                   player.avatar || '🏃'
                 )}
               >
                 <Popup>
-                  {player.name} {isPlayerIt ? '(IT!)' : ''} {playerInZone ? '(Safe)' : ''}
+                  {player.name} 
+                  {isPlayerIt ? ' (IT!)' : ''} 
+                  {isPlayerFrozen ? ' (Frozen)' : ''} 
+                  {isPlayerEliminated ? ' (Out)' : ''} 
+                  {player.team ? ` (${player.team})` : ''}
+                  {playerInZone ? ' (Safe)' : ''}
                 </Popup>
               </Marker>
             );
@@ -460,11 +664,19 @@ function ActiveGame() {
           <div className="absolute top-4 left-4 right-4 z-10">
             <div className="card p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="text-xl">{nearestPlayer.avatar || '🏃'}</span>
+                <span className="text-xl">
+                  {nearestPlayer.isFrozen ? '🧊' : 
+                   nearestPlayer.team === 'red' ? '🔴' :
+                   nearestPlayer.team === 'blue' ? '🔵' :
+                   nearestPlayer.avatar || '🏃'}
+                </span>
                 <div>
                   <p className="font-medium text-sm">{nearestPlayer.name}</p>
                   <p className="text-xs text-white/50">
-                    {isInNoTagZone(nearestPlayer.location, noTagZones) ? '🛡️ In Safe Zone' : 'Nearest target'}
+                    {isInNoTagZone(nearestPlayer.location, noTagZones) ? '🛡️ In Safe Zone' : 
+                     nearestPlayer.isFrozen ? '🧊 Frozen - touch to unfreeze' :
+                     gameMode === 'teamTag' ? `Team ${nearestPlayer.team}` :
+                     'Nearest target'}
                   </p>
                 </div>
               </div>
@@ -484,36 +696,86 @@ function ActiveGame() {
             </div>
           </div>
         )}
+        
+        {/* Freeze tag: Show unfreeze button for non-IT players near frozen teammates */}
+        {gameMode === 'freezeTag' && !isIt && nearestPlayer?.isFrozen && (
+          <div className="absolute top-4 left-4 right-4 z-10">
+            <div className="card p-3 flex items-center justify-between bg-blue-500/20 border-blue-500/30">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🧊</span>
+                <div>
+                  <p className="font-medium text-sm">{nearestPlayer.name}</p>
+                  <p className="text-xs text-blue-400">Touch to unfreeze!</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="font-bold text-blue-400">
+                  {nearestDistance < 1000 
+                    ? `${Math.round(nearestDistance)}m` 
+                    : `${(nearestDistance / 1000).toFixed(1)}km`}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       
-      {/* TAG Button */}
-      {isIt && (
+      {/* Action Button - varies by game mode */}
+      {!isEliminated && !isFrozen && (
         <div className="absolute bottom-24 left-0 right-0 flex justify-center z-10">
-          <button
-            onClick={handleTag}
-            disabled={!inTagRange || isTagging}
-            className={`w-32 h-32 rounded-full font-display font-bold text-2xl transition-all transform ${
-              canTag && !isTagging
-                ? 'bg-gradient-to-br from-neon-orange to-red-500 shadow-lg shadow-neon-orange/50 animate-pulse hover:scale-105 active:scale-95'
-                : inTagRange && !tagCheck.allowed
-                ? 'bg-yellow-500/50 text-yellow-200'
-                : 'bg-white/10 text-white/30'
-            } ${tagAnimation ? 'scale-110' : ''}`}
-          >
-            {isTagging ? (
-              <Loader2 className="w-10 h-10 animate-spin mx-auto" />
-            ) : !inTagRange ? 'TAG!' : !tagCheck.allowed ? '🛡️' : 'TAG!'}
-          </button>
+          {/* TAG Button for IT players / Team Tag / Freeze Tag unfreeze */}
+          {(isIt || (gameMode === 'teamTag' && nearestPlayer) || (gameMode === 'freezeTag' && !isIt && nearestPlayer?.isFrozen)) && (
+            <button
+              onClick={handleTag}
+              disabled={!inTagRange || isTagging || isHidingPhase}
+              className={`w-32 h-32 rounded-full font-display font-bold text-2xl transition-all transform ${
+                isHidingPhase
+                  ? 'bg-pink-500/50 text-pink-200'
+                  : canTag && !isTagging
+                  ? gameMode === 'freezeTag' && !isIt
+                    ? 'bg-gradient-to-br from-blue-400 to-cyan-500 shadow-lg shadow-blue-400/50 animate-pulse hover:scale-105 active:scale-95'
+                    : gameMode === 'hotPotato'
+                    ? 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-400/50 animate-pulse hover:scale-105 active:scale-95'
+                    : 'bg-gradient-to-br from-neon-orange to-red-500 shadow-lg shadow-neon-orange/50 animate-pulse hover:scale-105 active:scale-95'
+                  : inTagRange && !tagCheck.allowed
+                  ? 'bg-yellow-500/50 text-yellow-200'
+                  : 'bg-white/10 text-white/30'
+              } ${tagAnimation ? 'scale-110' : ''}`}
+            >
+              {isTagging ? (
+                <Loader2 className="w-10 h-10 animate-spin mx-auto" />
+              ) : isHidingPhase ? (
+                '👀'
+              ) : !inTagRange ? (
+                gameMode === 'freezeTag' && !isIt ? '❄️' :
+                gameMode === 'hotPotato' ? '🥔' :
+                gameMode === 'infection' ? '🧟' :
+                'TAG!'
+              ) : !tagCheck.allowed ? (
+                '🛡️'
+              ) : (
+                gameMode === 'freezeTag' && !isIt ? 'FREE!' :
+                gameMode === 'freezeTag' && isIt ? 'FREEZE!' :
+                gameMode === 'hotPotato' ? 'PASS!' :
+                gameMode === 'infection' ? 'INFECT!' :
+                'TAG!'
+              )}
+            </button>
+          )}
         </div>
       )}
       
-      {/* Distance to IT (non-IT players) */}
-      {!isIt && itPlayer?.location && user?.location && (
+      {/* Distance to IT (non-IT players in classic modes) */}
+      {!isIt && !isEliminated && !isFrozen && itPlayer?.location && user?.location && gameMode !== 'teamTag' && (
         <div className="absolute bottom-24 left-4 right-4 z-10">
           <div className="card p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Target className="w-6 h-6 text-neon-orange" />
-              <span className="font-medium">{itPlayer.name} is IT</span>
+              <span className="font-medium">
+                {gameMode === 'infection' ? `${infectedCount} infected` :
+                 gameMode === 'manhunt' ? `${itPlayer.name} hunting` :
+                 `${itPlayer.name} is IT`}
+              </span>
             </div>
             <div className="text-right">
               <p className="font-bold text-lg">

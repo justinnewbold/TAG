@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Copy, Check, Play, UserPlus, Clock, Target, MapPin, Shield, Calendar, Share2, Loader2, Wifi, WifiOff } from 'lucide-react';
-import { useStore, useSounds } from '../store';
+import { ArrowLeft, Users, Copy, Check, Play, UserPlus, Clock, Target, MapPin, Shield, Calendar, Share2, Loader2, Wifi, WifiOff, Zap } from 'lucide-react';
+import { useStore, useSounds, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import InviteModal from '../components/InviteModal';
@@ -23,7 +23,10 @@ function GameLobby() {
 
   const isHost = currentGame?.host === user?.id;
   const playerCount = currentGame?.players?.length || 0;
-  const canStart = playerCount >= 2;
+  const gameMode = currentGame?.gameMode || 'classic';
+  const modeConfig = GAME_MODES[gameMode] || GAME_MODES.classic;
+  const minPlayers = modeConfig.minPlayers || 2;
+  const canStart = playerCount >= minPlayers;
 
   // Clean up countdown interval on unmount
   useEffect(() => {
@@ -202,6 +205,36 @@ function GameLobby() {
           Share invite link
         </button>
       </div>
+
+      {/* Game Mode Card */}
+      {currentGame.gameMode && GAME_MODES[currentGame.gameMode] && (
+        <div className={`card p-4 mb-6 border-2 border-${GAME_MODES[currentGame.gameMode].color}/30 bg-${GAME_MODES[currentGame.gameMode].color}/5`}>
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{GAME_MODES[currentGame.gameMode].icon}</span>
+            <div className="flex-1">
+              <h3 className="font-bold text-lg">{GAME_MODES[currentGame.gameMode].name}</h3>
+              <p className="text-sm text-white/60">{GAME_MODES[currentGame.gameMode].description}</p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {GAME_MODES[currentGame.gameMode].features.map((feature, i) => (
+              <span key={i} className="text-xs bg-white/10 px-2 py-1 rounded-full">
+                {feature}
+              </span>
+            ))}
+          </div>
+          {currentGame.gameMode === 'hotPotato' && currentGame.settings?.potatoTimer && (
+            <div className="mt-2 text-xs text-amber-400">
+              🥔 Potato timer: {currentGame.settings.potatoTimer / 1000}s
+            </div>
+          )}
+          {currentGame.gameMode === 'hideAndSeek' && currentGame.settings?.hideTime && (
+            <div className="mt-2 text-xs text-pink-400">
+              👀 Hiding time: {currentGame.settings.hideTime / 60000} minutes
+            </div>
+          )}
+        </div>
+      )}
       
       {/* Game Settings */}
       <div className="card p-4 mb-6">
@@ -327,9 +360,9 @@ function GameLobby() {
           ))}
         </div>
         
-        {playerCount < 2 && (
+        {playerCount < minPlayers && (
           <p className="text-center text-sm text-white/40 mt-4 py-4 border-t border-white/10">
-            Need at least 2 players to start
+            Need at least {minPlayers} players for {modeConfig.name}
           </p>
         )}
       </div>

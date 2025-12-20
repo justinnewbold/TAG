@@ -42,19 +42,71 @@ export function setupSocketHandlers(io, socket, gameManager) {
     const validLocation = { lat: locationValidation.lat, lng: locationValidation.lng };
     const game = gameManager.updatePlayerLocation(user.id, validLocation);
 
-    if (game && game.status === 'active') {
+    if (game && (game.status === 'active' || game.status === 'hiding')) {
       // Broadcast location to other players in the game
-      socket.to(`game:${game.id}`).emit('player:location', {
-        playerId: user.id,
-        location: validLocation,
-        timestamp: Date.now(),
-      });
+      // For hide and seek: don't broadcast hider locations to seeker during hiding phase
+      const isSeeker = game.gameMode === 'hideAndSeek' && game.itPlayerId === user.id;
+      const isHiding = game.status === 'hiding';
+      
+      if (!(isHiding && !isSeeker)) {
+        socket.to(`game:${game.id}`).emit('player:location', {
+          playerId: user.id,
+          location: validLocation,
+          timestamp: Date.now(),
+        });
+      }
 
-      // Check for potential tag opportunities (notify IT player)
-      if (game.itPlayerId === user.id) {
-        // IT player moved - check distances to all other players
+      // Game mode specific proximity checks
+      const gameMode = game.gameMode || 'classic';
+      
+      if (gameMode === 'infection') {
+        // For infection: any infected player can tag
+        const currentPlayer = game.players.find(p => p.id === user.id);
+        if (currentPlayer?.isIt) {
+          // Check for nearby survivors
+          const nearbySurvivors = game.players
+            .filter(p => !p.isIt && p.location)
+            .map(p => ({
+              id: p.id,
+              name: p.name,
+              distance: getDistance(
+                validLocation.lat, validLocation.lng,
+                p.location.lat, p.location.lng
+              ),
+            }))
+            .filter(p => p.distance <= game.settings.tagRadius * 2)
+            .sort((a, b) => a.distance - b.distance);
+
+          if (nearbySurvivors.length > 0) {
+            socket.emit('nearby:players', { players: nearbySurvivors });
+          }
+        }
+      } else if (gameMode === 'teamTag') {
+        // For team tag: check for nearby enemies
+        const currentPlayer = game.players.find(p => p.id === user.id);
+        if (currentPlayer && !currentPlayer.isEliminated) {
+          const nearbyEnemies = game.players
+            .filter(p => p.team !== currentPlayer.team && !p.isEliminated && p.location)
+            .map(p => ({
+              id: p.id,
+              name: p.name,
+              team: p.team,
+              distance: getDistance(
+                validLocation.lat, validLocation.lng,
+                p.location.lat, p.location.lng
+              ),
+            }))
+            .filter(p => p.distance <= game.settings.tagRadius * 2)
+            .sort((a, b) => a.distance - b.distance);
+
+          if (nearbyEnemies.length > 0) {
+            socket.emit('nearby:players', { players: nearbyEnemies });
+          }
+        }
+      } else if (game.itPlayerId === user.id) {
+        // Classic/other modes: IT player moved - check distances to all other players
         const nearbyPlayers = game.players
-          .filter(p => p.id !== user.id && p.location)
+          .filter(p => p.id !== user.id && p.location && !p.isFrozen && !p.isEliminated)
           .map(p => ({
             id: p.id,
             name: p.name,
@@ -63,7 +115,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
               p.location.lat, p.location.lng
             ),
           }))
-          .filter(p => p.distance <= game.settings.tagRadius * 2) // Within 2x tag radius
+          .filter(p => p.distance <= game.settings.tagRadius * 2)
           .sort((a, b) => a.distance - b.distance);
 
         if (nearbyPlayers.length > 0) {
@@ -79,16 +131,14 @@ export function setupSocketHandlers(io, socket, gameManager) {
           );
 
           if (distance <= game.settings.tagRadius * 2) {
-            // Alert player that IT is nearby
             socket.emit('it:nearby', {
               distance,
               inRange: distance <= game.settings.tagRadius,
             });
 
-            // Send push notification when IT is very close (within 1.5x tag radius)
             if (distance <= game.settings.tagRadius * 1.5) {
               pushService.sendToUser(user.id, pushService.notifications.itNearby(Math.round(distance)))
-                .catch(() => {}); // Fire and forget
+                .catch(() => {});
             }
           }
         }
@@ -116,9 +166,10 @@ export function setupSocketHandlers(io, socket, gameManager) {
     if (result.success) {
       const validatedTargetId = targetValidation.id;
       const taggedPlayer = result.game.players.find(p => p.id === validatedTargetId);
+      const gameMode = result.game.gameMode || 'classic';
 
-      // Notify all players in the game
-      io.to(`game:${game.id}`).emit('player:tagged', {
+      // Notify all players in the game with game mode specific event
+      const tagEvent = {
         taggerId: user.id,
         taggerName: user.name,
         taggedId: validatedTargetId,
@@ -126,27 +177,119 @@ export function setupSocketHandlers(io, socket, gameManager) {
         newItPlayerId: result.game.itPlayerId,
         tagTime: result.tagTime,
         tag: result.tag,
-      });
+        gameMode,
+      };
+
+      // Add game mode specific data
+      if (gameMode === 'freezeTag') {
+        tagEvent.isFrozen = taggedPlayer?.isFrozen;
+        tagEvent.isUnfreeze = result.tag?.type === 'unfreeze';
+      } else if (gameMode === 'infection') {
+        tagEvent.infectedCount = result.game.players.filter(p => p.isIt).length;
+        tagEvent.survivorCount = result.game.players.filter(p => !p.isIt).length;
+      } else if (gameMode === 'teamTag') {
+        tagEvent.isEliminated = taggedPlayer?.isEliminated;
+        tagEvent.redTeamAlive = result.game.players.filter(p => p.team === 'red' && !p.isEliminated).length;
+        tagEvent.blueTeamAlive = result.game.players.filter(p => p.team === 'blue' && !p.isEliminated).length;
+      } else if (gameMode === 'hotPotato') {
+        tagEvent.potatoExpiresAt = result.game.potatoExpiresAt;
+      }
+
+      io.to(`game:${game.id}`).emit('player:tagged', tagEvent);
 
       socket.emit('tag:result', { success: true, tagTime: result.tagTime });
 
-      // Send push notification to the tagged player (they're now IT)
-      if (taggedPlayer) {
-        pushService.sendToUser(validatedTargetId, pushService.notifications.youAreIt(user.name))
-          .catch(() => {}); // Fire and forget
+      // Check if game ended due to this tag
+      if (result.gameEnded) {
+        io.to(`game:${game.id}`).emit('game:ended', {
+          game: result.game,
+          winner: result.winner,
+          reason: gameMode === 'infection' ? 'All players infected!' :
+                  gameMode === 'teamTag' ? `Team ${result.winner?.team} wins!` :
+                  gameMode === 'freezeTag' ? 'All players frozen!' :
+                  'Game over!',
+        });
+      }
 
-        // Notify other players that someone was tagged
+      // Send push notifications based on game mode
+      if (taggedPlayer) {
+        if (gameMode === 'freezeTag' && result.tag?.type === 'unfreeze') {
+          pushService.sendToUser(validatedTargetId, {
+            title: '❄️ Unfrozen!',
+            body: `${user.name} unfroze you! Get moving!`,
+          }).catch(() => {});
+        } else if (gameMode === 'infection') {
+          pushService.sendToUser(validatedTargetId, {
+            title: '🧟 Infected!',
+            body: `${user.name} infected you! Spread it to others!`,
+          }).catch(() => {});
+        } else if (gameMode === 'teamTag') {
+          pushService.sendToUser(validatedTargetId, {
+            title: '💀 Eliminated!',
+            body: `${user.name} eliminated you!`,
+          }).catch(() => {});
+        } else if (gameMode === 'hotPotato') {
+          pushService.sendToUser(validatedTargetId, {
+            title: '🥔 Hot Potato!',
+            body: `${user.name} passed the potato to you! Quick, pass it!`,
+          }).catch(() => {});
+        } else {
+          pushService.sendToUser(validatedTargetId, pushService.notifications.youAreIt(user.name))
+            .catch(() => {});
+        }
+
+        // Notify other players
         result.game.players
           .filter(p => p.id !== validatedTargetId && p.id !== user.id)
           .forEach(p => {
             pushService.sendToUser(p.id, pushService.notifications.playerTagged(
               user.name,
               taggedPlayer.name
-            )).catch(() => {}); // Fire and forget
+            )).catch(() => {});
           });
       }
     } else {
       socket.emit('tag:result', { success: false, error: result.error, distance: result.distance });
+    }
+  });
+
+  // Hot Potato: Handle potato explosion (timer ran out)
+  socket.on('potato:exploded', async () => {
+    const game = await gameManager.getPlayerGame(user.id);
+    if (!game || game.gameMode !== 'hotPotato') return;
+
+    const result = await gameManager.eliminatePotatoHolder(game.id);
+    if (result.success) {
+      io.to(`game:${game.id}`).emit('player:eliminated', {
+        playerId: result.eliminated?.id,
+        playerName: result.eliminated?.name,
+        reason: 'Potato exploded!',
+        newHolderId: result.newHolder?.id,
+        newHolderName: result.newHolder?.name,
+        potatoExpiresAt: result.game?.potatoExpiresAt,
+      });
+
+      if (result.gameEnded) {
+        io.to(`game:${game.id}`).emit('game:ended', {
+          game: result.game,
+          winner: result.winner,
+          reason: 'Last player standing!',
+        });
+      }
+    }
+  });
+
+  // Hide and Seek: End hiding phase
+  socket.on('hidePhase:end', async () => {
+    const game = await gameManager.getPlayerGame(user.id);
+    if (!game || game.gameMode !== 'hideAndSeek' || game.status !== 'hiding') return;
+    if (game.itPlayerId !== user.id) return; // Only seeker can trigger this
+
+    const result = await gameManager.endHidePhase(game.id);
+    if (result.success) {
+      io.to(`game:${game.id}`).emit('hidePhase:ended', {
+        game: result.game,
+      });
     }
   });
 

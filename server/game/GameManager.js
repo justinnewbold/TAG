@@ -1,6 +1,17 @@
 import { v4 as uuidv4 } from 'uuid';
 import { gameDb, userDb } from '../db/index.js';
 
+// Game mode configurations (must match client-side GAME_MODES)
+export const GAME_MODES = {
+  classic: { id: 'classic', name: 'Classic Tag', minPlayers: 2 },
+  freezeTag: { id: 'freezeTag', name: 'Freeze Tag', minPlayers: 3 },
+  infection: { id: 'infection', name: 'Infection', minPlayers: 3 },
+  teamTag: { id: 'teamTag', name: 'Team Tag', minPlayers: 4 },
+  manhunt: { id: 'manhunt', name: 'Manhunt', minPlayers: 3 },
+  hotPotato: { id: 'hotPotato', name: 'Hot Potato', minPlayers: 3, defaultTimer: 45000 },
+  hideAndSeek: { id: 'hideAndSeek', name: 'Hide & Seek', minPlayers: 3, defaultHideTime: 120000 },
+};
+
 // Generate 6-character game code
 const generateGameCode = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -112,6 +123,10 @@ export class GameManager {
       }
     } while (true);
 
+    // Validate game mode
+    const gameMode = settings.gameMode || 'classic';
+    const modeConfig = GAME_MODES[gameMode] || GAME_MODES.classic;
+
     const gameId = uuidv4();
     const game = {
       id: gameId,
@@ -119,6 +134,7 @@ export class GameManager {
       host: host.id,
       hostName: host.name,
       status: 'waiting',
+      gameMode: gameMode,
       settings: {
         gpsInterval: settings.gpsInterval || 5 * 60 * 1000,
         tagRadius: settings.tagRadius || 20,
@@ -127,6 +143,9 @@ export class GameManager {
         gameName: settings.gameName || `${host.name}'s Game`,
         noTagZones: settings.noTagZones || [],
         noTagTimes: settings.noTagTimes || [],
+        // Game mode specific settings
+        potatoTimer: settings.potatoTimer || GAME_MODES.hotPotato.defaultTimer,
+        hideTime: settings.hideTime || GAME_MODES.hideAndSeek.defaultHideTime,
       },
       players: [{
         id: host.id,
@@ -134,6 +153,9 @@ export class GameManager {
         avatar: host.avatar,
         location: null,
         isIt: false,
+        isFrozen: false, // For freeze tag
+        isEliminated: false, // For infection/hot potato
+        team: null, // For team tag
         joinedAt: Date.now(),
         lastUpdate: null,
         tagCount: 0,
@@ -141,8 +163,11 @@ export class GameManager {
         becameItAt: null,
       }],
       itPlayerId: null,
+      itPlayerIds: [], // For infection mode (multiple IT players)
       startedAt: null,
       endedAt: null,
+      hidePhaseEndAt: null, // For hide and seek
+      potatoExpiresAt: null, // For hot potato
       tags: [],
       createdAt: Date.now(),
     };
@@ -242,6 +267,9 @@ export class GameManager {
       avatar: player.avatar,
       location: null,
       isIt: false,
+      isFrozen: false,
+      isEliminated: false,
+      team: null,
       joinedAt: Date.now(),
       lastUpdate: null,
       tagCount: 0,
@@ -301,22 +329,115 @@ export class GameManager {
       return { success: false, error: 'Game has already started' };
     }
 
-    if (game.players.length < 2) {
-      return { success: false, error: 'Need at least 2 players to start' };
+    // Check minimum players for game mode
+    const modeConfig = GAME_MODES[game.gameMode] || GAME_MODES.classic;
+    const minPlayers = modeConfig.minPlayers || 2;
+    
+    if (game.players.length < minPlayers) {
+      return { success: false, error: `Need at least ${minPlayers} players for ${modeConfig.name}` };
     }
 
-    // Randomly select IT player
-    const itIndex = Math.floor(Math.random() * game.players.length);
-    const itPlayerId = game.players[itIndex].id;
-
+    const now = Date.now();
     game.status = 'active';
-    game.itPlayerId = itPlayerId;
-    game.startedAt = Date.now();
-    game.players = game.players.map(p => ({
-      ...p,
-      isIt: p.id === itPlayerId,
-      becameItAt: p.id === itPlayerId ? Date.now() : null,
-    }));
+    game.startedAt = now;
+
+    // Handle game mode specific initialization
+    switch (game.gameMode) {
+      case 'teamTag': {
+        // Assign players to teams (alternating or random)
+        const shuffled = [...game.players].sort(() => Math.random() - 0.5);
+        game.players = shuffled.map((p, i) => ({
+          ...p,
+          team: i % 2 === 0 ? 'red' : 'blue',
+          isIt: true, // In team tag, everyone can tag
+        }));
+        game.itPlayerId = null; // No single IT in team mode
+        break;
+      }
+
+      case 'infection': {
+        // One random player starts as infected (IT)
+        const itIndex = Math.floor(Math.random() * game.players.length);
+        const itPlayerId = game.players[itIndex].id;
+        game.itPlayerId = itPlayerId;
+        game.itPlayerIds = [itPlayerId];
+        game.players = game.players.map(p => ({
+          ...p,
+          isIt: p.id === itPlayerId,
+          becameItAt: p.id === itPlayerId ? now : null,
+        }));
+        break;
+      }
+
+      case 'manhunt': {
+        // Host or random player is the hunter (IT) - they stay IT forever
+        const hunterId = game.host;
+        game.itPlayerId = hunterId;
+        game.players = game.players.map(p => ({
+          ...p,
+          isIt: p.id === hunterId,
+          becameItAt: p.id === hunterId ? now : null,
+        }));
+        break;
+      }
+
+      case 'freezeTag': {
+        // One random player starts as IT
+        const itIndex = Math.floor(Math.random() * game.players.length);
+        const itPlayerId = game.players[itIndex].id;
+        game.itPlayerId = itPlayerId;
+        game.players = game.players.map(p => ({
+          ...p,
+          isIt: p.id === itPlayerId,
+          isFrozen: false,
+          becameItAt: p.id === itPlayerId ? now : null,
+        }));
+        break;
+      }
+
+      case 'hotPotato': {
+        // Random player gets the potato (is IT)
+        const itIndex = Math.floor(Math.random() * game.players.length);
+        const itPlayerId = game.players[itIndex].id;
+        game.itPlayerId = itPlayerId;
+        game.potatoExpiresAt = now + (game.settings.potatoTimer || 45000);
+        game.players = game.players.map(p => ({
+          ...p,
+          isIt: p.id === itPlayerId,
+          isEliminated: false,
+          becameItAt: p.id === itPlayerId ? now : null,
+        }));
+        break;
+      }
+
+      case 'hideAndSeek': {
+        // Host is the seeker, starts in hiding phase
+        const seekerId = game.host;
+        game.itPlayerId = seekerId;
+        game.status = 'hiding'; // Special status for hide phase
+        game.hidePhaseEndAt = now + (game.settings.hideTime || 120000);
+        game.players = game.players.map(p => ({
+          ...p,
+          isIt: p.id === seekerId,
+          becameItAt: p.id === seekerId ? now : null,
+        }));
+        break;
+      }
+
+      case 'classic':
+      default: {
+        // Classic tag: random IT
+        const itIndex = Math.floor(Math.random() * game.players.length);
+        const itPlayerId = game.players[itIndex].id;
+        game.itPlayerId = itPlayerId;
+        game.players = game.players.map(p => ({
+          ...p,
+          isIt: p.id === itPlayerId,
+          becameItAt: p.id === itPlayerId ? now : null,
+        }));
+        break;
+      }
+    }
 
     // Persist to database
     await gameDb.updateGame(game);
@@ -366,12 +487,13 @@ export class GameManager {
       return { success: false, error: 'Game not found' };
     }
 
-    if (game.status !== 'active') {
+    if (game.status !== 'active' && game.status !== 'hiding') {
       return { success: false, error: 'Game is not active' };
     }
 
-    if (game.itPlayerId !== taggerId) {
-      return { success: false, error: 'You are not IT' };
+    // Hide and seek: seeker can't tag during hiding phase
+    if (game.gameMode === 'hideAndSeek' && game.status === 'hiding') {
+      return { success: false, error: 'Still in hiding phase!' };
     }
 
     const tagger = game.players.find(p => p.id === taggerId);
@@ -379,6 +501,74 @@ export class GameManager {
 
     if (!tagger || !target) {
       return { success: false, error: 'Player not found' };
+    }
+
+    // Game mode specific validation
+    const gameMode = game.gameMode || 'classic';
+    
+    switch (gameMode) {
+      case 'teamTag':
+        // Can only tag players on the opposite team
+        if (tagger.team === target.team) {
+          return { success: false, error: 'Cannot tag your own teammate!' };
+        }
+        if (target.isEliminated) {
+          return { success: false, error: 'Player is already eliminated' };
+        }
+        break;
+
+      case 'infection':
+        // Must be infected (IT) to tag
+        if (!tagger.isIt) {
+          return { success: false, error: 'You are not infected' };
+        }
+        if (target.isIt) {
+          return { success: false, error: 'Target is already infected' };
+        }
+        break;
+
+      case 'freezeTag':
+        if (tagger.isIt) {
+          // IT player freezing someone
+          if (target.isFrozen) {
+            return { success: false, error: 'Player is already frozen' };
+          }
+        } else {
+          // Non-IT trying to unfreeze teammate
+          if (!target.isFrozen) {
+            return { success: false, error: 'Player is not frozen' };
+          }
+          if (target.isIt) {
+            return { success: false, error: 'Cannot unfreeze IT player' };
+          }
+        }
+        break;
+
+      case 'manhunt':
+        // Only hunter (IT) can tag
+        if (!tagger.isIt) {
+          return { success: false, error: 'Only the hunter can tag' };
+        }
+        if (target.isEliminated) {
+          return { success: false, error: 'Player is already eliminated' };
+        }
+        break;
+
+      case 'hotPotato':
+        if (game.itPlayerId !== taggerId) {
+          return { success: false, error: 'You don\'t have the potato!' };
+        }
+        if (target.isEliminated) {
+          return { success: false, error: 'Player is eliminated' };
+        }
+        break;
+
+      case 'classic':
+      default:
+        if (game.itPlayerId !== taggerId) {
+          return { success: false, error: 'You are not IT' };
+        }
+        break;
     }
 
     if (!tagger.location || !target.location) {
@@ -412,21 +602,150 @@ export class GameManager {
       timestamp: now,
       tagTime,
       location: { ...target.location },
+      gameMode,
     };
 
     game.tags.push(tag);
-    game.itPlayerId = targetId;
 
-    // Update player states
-    game.players = game.players.map(p => {
-      if (p.id === taggerId) {
-        return { ...p, isIt: false, tagCount: (p.tagCount || 0) + 1, becameItAt: null };
+    // Handle game mode specific tag results
+    let gameEnded = false;
+    let winner = null;
+
+    switch (gameMode) {
+      case 'teamTag': {
+        // Target is eliminated
+        game.players = game.players.map(p => {
+          if (p.id === targetId) {
+            return { ...p, isEliminated: true, tagCount: (p.tagCount || 0) };
+          }
+          if (p.id === taggerId) {
+            return { ...p, tagCount: (p.tagCount || 0) + 1 };
+          }
+          return p;
+        });
+        
+        // Check if one team is fully eliminated
+        const redAlive = game.players.filter(p => p.team === 'red' && !p.isEliminated);
+        const blueAlive = game.players.filter(p => p.team === 'blue' && !p.isEliminated);
+        
+        if (redAlive.length === 0) {
+          gameEnded = true;
+          winner = { team: 'blue', players: game.players.filter(p => p.team === 'blue') };
+        } else if (blueAlive.length === 0) {
+          gameEnded = true;
+          winner = { team: 'red', players: game.players.filter(p => p.team === 'red') };
+        }
+        break;
       }
-      if (p.id === targetId) {
-        return { ...p, isIt: true, becameItAt: now };
+
+      case 'infection': {
+        // Target becomes infected
+        game.itPlayerIds = [...(game.itPlayerIds || []), targetId];
+        game.players = game.players.map(p => {
+          if (p.id === targetId) {
+            return { ...p, isIt: true, becameItAt: now };
+          }
+          if (p.id === taggerId) {
+            return { ...p, tagCount: (p.tagCount || 0) + 1 };
+          }
+          return p;
+        });
+        
+        // Check if all players are infected
+        const survivors = game.players.filter(p => !p.isIt);
+        if (survivors.length === 0) {
+          gameEnded = true;
+          // Last person to be infected "wins" (survived longest)
+          winner = target;
+        }
+        break;
       }
-      return p;
-    });
+
+      case 'freezeTag': {
+        if (tagger.isIt) {
+          // Freeze the target
+          game.players = game.players.map(p => {
+            if (p.id === targetId) {
+              return { ...p, isFrozen: true };
+            }
+            if (p.id === taggerId) {
+              return { ...p, tagCount: (p.tagCount || 0) + 1 };
+            }
+            return p;
+          });
+          
+          // Check if all non-IT players are frozen
+          const unfrozen = game.players.filter(p => !p.isIt && !p.isFrozen);
+          if (unfrozen.length === 0) {
+            gameEnded = true;
+            winner = game.players.find(p => p.isIt);
+          }
+        } else {
+          // Unfreeze teammate
+          game.players = game.players.map(p => {
+            if (p.id === targetId) {
+              return { ...p, isFrozen: false };
+            }
+            return p;
+          });
+          tag.type = 'unfreeze';
+        }
+        break;
+      }
+
+      case 'manhunt': {
+        // Target is eliminated (caught by hunter)
+        game.players = game.players.map(p => {
+          if (p.id === targetId) {
+            return { ...p, isEliminated: true };
+          }
+          if (p.id === taggerId) {
+            return { ...p, tagCount: (p.tagCount || 0) + 1 };
+          }
+          return p;
+        });
+        
+        // Check if all runners are eliminated
+        const runnersAlive = game.players.filter(p => !p.isIt && !p.isEliminated);
+        if (runnersAlive.length === 0) {
+          gameEnded = true;
+          winner = game.players.find(p => p.isIt); // Hunter wins
+        }
+        break;
+      }
+
+      case 'hotPotato': {
+        // Pass the potato to target
+        game.itPlayerId = targetId;
+        game.potatoExpiresAt = now + (game.settings.potatoTimer || 45000);
+        game.players = game.players.map(p => {
+          if (p.id === taggerId) {
+            return { ...p, isIt: false, tagCount: (p.tagCount || 0) + 1, becameItAt: null };
+          }
+          if (p.id === targetId) {
+            return { ...p, isIt: true, becameItAt: now };
+          }
+          return p;
+        });
+        break;
+      }
+
+      case 'classic':
+      default: {
+        // Transfer IT to target
+        game.itPlayerId = targetId;
+        game.players = game.players.map(p => {
+          if (p.id === taggerId) {
+            return { ...p, isIt: false, tagCount: (p.tagCount || 0) + 1, becameItAt: null };
+          }
+          if (p.id === targetId) {
+            return { ...p, isIt: true, becameItAt: now };
+          }
+          return p;
+        });
+        break;
+      }
+    }
 
     // Persist to database
     await gameDb.updateGame(game);
@@ -455,7 +774,62 @@ export class GameManager {
       });
     }
 
-    return { success: true, game, tag, tagTime };
+    return { success: true, game, tag, tagTime, gameEnded, winner };
+  }
+
+  // Eliminate player in hot potato when timer expires
+  async eliminatePotatoHolder(gameId) {
+    const game = await this.getGame(gameId);
+    if (!game || game.gameMode !== 'hotPotato' || game.status !== 'active') {
+      return { success: false };
+    }
+
+    const holder = game.players.find(p => p.isIt && !p.isEliminated);
+    if (!holder) return { success: false };
+
+    // Eliminate the potato holder
+    game.players = game.players.map(p => {
+      if (p.id === holder.id) {
+        return { ...p, isIt: false, isEliminated: true };
+      }
+      return p;
+    });
+
+    // Find remaining players
+    const remaining = game.players.filter(p => !p.isEliminated);
+    
+    if (remaining.length <= 1) {
+      // Game over - last player wins
+      return { success: true, game, gameEnded: true, winner: remaining[0], eliminated: holder };
+    }
+
+    // Pick new random potato holder from remaining
+    const newHolder = remaining[Math.floor(Math.random() * remaining.length)];
+    game.itPlayerId = newHolder.id;
+    game.potatoExpiresAt = Date.now() + (game.settings.potatoTimer || 45000);
+    game.players = game.players.map(p => {
+      if (p.id === newHolder.id) {
+        return { ...p, isIt: true, becameItAt: Date.now() };
+      }
+      return p;
+    });
+
+    await gameDb.updateGame(game);
+    return { success: true, game, eliminated: holder, newHolder };
+  }
+
+  // End hide phase for hide and seek
+  async endHidePhase(gameId) {
+    const game = await this.getGame(gameId);
+    if (!game || game.gameMode !== 'hideAndSeek' || game.status !== 'hiding') {
+      return { success: false };
+    }
+
+    game.status = 'active';
+    game.hidePhaseEndAt = null;
+    
+    await gameDb.updateGame(game);
+    return { success: true, game };
   }
 
   async endGame(gameId, hostId) {

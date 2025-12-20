@@ -5,6 +5,79 @@ import { persist } from 'zustand/middleware';
 const generateId = () => Math.random().toString(36).substring(2, 9);
 const generateGameCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
 
+// Game Mode definitions
+export const GAME_MODES = {
+  classic: {
+    id: 'classic',
+    name: 'Classic Tag',
+    description: 'One player is IT and must tag others. Tagged player becomes the new IT.',
+    icon: '🏃',
+    color: 'neon-cyan',
+    minPlayers: 2,
+    features: ['Single IT player', 'Tag transfers IT', 'Last non-IT survives longest wins'],
+  },
+  freezeTag: {
+    id: 'freezeTag',
+    name: 'Freeze Tag',
+    description: 'Tagged players are frozen until unfrozen by a teammate touching them.',
+    icon: '🧊',
+    color: 'blue-400',
+    minPlayers: 3,
+    features: ['Frozen players can\'t move', 'Teammates can unfreeze', 'IT wins when all frozen'],
+  },
+  infection: {
+    id: 'infection',
+    name: 'Infection',
+    description: 'Tagged players become infected and join the IT team. Last survivor wins!',
+    icon: '🧟',
+    color: 'green-400',
+    minPlayers: 3,
+    features: ['Multiple IT players', 'Infection spreads', 'Last survivor wins'],
+  },
+  teamTag: {
+    id: 'teamTag',
+    name: 'Team Tag',
+    description: 'Two teams compete! Tag players on the opposing team to eliminate them.',
+    icon: '⚔️',
+    color: 'neon-purple',
+    minPlayers: 4,
+    features: ['Red vs Blue teams', 'Tag enemies only', 'Last team standing wins'],
+  },
+  manhunt: {
+    id: 'manhunt',
+    name: 'Manhunt',
+    description: 'One hunter vs all runners. Runners must survive until time runs out!',
+    icon: '🎯',
+    color: 'neon-orange',
+    minPlayers: 3,
+    features: ['One dedicated hunter', 'Runners can\'t tag back', 'Survival time matters'],
+  },
+  hotPotato: {
+    id: 'hotPotato',
+    name: 'Hot Potato',
+    description: 'The IT player has a countdown timer. Pass the tag before time runs out or lose!',
+    icon: '🥔',
+    color: 'amber-400',
+    minPlayers: 3,
+    features: ['30-60s countdown', 'Tag resets timer', 'Timer out = eliminated'],
+    settings: {
+      potatoTimer: 45000, // 45 seconds default
+    },
+  },
+  hideAndSeek: {
+    id: 'hideAndSeek',
+    name: 'Hide & Seek',
+    description: 'Seeker waits while others hide. After hiding phase, the hunt begins!',
+    icon: '👀',
+    color: 'pink-400',
+    minPlayers: 3,
+    features: ['Hiding phase (2-5 min)', 'Seeker GPS disabled during hide', 'Find all hiders to win'],
+    settings: {
+      hideTime: 120000, // 2 minutes default
+    },
+  },
+};
+
 // Achievement definitions
 export const ACHIEVEMENTS = {
   firstTag: {
