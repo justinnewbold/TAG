@@ -56,6 +56,7 @@ if (usePostgres) {
         host_id TEXT NOT NULL REFERENCES users(id),
         host_name TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'waiting',
+        game_mode TEXT NOT NULL DEFAULT 'classic',
         settings TEXT NOT NULL,
         it_player_id TEXT,
         started_at BIGINT,
@@ -95,6 +96,12 @@ if (usePostgres) {
       CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
       CREATE INDEX IF NOT EXISTS idx_game_players_user ON game_players(user_id);
       CREATE INDEX IF NOT EXISTS idx_game_tags_game ON game_tags(game_id);
+
+      -- Migration: Add game_mode column if it doesn't exist
+      DO $$ BEGIN
+        ALTER TABLE games ADD COLUMN IF NOT EXISTS game_mode TEXT NOT NULL DEFAULT 'classic';
+      EXCEPTION WHEN others THEN NULL;
+      END $$;
     `);
     console.log('PostgreSQL schema initialized');
   };
@@ -208,11 +215,11 @@ if (usePostgres) {
   gameDb = {
     async create(game) {
       await pool.query(`
-        INSERT INTO games (id, code, host_id, host_name, status, settings, it_player_id, started_at, ended_at, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        INSERT INTO games (id, code, host_id, host_name, status, game_mode, settings, it_player_id, started_at, ended_at, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       `, [
         game.id, game.code, game.host, game.hostName, game.status,
-        JSON.stringify(game.settings), game.itPlayerId, game.startedAt, game.endedAt, game.createdAt
+        game.gameMode || 'classic', JSON.stringify(game.settings), game.itPlayerId, game.startedAt, game.endedAt, game.createdAt
       ]);
       await this.addPlayer(game.id, game.players[0]);
       return game;
@@ -272,6 +279,7 @@ if (usePostgres) {
         host: row.host_id,
         hostName: row.host_name,
         status: row.status,
+        gameMode: row.game_mode || 'classic',
         settings: JSON.parse(row.settings),
         players,
         itPlayerId: row.it_player_id,
@@ -299,12 +307,12 @@ if (usePostgres) {
     async updateGame(game) {
       await pool.query(`
         UPDATE games SET
-          host_id = $1, host_name = $2, status = $3, settings = $4,
-          it_player_id = $5, started_at = $6, ended_at = $7,
-          winner_id = $8, winner_name = $9, game_duration = $10
-        WHERE id = $11
+          host_id = $1, host_name = $2, status = $3, game_mode = $4, settings = $5,
+          it_player_id = $6, started_at = $7, ended_at = $8,
+          winner_id = $9, winner_name = $10, game_duration = $11
+        WHERE id = $12
       `, [
-        game.host, game.hostName, game.status, JSON.stringify(game.settings),
+        game.host, game.hostName, game.status, game.gameMode || 'classic', JSON.stringify(game.settings),
         game.itPlayerId, game.startedAt, game.endedAt,
         game.winnerId || null, game.winnerName || null, game.gameDuration || null, game.id
       ]);
@@ -405,6 +413,7 @@ if (usePostgres) {
       host_id TEXT NOT NULL REFERENCES users(id),
       host_name TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'waiting',
+      game_mode TEXT NOT NULL DEFAULT 'classic',
       settings TEXT NOT NULL,
       it_player_id TEXT,
       started_at INTEGER,
@@ -445,6 +454,18 @@ if (usePostgres) {
     CREATE INDEX IF NOT EXISTS idx_game_players_user ON game_players(user_id);
     CREATE INDEX IF NOT EXISTS idx_game_tags_game ON game_tags(game_id);
   `);
+
+  // Migration: Add game_mode column if it doesn't exist (for existing databases)
+  const gamesTableInfo = sqliteDb.prepare('PRAGMA table_info(games)').all();
+  const gamesColumns = gamesTableInfo.map(c => c.name);
+  if (!gamesColumns.includes('game_mode')) {
+    try {
+      sqliteDb.exec(`ALTER TABLE games ADD COLUMN game_mode TEXT NOT NULL DEFAULT 'classic'`);
+      console.log('Added game_mode column to games table');
+    } catch (e) {
+      // Column might already exist
+    }
+  }
 
   // SQLite User operations (synchronous, wrapped in promises for consistent API)
   userDb = {
@@ -536,9 +557,9 @@ if (usePostgres) {
   gameDb = {
     async create(game) {
       sqliteDb.prepare(`
-        INSERT INTO games (id, code, host_id, host_name, status, settings, it_player_id, started_at, ended_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(game.id, game.code, game.host, game.hostName, game.status, JSON.stringify(game.settings), game.itPlayerId, game.startedAt, game.endedAt, game.createdAt);
+        INSERT INTO games (id, code, host_id, host_name, status, game_mode, settings, it_player_id, started_at, ended_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(game.id, game.code, game.host, game.hostName, game.status, game.gameMode || 'classic', JSON.stringify(game.settings), game.itPlayerId, game.startedAt, game.endedAt, game.createdAt);
       await this.addPlayer(game.id, game.players[0]);
       return game;
     },
@@ -579,7 +600,7 @@ if (usePostgres) {
 
       return {
         id: row.id, code: row.code, host: row.host_id, hostName: row.host_name,
-        status: row.status, settings: JSON.parse(row.settings), players,
+        status: row.status, gameMode: row.game_mode || 'classic', settings: JSON.parse(row.settings), players,
         itPlayerId: row.it_player_id, startedAt: row.started_at, endedAt: row.ended_at,
         winnerId: row.winner_id, winnerName: row.winner_name, gameDuration: row.game_duration,
         tags, createdAt: row.created_at,
@@ -599,10 +620,10 @@ if (usePostgres) {
 
     async updateGame(game) {
       sqliteDb.prepare(`
-        UPDATE games SET host_id = ?, host_name = ?, status = ?, settings = ?,
+        UPDATE games SET host_id = ?, host_name = ?, status = ?, game_mode = ?, settings = ?,
           it_player_id = ?, started_at = ?, ended_at = ?, winner_id = ?, winner_name = ?, game_duration = ?
         WHERE id = ?
-      `).run(game.host, game.hostName, game.status, JSON.stringify(game.settings), game.itPlayerId, game.startedAt, game.endedAt, game.winnerId || null, game.winnerName || null, game.gameDuration || null, game.id);
+      `).run(game.host, game.hostName, game.status, game.gameMode || 'classic', JSON.stringify(game.settings), game.itPlayerId, game.startedAt, game.endedAt, game.winnerId || null, game.winnerName || null, game.gameDuration || null, game.id);
     },
 
     async updatePlayer(gameId, player) {
