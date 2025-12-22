@@ -333,4 +333,324 @@ router.post('/:id/tag/:targetId', async (req, res) => {
   }
 });
 
+// Get public games (game browser)
+router.get('/public/list', async (req, res) => {
+  try {
+    const gameManager = req.app.get('gameManager');
+    const games = await gameManager.getPublicGames(20);
+    res.json({ games });
+  } catch (error) {
+    console.error('Get public games error:', error);
+    res.status(500).json({ error: 'Failed to get public games' });
+  }
+});
+
+// Kick a player (host only)
+router.post('/:id/players/:playerId/kick', async (req, res) => {
+  try {
+    const gameManager = req.app.get('gameManager');
+    const io = req.app.get('io');
+
+    const gameIdValidation = validate.uuid(req.params.id);
+    const playerIdValidation = validate.uuid(req.params.playerId);
+
+    if (!gameIdValidation.valid) {
+      return res.status(400).json({ error: 'Invalid game ID' });
+    }
+    if (!playerIdValidation.valid) {
+      return res.status(400).json({ error: 'Invalid player ID' });
+    }
+
+    const result = await gameManager.kickPlayer(
+      gameIdValidation.id,
+      req.user.id,
+      playerIdValidation.id
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    // Notify all players including the kicked player
+    io.to(`game:${result.game.id}`).emit('player:kicked', {
+      playerId: playerIdValidation.id,
+      playerName: result.kickedPlayer?.name,
+      byHost: req.user.name,
+    });
+
+    res.json({ game: result.game });
+  } catch (error) {
+    console.error('Kick player error:', error);
+    res.status(500).json({ error: 'Failed to kick player' });
+  }
+});
+
+// Ban a player (host only)
+router.post('/:id/players/:playerId/ban', async (req, res) => {
+  try {
+    const gameManager = req.app.get('gameManager');
+    const io = req.app.get('io');
+
+    const gameIdValidation = validate.uuid(req.params.id);
+    const playerIdValidation = validate.uuid(req.params.playerId);
+
+    if (!gameIdValidation.valid) {
+      return res.status(400).json({ error: 'Invalid game ID' });
+    }
+    if (!playerIdValidation.valid) {
+      return res.status(400).json({ error: 'Invalid player ID' });
+    }
+
+    const result = await gameManager.banPlayer(
+      gameIdValidation.id,
+      req.user.id,
+      playerIdValidation.id
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    // Notify all players
+    io.to(`game:${result.game.id}`).emit('player:banned', {
+      playerId: playerIdValidation.id,
+      playerName: result.bannedPlayer?.name,
+      byHost: req.user.name,
+    });
+
+    res.json({ game: result.game });
+  } catch (error) {
+    console.error('Ban player error:', error);
+    res.status(500).json({ error: 'Failed to ban player' });
+  }
+});
+
+// Update game settings (host only)
+router.patch('/:id/settings', async (req, res) => {
+  try {
+    const gameManager = req.app.get('gameManager');
+    const io = req.app.get('io');
+
+    const gameIdValidation = validate.uuid(req.params.id);
+    if (!gameIdValidation.valid) {
+      return res.status(400).json({ error: 'Invalid game ID' });
+    }
+
+    // Validate the new settings
+    const settingsValidation = validate.gameSettings(req.body.settings || {});
+    if (!settingsValidation.valid) {
+      return res.status(400).json({ error: settingsValidation.errors.join(', ') });
+    }
+
+    const result = await gameManager.updateGameSettings(
+      gameIdValidation.id,
+      req.user.id,
+      settingsValidation.settings
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    // Notify all players of settings change
+    io.to(`game:${result.game.id}`).emit('game:settingsUpdated', {
+      game: result.game,
+      updatedBy: req.user.name,
+    });
+
+    res.json({ game: result.game });
+  } catch (error) {
+    console.error('Update settings error:', error);
+    res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
+// Approve a pending player (host only)
+router.post('/:id/players/:playerId/approve', async (req, res) => {
+  try {
+    const gameManager = req.app.get('gameManager');
+    const io = req.app.get('io');
+
+    const gameIdValidation = validate.uuid(req.params.id);
+    const playerIdValidation = validate.uuid(req.params.playerId);
+
+    if (!gameIdValidation.valid) {
+      return res.status(400).json({ error: 'Invalid game ID' });
+    }
+    if (!playerIdValidation.valid) {
+      return res.status(400).json({ error: 'Invalid player ID' });
+    }
+
+    const result = await gameManager.approvePlayer(
+      gameIdValidation.id,
+      req.user.id,
+      playerIdValidation.id
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    // Notify all players including the approved player
+    io.to(`game:${result.game.id}`).emit('player:approved', {
+      player: result.approvedPlayer,
+      playerCount: result.game.players.length,
+    });
+
+    // Also emit player:joined for consistency
+    io.to(`game:${result.game.id}`).emit('player:joined', {
+      player: result.approvedPlayer,
+      playerCount: result.game.players.length,
+    });
+
+    res.json({ game: result.game });
+  } catch (error) {
+    console.error('Approve player error:', error);
+    res.status(500).json({ error: 'Failed to approve player' });
+  }
+});
+
+// Reject a pending player (host only)
+router.post('/:id/players/:playerId/reject', async (req, res) => {
+  try {
+    const gameManager = req.app.get('gameManager');
+    const io = req.app.get('io');
+
+    const gameIdValidation = validate.uuid(req.params.id);
+    const playerIdValidation = validate.uuid(req.params.playerId);
+
+    if (!gameIdValidation.valid) {
+      return res.status(400).json({ error: 'Invalid game ID' });
+    }
+    if (!playerIdValidation.valid) {
+      return res.status(400).json({ error: 'Invalid player ID' });
+    }
+
+    const result = await gameManager.rejectPlayer(
+      gameIdValidation.id,
+      req.user.id,
+      playerIdValidation.id
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    // Notify the rejected player specifically
+    io.to(`game:${result.game.id}`).emit('player:rejected', {
+      playerId: playerIdValidation.id,
+      playerName: result.rejectedPlayer?.name,
+    });
+
+    res.json({ game: result.game });
+  } catch (error) {
+    console.error('Reject player error:', error);
+    res.status(500).json({ error: 'Failed to reject player' });
+  }
+});
+
+// Create rematch game
+router.post('/rematch', async (req, res) => {
+  try {
+    const gameManager = req.app.get('gameManager');
+    const io = req.app.get('io');
+    const { originalCode, settings } = req.body;
+
+    // Validate original game code
+    const codeValidation = validate.gameCode(originalCode);
+    if (!codeValidation.valid) {
+      return res.status(400).json({ error: codeValidation.error });
+    }
+
+    // Get original game to verify host
+    const originalGame = await gameManager.getGameByCode(codeValidation.code);
+    if (!originalGame) {
+      return res.status(404).json({ error: 'Original game not found' });
+    }
+
+    // Only host can create rematch
+    if (originalGame.hostId !== req.user.id) {
+      return res.status(403).json({ error: 'Only host can create rematch' });
+    }
+
+    // Create new game with same settings
+    const rematchSettings = {
+      mode: settings?.mode || originalGame.mode,
+      tagRadius: settings?.tagRadius || originalGame.tagRadius,
+      gameDuration: settings?.gameDuration || originalGame.gameDuration,
+      isPublic: settings?.isPublic ?? originalGame.isPublic,
+      gameName: `${originalGame.settings?.gameName || 'Game'} (Rematch)`,
+      ...settings
+    };
+
+    const validation = validate.gameSettings(rematchSettings);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.errors.join(', ') });
+    }
+
+    const newGame = await gameManager.createGame(req.user, validation.settings);
+
+    // Notify players from original game about rematch
+    io.to(`game:${originalGame.id}`).emit('rematch:created', {
+      originalCode: originalGame.code,
+      game: {
+        id: newGame.id,
+        code: newGame.code,
+        hostName: newGame.hostName
+      }
+    });
+
+    res.status(201).json({ game: newGame });
+  } catch (error) {
+    console.error('Rematch error:', error);
+    res.status(500).json({ error: 'Failed to create rematch' });
+  }
+});
+
+// Get public games
+router.get('/public', async (req, res) => {
+  try {
+    const gameManager = req.app.get('gameManager');
+    const games = await gameManager.getPublicGames();
+    
+    res.json({ games });
+  } catch (error) {
+    console.error('Get public games error:', error);
+    res.status(500).json({ error: 'Failed to get public games' });
+  }
+});
+
+// Spectate a game
+router.post('/spectate', async (req, res) => {
+  try {
+    const gameManager = req.app.get('gameManager');
+    const io = req.app.get('io');
+    const { code } = req.body;
+
+    const codeValidation = validate.gameCode(code);
+    if (!codeValidation.valid) {
+      return res.status(400).json({ error: codeValidation.error });
+    }
+
+    const result = await gameManager.spectateGame(codeValidation.code, req.user);
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    // Notify game about new spectator
+    io.to(`game:${result.game.id}`).emit('spectator:joined', {
+      spectator: {
+        id: req.user.id,
+        name: req.user.name
+      }
+    });
+
+    res.json({ game: result.game });
+  } catch (error) {
+    console.error('Spectate error:', error);
+    res.status(500).json({ error: 'Failed to spectate game' });
+  }
+});
+
 export { router as gameRouter };

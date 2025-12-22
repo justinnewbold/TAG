@@ -736,7 +736,8 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Token required' });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    // Allow expired tokens for re-login - user proved auth by having the token
+    const decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true });
     const user = await userDb.getById(decoded.id);
 
     if (!user) {

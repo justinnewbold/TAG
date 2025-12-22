@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Copy, Check, Play, UserPlus, Clock, Target, MapPin, Shield, Calendar, Share2, Loader2, Wifi, WifiOff, Zap, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { ArrowLeft, Users, Copy, Check, Play, UserPlus, Clock, Target, MapPin, Shield, Calendar, Share2, Loader2, Wifi, WifiOff, Zap, ChevronDown, ChevronUp, X, MoreVertical, Globe, Lock, UserCheck, UserX, Ban, Settings, Edit3 } from 'lucide-react';
 import { useStore, useSounds, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
@@ -15,11 +15,14 @@ function GameLobby() {
   const [copied, setCopied] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showEditSettings, setShowEditSettings] = useState(false);
   const [countdown, setCountdown] = useState(null);
   const [isStarting, setIsStarting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [error, setError] = useState('');
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [playerMenuId, setPlayerMenuId] = useState(null);
+  const [isKicking, setIsKicking] = useState(false);
 
   // Refs for cleanup
   const countdownIntervalRef = useRef(null);
@@ -27,9 +30,12 @@ function GameLobby() {
 
   const isHost = currentGame?.host === user?.id;
   const playerCount = currentGame?.players?.length || 0;
+  const pendingCount = currentGame?.pendingPlayers?.length || 0;
   const gameMode = currentGame?.gameMode || 'classic';
   const modeConfig = GAME_MODES[gameMode] || GAME_MODES.classic;
-  const minPlayers = modeConfig.minPlayers || 2;
+  const defaultMinPlayers = modeConfig.minPlayers || 2;
+  // Use allowSoloPlay setting or custom minPlayers
+  const minPlayers = currentGame?.settings?.allowSoloPlay ? 1 : (currentGame?.settings?.minPlayers || defaultMinPlayers);
   const canStart = playerCount >= minPlayers;
 
   // Clean up countdown interval on unmount
@@ -50,12 +56,54 @@ function GameLobby() {
       navigate('/game');
     };
 
+    const handlePlayerKicked = ({ playerId, playerName }) => {
+      if (playerId === user?.id) {
+        // We were kicked
+        leaveGame();
+        navigate('/');
+        alert(`You were removed from the game by the host`);
+      }
+    };
+
+    const handlePlayerBanned = ({ playerId }) => {
+      if (playerId === user?.id) {
+        leaveGame();
+        navigate('/');
+        alert(`You were banned from this game`);
+      }
+    };
+
+    const handleSettingsUpdated = ({ game }) => {
+      syncGameState(game);
+    };
+
+    const handlePlayerApproved = ({ player, playerCount }) => {
+      // Game state will be updated via player:joined
+    };
+
+    const handlePlayerRejected = ({ playerId }) => {
+      if (playerId === user?.id) {
+        navigate('/');
+        alert(`Your request to join was declined`);
+      }
+    };
+
     socketService.on('game:started', handleGameStarted);
+    socketService.on('player:kicked', handlePlayerKicked);
+    socketService.on('player:banned', handlePlayerBanned);
+    socketService.on('game:settingsUpdated', handleSettingsUpdated);
+    socketService.on('player:approved', handlePlayerApproved);
+    socketService.on('player:rejected', handlePlayerRejected);
 
     return () => {
       socketService.off('game:started', handleGameStarted);
+      socketService.off('player:kicked', handlePlayerKicked);
+      socketService.off('player:banned', handlePlayerBanned);
+      socketService.off('game:settingsUpdated', handleSettingsUpdated);
+      socketService.off('player:approved', handlePlayerApproved);
+      socketService.off('player:rejected', handlePlayerRejected);
     };
-  }, [navigate, playSound, vibrate, syncGameState]);
+  }, [navigate, playSound, vibrate, syncGameState, user?.id, leaveGame]);
 
   const handleCopyCode = async () => {
     try {
@@ -147,6 +195,61 @@ function GameLobby() {
     leaveGame();
     navigate('/');
   };
+
+  const handleKickPlayer = async (playerId) => {
+    if (isKicking) return;
+    setIsKicking(true);
+    setPlayerMenuId(null);
+    try {
+      const { game } = await api.kickPlayer(currentGame.id, playerId);
+      syncGameState(game);
+      vibrate([50]);
+    } catch (err) {
+      console.error('Kick player error:', err);
+      setError(err.message || 'Failed to kick player');
+    } finally {
+      setIsKicking(false);
+    }
+  };
+
+  const handleBanPlayer = async (playerId) => {
+    if (isKicking) return;
+    setIsKicking(true);
+    setPlayerMenuId(null);
+    try {
+      const { game } = await api.banPlayer(currentGame.id, playerId);
+      syncGameState(game);
+      vibrate([50, 50, 50]);
+    } catch (err) {
+      console.error('Ban player error:', err);
+      setError(err.message || 'Failed to ban player');
+    } finally {
+      setIsKicking(false);
+    }
+  };
+
+  const handleApprovePlayer = async (playerId) => {
+    try {
+      const { game } = await api.approvePlayer(currentGame.id, playerId);
+      syncGameState(game);
+      vibrate([50]);
+      playSound('tag');
+    } catch (err) {
+      console.error('Approve player error:', err);
+      setError(err.message || 'Failed to approve player');
+    }
+  };
+
+  const handleRejectPlayer = async (playerId) => {
+    try {
+      const { game } = await api.rejectPlayer(currentGame.id, playerId);
+      syncGameState(game);
+      vibrate([50]);
+    } catch (err) {
+      console.error('Reject player error:', err);
+      setError(err.message || 'Failed to reject player');
+    }
+  };
   
   if (!currentGame) {
     navigate('/');
@@ -231,6 +334,48 @@ function GameLobby() {
           </div>
         </div>
       )}
+
+      {/* Game Status Badges */}
+      <div className="px-4 py-2 flex flex-wrap gap-2">
+        {/* Public/Private Badge */}
+        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs ${
+          currentGame.settings?.isPublic 
+            ? 'bg-blue-400/20 text-blue-400' 
+            : 'bg-amber-400/20 text-amber-400'
+        }`}>
+          {currentGame.settings?.isPublic ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+          {currentGame.settings?.isPublic ? 'Public' : 'Private'}
+        </div>
+
+        {/* Solo Play Badge */}
+        {currentGame.settings?.allowSoloPlay && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs bg-green-400/20 text-green-400">
+            <Play className="w-3 h-3" />
+            Solo OK
+          </div>
+        )}
+
+        {/* Approval Required Badge */}
+        {currentGame.settings?.requireApproval && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs bg-amber-400/20 text-amber-400">
+            <UserCheck className="w-3 h-3" />
+            Approval Required
+          </div>
+        )}
+
+        {/* Scheduled Start Badge */}
+        {currentGame.settings?.scheduledStartTime && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs bg-pink-400/20 text-pink-400">
+            <Calendar className="w-3 h-3" />
+            {new Date(currentGame.settings.scheduledStartTime).toLocaleString([], { 
+              month: 'short', 
+              day: 'numeric', 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            })}
+          </div>
+        )}
+      </div>
       
       {/* Players List - Main content */}
       <div className="flex-1 overflow-y-auto px-4 pb-36">
@@ -251,7 +396,7 @@ function GameLobby() {
           {currentGame.players?.map((player) => (
             <div
               key={player.id}
-              className={`flex items-center gap-4 p-4 rounded-xl transition-all ${
+              className={`flex items-center gap-4 p-4 rounded-xl transition-all relative ${
                 player.id === user?.id 
                   ? 'bg-neon-cyan/10 border-2 border-neon-cyan/30' 
                   : 'bg-white/5'
@@ -279,10 +424,76 @@ function GameLobby() {
                     <span className="text-xs text-amber-400">GPS...</span>
                   </div>
                 )}
+                {/* Host actions - kick/ban menu */}
+                {isHost && player.id !== user?.id && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setPlayerMenuId(playerMenuId === player.id ? null : player.id)}
+                      className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                    >
+                      <MoreVertical className="w-4 h-4 text-white/50" />
+                    </button>
+                    {playerMenuId === player.id && (
+                      <div className="absolute right-0 top-full mt-1 bg-dark-800 border border-white/10 rounded-xl shadow-xl z-20 overflow-hidden min-w-[150px]">
+                        <button
+                          onClick={() => handleKickPlayer(player.id)}
+                          disabled={isKicking}
+                          className="w-full px-4 py-3 text-left text-amber-400 hover:bg-amber-400/10 flex items-center gap-2"
+                        >
+                          <UserX className="w-4 h-4" />
+                          Remove
+                        </button>
+                        <button
+                          onClick={() => handleBanPlayer(player.id)}
+                          disabled={isKicking}
+                          className="w-full px-4 py-3 text-left text-red-400 hover:bg-red-400/10 flex items-center gap-2 border-t border-white/5"
+                        >
+                          <Ban className="w-4 h-4" />
+                          Ban
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}
-          
+
+          {/* Pending Players (awaiting approval) */}
+          {isHost && currentGame.pendingPlayers?.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <p className="text-sm text-amber-400 mb-2 flex items-center gap-2">
+                <UserCheck className="w-4 h-4" />
+                Pending Approval ({currentGame.pendingPlayers.length})
+              </p>
+              {currentGame.pendingPlayers.map((player) => (
+                <div
+                  key={player.id}
+                  className="flex items-center gap-4 p-4 rounded-xl bg-amber-400/10 border border-amber-400/30 mb-2"
+                >
+                  <div className="text-3xl">{player.avatar || '👤'}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{player.name}</p>
+                    <p className="text-xs text-white/40">Wants to join</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleApprovePlayer(player.id)}
+                      className="p-2 bg-green-500/20 hover:bg-green-500/30 rounded-lg text-green-400"
+                    >
+                      <Check className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => handleRejectPlayer(player.id)}
+                      className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {/* Empty slots */}
           {playerCount < minPlayers && [...Array(minPlayers - playerCount)].map((_, i) => (
             <button

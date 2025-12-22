@@ -2,12 +2,11 @@ import React, { useState, useEffect, lazy, Suspense, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Circle, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin, Calendar, Plus, X, Shield, Map, Crosshair, Loader2, Zap, ChevronDown, ChevronUp, Settings, MapPinned, Grip } from 'lucide-react';
+import { ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin, Calendar, Plus, X, Shield, Map, Crosshair, Loader2, Zap, ChevronDown, ChevronUp, Settings, MapPinned, Grip, Globe, Lock, UserCheck, Play } from 'lucide-react';
 import { useStore, useSounds, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import BottomSheet from '../components/BottomSheet';
-import { useDragToClose } from '../hooks/useGestures';
 
 // Lazy load boundary editor
 const BoundaryEditor = lazy(() => import('../components/BoundaryEditor'));
@@ -106,6 +105,12 @@ function CreateGame() {
     // Game mode specific settings
     potatoTimer: 45000, // 45 seconds for hot potato
     hideTime: 120000, // 2 minutes for hide and seek
+    // Privacy and scheduling settings
+    isPublic: true, // Visible in public game list
+    allowSoloPlay: true, // Allow starting with 1 player
+    minPlayers: null, // null = use game mode default
+    scheduledStartTime: null, // null = manual start
+    requireApproval: false, // Host must approve joins
   });
 
   // Game presets for quick setup
@@ -771,6 +776,138 @@ function CreateGame() {
             ) : (
               <p className="text-sm text-white/40 text-center py-4">No boundary - unlimited area</p>
             )}
+          </div>
+
+          {/* Privacy & Access Settings */}
+          <div className="card p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Globe className="w-5 h-5 text-blue-400" />
+              <h3 className="font-medium">Privacy & Access</h3>
+            </div>
+            
+            <div className="space-y-3">
+              {/* Public/Private Toggle */}
+              <label className="flex items-center gap-3 p-3 bg-blue-400/10 rounded-xl cursor-pointer active:scale-[0.98] transition-transform">
+                <input
+                  type="checkbox"
+                  checked={settings.isPublic}
+                  onChange={(e) => setSettings({ ...settings, isPublic: e.target.checked })}
+                  className="w-5 h-5 accent-blue-400 cursor-pointer"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    {settings.isPublic ? <Globe className="w-4 h-4 text-blue-400" /> : <Lock className="w-4 h-4 text-amber-400" />}
+                    <p className="font-medium">{settings.isPublic ? 'Public Game' : 'Private Game'}</p>
+                  </div>
+                  <p className="text-xs text-white/50">
+                    {settings.isPublic ? 'Anyone can find and join this game' : 'Only people with the code can join'}
+                  </p>
+                </div>
+              </label>
+
+              {/* Allow Solo Play */}
+              <label className="flex items-center gap-3 p-3 bg-green-400/10 rounded-xl cursor-pointer active:scale-[0.98] transition-transform">
+                <input
+                  type="checkbox"
+                  checked={settings.allowSoloPlay}
+                  onChange={(e) => setSettings({ ...settings, allowSoloPlay: e.target.checked })}
+                  className="w-5 h-5 accent-green-400 cursor-pointer"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <Play className="w-4 h-4 text-green-400" />
+                    <p className="font-medium">Allow Solo Play</p>
+                  </div>
+                  <p className="text-xs text-white/50">Start the game without waiting for other players</p>
+                </div>
+              </label>
+
+              {/* Require Approval */}
+              <label className="flex items-center gap-3 p-3 bg-amber-400/10 rounded-xl cursor-pointer active:scale-[0.98] transition-transform">
+                <input
+                  type="checkbox"
+                  checked={settings.requireApproval}
+                  onChange={(e) => setSettings({ ...settings, requireApproval: e.target.checked })}
+                  className="w-5 h-5 accent-amber-400 cursor-pointer"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-amber-400" />
+                    <p className="font-medium">Require Approval</p>
+                  </div>
+                  <p className="text-xs text-white/50">You must approve each player before they can join</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Minimum Players */}
+          <div className="card p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Users className="w-5 h-5 text-cyan-400" />
+              <h3 className="font-medium">Minimum Players to Start</h3>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {[null, 1, 2, 3, 4, 5, 6].map((num) => (
+                <button
+                  key={num ?? 'default'}
+                  onClick={() => setSettings({ ...settings, minPlayers: num })}
+                  className={`touch-target-48 px-4 py-2 rounded-xl transition-all ${
+                    settings.minPlayers === num
+                      ? 'bg-cyan-400/20 border-2 border-cyan-400 text-cyan-400'
+                      : 'bg-white/5 border border-white/10 active:scale-95'
+                  }`}
+                >
+                  {num === null ? 'Default' : num}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-white/40 mt-2">
+              {settings.minPlayers === null 
+                ? `Using game mode default (${GAME_MODES[settings.gameMode]?.minPlayers || 2} players)`
+                : settings.minPlayers === 1 
+                  ? 'Game can start with just you!'
+                  : `Need ${settings.minPlayers} players to start`}
+            </p>
+          </div>
+
+          {/* Scheduled Start Time */}
+          <div className="card p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Calendar className="w-5 h-5 text-pink-400" />
+              <h3 className="font-medium">Schedule Start Time</h3>
+            </div>
+            <div className="space-y-3">
+              <label className="flex items-center gap-3">
+                <input
+                  type="radio"
+                  name="startTime"
+                  checked={settings.scheduledStartTime === null}
+                  onChange={() => setSettings({ ...settings, scheduledStartTime: null })}
+                  className="w-5 h-5 accent-pink-400"
+                />
+                <span>Start manually when ready</span>
+              </label>
+              <label className="flex items-center gap-3">
+                <input
+                  type="radio"
+                  name="startTime"
+                  checked={settings.scheduledStartTime !== null}
+                  onChange={() => setSettings({ ...settings, scheduledStartTime: Date.now() + 30 * 60 * 1000 })}
+                  className="w-5 h-5 accent-pink-400"
+                />
+                <span>Schedule for later</span>
+              </label>
+              {settings.scheduledStartTime !== null && (
+                <input
+                  type="datetime-local"
+                  value={new Date(settings.scheduledStartTime).toISOString().slice(0, 16)}
+                  onChange={(e) => setSettings({ ...settings, scheduledStartTime: new Date(e.target.value).getTime() })}
+                  min={new Date().toISOString().slice(0, 16)}
+                  className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                />
+              )}
+            </div>
           </div>
         </div>
       </BottomSheet>

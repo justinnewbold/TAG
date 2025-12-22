@@ -198,6 +198,49 @@ export const validate = {
       }
     }
 
+    // Privacy settings
+    if (settings.isPublic !== undefined) {
+      validated.isPublic = Boolean(settings.isPublic);
+    }
+
+    if (settings.allowSoloPlay !== undefined) {
+      validated.allowSoloPlay = Boolean(settings.allowSoloPlay);
+    }
+
+    if (settings.requireApproval !== undefined) {
+      validated.requireApproval = Boolean(settings.requireApproval);
+    }
+
+    // Minimum players: 1 to 20 (or null for game mode default)
+    if (settings.minPlayers !== undefined) {
+      if (settings.minPlayers === null) {
+        validated.minPlayers = null;
+      } else {
+        const min = parseInt(settings.minPlayers);
+        if (isNaN(min) || min < 1 || min > 20) {
+          errors.push('Minimum players must be between 1 and 20');
+        } else {
+          validated.minPlayers = min;
+        }
+      }
+    }
+
+    // Scheduled start time: must be in the future
+    if (settings.scheduledStartTime !== undefined) {
+      if (settings.scheduledStartTime === null) {
+        validated.scheduledStartTime = null;
+      } else {
+        const time = parseInt(settings.scheduledStartTime);
+        if (isNaN(time)) {
+          errors.push('Invalid scheduled start time');
+        } else if (time < Date.now() - 60000) { // Allow 1 minute grace period
+          errors.push('Scheduled start time must be in the future');
+        } else {
+          validated.scheduledStartTime = time;
+        }
+      }
+    }
+
     return {
       valid: errors.length === 0,
       errors,

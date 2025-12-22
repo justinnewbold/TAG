@@ -119,37 +119,6 @@ function ActiveGame() {
     };
   }, []);
 
-  // Proximity haptic feedback - escalating vibration as IT gets closer
-  useEffect(() => {
-    if (!isIt || noTagStatus.inZone || noTagStatus.inTime) return;
-    
-    // Determine proximity zone
-    let zone = null;
-    if (nearestDistance <= 10) zone = 'critical';
-    else if (nearestDistance <= 25) zone = 'close';
-    else if (nearestDistance <= 50) zone = 'near';
-    else if (nearestDistance <= 100) zone = 'approaching';
-    
-    // Only vibrate when entering a new zone
-    if (zone && zone !== lastProximityZoneRef.current) {
-      switch (zone) {
-        case 'critical':
-          vibrate([50, 30, 50, 30, 100]); // Rapid pulses
-          break;
-        case 'close':
-          vibrate([80, 40, 80]); // Strong double pulse
-          break;
-        case 'near':
-          vibrate([60, 60]); // Medium pulse
-          break;
-        case 'approaching':
-          vibrate([40]); // Light pulse
-          break;
-      }
-    }
-    lastProximityZoneRef.current = zone;
-  }, [isIt, Math.floor(nearestDistance / 5), noTagStatus.inZone, noTagStatus.inTime]);
-
   // Send location updates via socket
   useEffect(() => {
     if (user?.location && currentGame?.status === 'active') {
@@ -342,6 +311,38 @@ function ActiveGame() {
   // Check if tagging is allowed
   const tagCheck = canTagNow(currentGame, user?.location, nearestPlayer?.location);
   const canTag = inTagRange && tagCheck.allowed;
+
+  // Proximity haptic feedback - escalating vibration as IT gets closer
+  // This effect must be after isIt and nearestDistance are defined
+  useEffect(() => {
+    if (!isIt || noTagStatus.inZone || noTagStatus.inTime) return;
+    
+    // Determine proximity zone
+    let zone = null;
+    if (nearestDistance <= 10) zone = 'critical';
+    else if (nearestDistance <= 25) zone = 'close';
+    else if (nearestDistance <= 50) zone = 'near';
+    else if (nearestDistance <= 100) zone = 'approaching';
+    
+    // Only vibrate when entering a new zone
+    if (zone && zone !== lastProximityZoneRef.current) {
+      switch (zone) {
+        case 'critical':
+          vibrate([50, 30, 50, 30, 100]); // Rapid pulses
+          break;
+        case 'close':
+          vibrate([80, 40, 80]); // Strong double pulse
+          break;
+        case 'near':
+          vibrate([60, 60]); // Medium pulse
+          break;
+        case 'approaching':
+          vibrate([40]); // Light pulse
+          break;
+      }
+    }
+    lastProximityZoneRef.current = zone;
+  }, [isIt, nearestDistance, noTagStatus.inZone, noTagStatus.inTime, vibrate]);
   
   const handleTag = async () => {
     if (!inTagRange || isTagging) return;

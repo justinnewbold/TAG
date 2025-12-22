@@ -1,13 +1,18 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Target, Clock, Users, Share2, Home, RotateCcw } from 'lucide-react';
+import { Trophy, Target, Clock, Users, Share2, Home, RotateCcw, Play } from 'lucide-react';
 import { useStore, useSounds } from '../store';
+import { api } from '../services/api';
+import { socketService } from '../services/socket';
 import confetti from 'canvas-confetti';
 
 function GameEndSummary({ game, onClose }) {
   const navigate = useNavigate();
-  const { user } = useStore();
+  const { user, syncGameState } = useStore();
   const { playSound, vibrate } = useSounds();
+  const [rematchStatus, setRematchStatus] = useState('idle'); // idle, creating, waiting, ready
+  const [rematchVotes, setRematchVotes] = useState([]);
+  const [rematchGame, setRematchGame] = useState(null);
   
   const isWinner = game?.winnerId === user?.id;
   const winner = game?.players?.find(p => p.id === game?.winnerId);
@@ -85,6 +90,102 @@ function GameEndSummary({ game, onClose }) {
       alert('Copied to clipboard!');
     }
   };
+
+  // Listen for rematch events
+  useEffect(() => {
+    const handleRematchRequest = (data) => {
+      if (data.gameCode === game?.code) {
+        setRematchVotes(data.votes || []);
+        if (data.status === 'ready') {
+          setRematchStatus('ready');
+          setRematchGame(data.newGame);
+        }
+      }
+    };
+
+    const handleRematchCreated = (data) => {
+      if (data.originalCode === game?.code) {
+        setRematchGame(data.game);
+        setRematchStatus('ready');
+        playSound('notification');
+        vibrate([100, 50, 100]);
+      }
+    };
+
+    socketService.on('rematch:requested', handleRematchRequest);
+    socketService.on('rematch:created', handleRematchCreated);
+
+    return () => {
+      socketService.off('rematch:requested', handleRematchRequest);
+      socketService.off('rematch:created', handleRematchCreated);
+    };
+  }, [game?.code, playSound, vibrate]);
+
+  const handleRematch = async () => {
+    if (rematchStatus === 'ready' && rematchGame) {
+      // Join the rematch game
+      try {
+        const { game: joinedGame } = await api.joinGame(rematchGame.code);
+        syncGameState(joinedGame);
+        socketService.emit('game:join', { gameId: rematchGame.id });
+        onClose?.();
+        navigate('/lobby');
+      } catch (err) {
+        console.error('Failed to join rematch:', err);
+        alert(err.message);
+      }
+      return;
+    }
+
+    // Request/vote for rematch
+    setRematchStatus('waiting');
+    socketService.emit('rematch:request', { 
+      gameCode: game?.code,
+      userId: user?.id 
+    });
+  };
+
+  const handleQuickRestart = async () => {
+    // Only host can quick restart
+    if (game?.hostId !== user?.id) return;
+
+    setRematchStatus('creating');
+    try {
+      const { game: newGame } = await api.request('/games/rematch', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          originalCode: game?.code,
+          settings: {
+            mode: game?.mode,
+            tagRadius: game?.tagRadius,
+            gameDuration: game?.gameDuration,
+            isPublic: game?.isPublic
+          }
+        })
+      });
+      
+      syncGameState(newGame);
+      socketService.emit('game:join', { gameId: newGame.id });
+      
+      // Notify other players
+      socketService.emit('rematch:created', {
+        originalCode: game?.code,
+        game: newGame
+      });
+
+      onClose?.();
+      navigate('/lobby');
+    } catch (err) {
+      console.error('Failed to create rematch:', err);
+      setRematchStatus('idle');
+      alert(err.message);
+    }
+  };
+  
+  const isHost = game?.hostId === user?.id;
+  const hasVotedForRematch = rematchVotes.includes(user?.id);
+  const rematchVoteCount = rematchVotes.length;
+  const totalPlayers = game?.players?.length || 0;
   
   return (
     <div className="fixed inset-0 z-50 bg-dark-900/95 backdrop-blur-sm flex items-center justify-center p-6">
@@ -171,23 +272,64 @@ function GameEndSummary({ game, onClose }) {
         </div>
         
         {/* Actions */}
-        <div className="p-6 pt-2 grid grid-cols-2 gap-3">
-          <button
-            onClick={handleShare}
-            className="btn-secondary flex items-center justify-center gap-2"
-          >
-            <Share2 className="w-4 h-4" />
-            Share
-          </button>
+        <div className="p-6 pt-2 space-y-3">
+          {/* Rematch/Quick Restart */}
+          <div className="grid grid-cols-2 gap-3">
+            {isHost ? (
+              <button
+                onClick={handleQuickRestart}
+                disabled={rematchStatus === 'creating'}
+                className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <RotateCcw className={`w-4 h-4 ${rematchStatus === 'creating' ? 'animate-spin' : ''}`} />
+                {rematchStatus === 'creating' ? 'Creating...' : 'Rematch'}
+              </button>
+            ) : (
+              <button
+                onClick={handleRematch}
+                disabled={rematchStatus === 'waiting' && hasVotedForRematch}
+                className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-colors ${
+                  rematchStatus === 'ready'
+                    ? 'bg-green-500 text-white animate-pulse'
+                    : hasVotedForRematch
+                    ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30'
+                    : 'btn-secondary'
+                }`}
+              >
+                {rematchStatus === 'ready' ? (
+                  <>
+                    <Play className="w-4 h-4" />
+                    Join Rematch!
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-4 h-4" />
+                    {hasVotedForRematch 
+                      ? `Voted (${rematchVoteCount}/${totalPlayers})`
+                      : 'Vote Rematch'}
+                  </>
+                )}
+              </button>
+            )}
+            <button
+              onClick={handleShare}
+              className="btn-secondary flex items-center justify-center gap-2"
+            >
+              <Share2 className="w-4 h-4" />
+              Share
+            </button>
+          </div>
+          
+          {/* Home button */}
           <button
             onClick={() => {
               onClose?.();
               navigate('/');
             }}
-            className="btn-primary flex items-center justify-center gap-2"
+            className="w-full btn-secondary flex items-center justify-center gap-2"
           >
             <Home className="w-4 h-4" />
-            Home
+            Back to Home
           </button>
         </div>
       </div>

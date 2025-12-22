@@ -8,10 +8,18 @@ import dotenv from 'dotenv';
 import { authRouter, authenticateToken, authenticateSocket } from './auth.js';
 import { gameRouter } from './routes/games.js';
 import { pushRouter } from './routes/push.js';
+import { socialRouter } from './routes/social.js';
+import { replayRouter } from './routes/replays.js';
+import { adminRouter } from './routes/admin.js';
+import { weatherRouter } from './routes/weather.js';
+import { powerupRouter } from './routes/powerups.js';
+import { usersRouter } from './routes/users.js';
 import { GameManager } from './game/GameManager.js';
 import { setupSocketHandlers } from './socket/handlers.js';
 import { logger } from './utils/logger.js';
 import { sentry } from './services/sentry.js';
+import { replayDb } from './db/replays.js';
+import { socialDb } from './db/social.js';
 
 dotenv.config();
 
@@ -125,6 +133,22 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/games', authenticateToken, gameLimiter, gameRouter);
 app.use('/api/push', authenticateToken, pushRouter);
+app.use('/api/social', authenticateToken, socialRouter);
+app.use('/api/replays', authenticateToken, replayRouter);
+app.use('/api/admin', authenticateToken, adminRouter);
+app.use('/api/weather', authenticateToken, weatherRouter);
+app.use('/api/powerups', authenticateToken, powerupRouter);
+app.use('/api/users', authenticateToken, usersRouter);
+
+// Initialize additional database tables
+(async () => {
+  try {
+    await replayDb.init();
+    await socialDb.init();
+  } catch (err) {
+    console.error('Failed to initialize social/replay tables:', err);
+  }
+})();
 
 // Socket.io authentication middleware
 io.use(authenticateSocket);

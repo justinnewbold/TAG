@@ -146,7 +146,15 @@ export class GameManager {
         // Game mode specific settings
         potatoTimer: settings.potatoTimer || GAME_MODES.hotPotato.defaultTimer,
         hideTime: settings.hideTime || GAME_MODES.hideAndSeek.defaultHideTime,
+        // Privacy and scheduling settings
+        isPublic: settings.isPublic !== undefined ? settings.isPublic : true,
+        allowSoloPlay: settings.allowSoloPlay !== undefined ? settings.allowSoloPlay : false,
+        minPlayers: settings.minPlayers || null, // null = use game mode default
+        scheduledStartTime: settings.scheduledStartTime || null, // null = manual start
+        requireApproval: settings.requireApproval || false, // Host must approve joins
       },
+      bannedPlayers: [], // List of banned player IDs
+      pendingPlayers: [], // Players waiting for approval
       players: [{
         id: host.id,
         name: host.name,
@@ -250,6 +258,16 @@ export class GameManager {
       return { success: false, error: 'Game is full' };
     }
 
+    // Check if player is banned
+    if (game.bannedPlayers?.includes(player.id)) {
+      return { success: false, error: 'You have been banned from this game' };
+    }
+
+    // Check if approval is required
+    if (game.settings.requireApproval && game.host !== player.id) {
+      return this.requestJoin(gameCode, player);
+    }
+
     // Check if player already in game
     if (game.players.some(p => p.id === player.id)) {
       return { success: true, game, alreadyJoined: true };
@@ -314,6 +332,256 @@ export class GameManager {
     return { success: true, game };
   }
 
+  // Kick a player from the game (host only)
+  async kickPlayer(gameId, hostId, targetPlayerId) {
+    const game = await this.getGame(gameId);
+
+    if (!game) {
+      return { success: false, error: 'Game not found' };
+    }
+
+    if (game.host !== hostId) {
+      return { success: false, error: 'Only the host can kick players' };
+    }
+
+    if (targetPlayerId === hostId) {
+      return { success: false, error: 'Host cannot kick themselves' };
+    }
+
+    const targetPlayer = game.players.find(p => p.id === targetPlayerId);
+    if (!targetPlayer) {
+      return { success: false, error: 'Player not in game' };
+    }
+
+    // Remove player
+    game.players = game.players.filter(p => p.id !== targetPlayerId);
+    this._uncachePlayer(targetPlayerId);
+    await gameDb.removePlayer(game.id, targetPlayerId);
+
+    return { success: true, game, kickedPlayer: targetPlayer };
+  }
+
+  // Ban a player from the game (host only) - prevents rejoin
+  async banPlayer(gameId, hostId, targetPlayerId) {
+    const game = await this.getGame(gameId);
+
+    if (!game) {
+      return { success: false, error: 'Game not found' };
+    }
+
+    if (game.host !== hostId) {
+      return { success: false, error: 'Only the host can ban players' };
+    }
+
+    if (targetPlayerId === hostId) {
+      return { success: false, error: 'Host cannot ban themselves' };
+    }
+
+    // Add to banned list
+    if (!game.bannedPlayers) game.bannedPlayers = [];
+    if (!game.bannedPlayers.includes(targetPlayerId)) {
+      game.bannedPlayers.push(targetPlayerId);
+    }
+
+    // Also kick if currently in game
+    const targetPlayer = game.players.find(p => p.id === targetPlayerId);
+    if (targetPlayer) {
+      game.players = game.players.filter(p => p.id !== targetPlayerId);
+      this._uncachePlayer(targetPlayerId);
+      await gameDb.removePlayer(game.id, targetPlayerId);
+    }
+
+    await gameDb.updateGame(game);
+
+    return { success: true, game, bannedPlayer: targetPlayer };
+  }
+
+  // Update game settings (host only, before game starts)
+  async updateGameSettings(gameId, hostId, newSettings) {
+    const game = await this.getGame(gameId);
+
+    if (!game) {
+      return { success: false, error: 'Game not found' };
+    }
+
+    if (game.host !== hostId) {
+      return { success: false, error: 'Only the host can update settings' };
+    }
+
+    if (game.status !== 'waiting') {
+      return { success: false, error: 'Cannot change settings after game starts' };
+    }
+
+    // Merge new settings (only allow specific fields to be updated)
+    const allowedFields = [
+      'gameName', 'tagRadius', 'gpsInterval', 'duration', 'maxPlayers',
+      'noTagZones', 'noTagTimes', 'isPublic', 'allowSoloPlay', 'minPlayers',
+      'scheduledStartTime', 'requireApproval', 'potatoTimer', 'hideTime'
+    ];
+
+    for (const field of allowedFields) {
+      if (newSettings[field] !== undefined) {
+        // Don't allow maxPlayers below current player count
+        if (field === 'maxPlayers' && newSettings[field] < game.players.length) {
+          return { success: false, error: `Cannot set max players below current player count (${game.players.length})` };
+        }
+        game.settings[field] = newSettings[field];
+      }
+    }
+
+    await gameDb.updateGame(game);
+
+    return { success: true, game };
+  }
+
+  // Request to join a game (for games requiring approval)
+  async requestJoin(code, player) {
+    const game = await this.getGameByCode(code);
+    
+    if (!game) {
+      return { success: false, error: 'Game not found' };
+    }
+
+    // Check if banned
+    if (game.bannedPlayers?.includes(player.id)) {
+      return { success: false, error: 'You have been banned from this game' };
+    }
+
+    // If approval not required, use normal join
+    if (!game.settings.requireApproval) {
+      return this.joinGame(code, player);
+    }
+
+    // Check if already pending
+    if (!game.pendingPlayers) game.pendingPlayers = [];
+    if (game.pendingPlayers.some(p => p.id === player.id)) {
+      return { success: false, error: 'Already requested to join', pending: true };
+    }
+
+    // Check if already in game
+    if (game.players.some(p => p.id === player.id)) {
+      return { success: true, game, alreadyJoined: true };
+    }
+
+    // Add to pending list
+    game.pendingPlayers.push({
+      id: player.id,
+      name: player.name,
+      avatar: player.avatar,
+      requestedAt: Date.now(),
+    });
+
+    await gameDb.updateGame(game);
+
+    return { success: true, game, pending: true };
+  }
+
+  // Approve a pending player (host only)
+  async approvePlayer(gameId, hostId, pendingPlayerId) {
+    const game = await this.getGame(gameId);
+
+    if (!game) {
+      return { success: false, error: 'Game not found' };
+    }
+
+    if (game.host !== hostId) {
+      return { success: false, error: 'Only the host can approve players' };
+    }
+
+    if (!game.pendingPlayers) game.pendingPlayers = [];
+    const pendingPlayer = game.pendingPlayers.find(p => p.id === pendingPlayerId);
+    
+    if (!pendingPlayer) {
+      return { success: false, error: 'Player not found in pending list' };
+    }
+
+    // Check max players
+    if (game.players.length >= game.settings.maxPlayers) {
+      return { success: false, error: 'Game is full' };
+    }
+
+    // Remove from pending, add to players
+    game.pendingPlayers = game.pendingPlayers.filter(p => p.id !== pendingPlayerId);
+    
+    const newPlayer = {
+      id: pendingPlayer.id,
+      name: pendingPlayer.name,
+      avatar: pendingPlayer.avatar,
+      location: null,
+      isIt: false,
+      isFrozen: false,
+      isEliminated: false,
+      team: null,
+      joinedAt: Date.now(),
+      lastUpdate: null,
+      tagCount: 0,
+      survivalTime: 0,
+      becameItAt: null,
+    };
+
+    game.players.push(newPlayer);
+    this.playerGames.set(pendingPlayerId, game.id);
+    
+    await gameDb.addPlayer(game.id, newPlayer);
+    await gameDb.updateGame(game);
+
+    return { success: true, game, approvedPlayer: newPlayer };
+  }
+
+  // Reject a pending player (host only)
+  async rejectPlayer(gameId, hostId, pendingPlayerId) {
+    const game = await this.getGame(gameId);
+
+    if (!game) {
+      return { success: false, error: 'Game not found' };
+    }
+
+    if (game.host !== hostId) {
+      return { success: false, error: 'Only the host can reject players' };
+    }
+
+    if (!game.pendingPlayers) game.pendingPlayers = [];
+    const pendingPlayer = game.pendingPlayers.find(p => p.id === pendingPlayerId);
+    
+    if (!pendingPlayer) {
+      return { success: false, error: 'Player not found in pending list' };
+    }
+
+    // Remove from pending
+    game.pendingPlayers = game.pendingPlayers.filter(p => p.id !== pendingPlayerId);
+    await gameDb.updateGame(game);
+
+    return { success: true, game, rejectedPlayer: pendingPlayer };
+  }
+
+  // Get public games (for game browser)
+  async getPublicGames(limit = 20) {
+    // Get games that are public, waiting, and have room
+    const allGames = [];
+    
+    // Check cached games first
+    for (const game of this.activeGames.values()) {
+      if (game.settings.isPublic && game.status === 'waiting' && 
+          game.players.length < game.settings.maxPlayers) {
+        allGames.push({
+          id: game.id,
+          code: game.code,
+          gameName: game.settings.gameName,
+          hostName: game.hostName,
+          gameMode: game.gameMode,
+          playerCount: game.players.length,
+          maxPlayers: game.settings.maxPlayers,
+          tagRadius: game.settings.tagRadius,
+          scheduledStartTime: game.settings.scheduledStartTime,
+          requireApproval: game.settings.requireApproval,
+          createdAt: game.createdAt,
+        });
+      }
+    }
+
+    return allGames.slice(0, limit);
+  }
+
   async startGame(gameId, hostId) {
     const game = await this.getGame(gameId);
 
@@ -329,12 +597,13 @@ export class GameManager {
       return { success: false, error: 'Game has already started' };
     }
 
-    // Check minimum players for game mode
+    // Check minimum players for game mode (unless solo play is enabled)
     const modeConfig = GAME_MODES[game.gameMode] || GAME_MODES.classic;
-    const minPlayers = modeConfig.minPlayers || 2;
+    const defaultMinPlayers = modeConfig.minPlayers || 2;
+    const minPlayers = game.settings.allowSoloPlay ? 1 : (game.settings.minPlayers || defaultMinPlayers);
     
     if (game.players.length < minPlayers) {
-      return { success: false, error: `Need at least ${minPlayers} players for ${modeConfig.name}` };
+      return { success: false, error: `Need at least ${minPlayers} player${minPlayers > 1 ? 's' : ''} to start` };
     }
 
     const now = Date.now();
@@ -948,5 +1217,88 @@ export class GameManager {
   // Cleanup old ended games (call periodically)
   async cleanupOldGames(maxAgeMs = 7 * 24 * 60 * 60 * 1000) {
     await gameDb.cleanupOldGames(maxAgeMs);
+  }
+
+  // Get public games for browsing
+  async getPublicGames() {
+    const publicGames = [];
+    
+    // Check cached active games first
+    for (const game of this.activeGames.values()) {
+      if (game.isPublic && (game.status === 'waiting' || game.status === 'active')) {
+        publicGames.push({
+          id: game.id,
+          code: game.code,
+          name: game.settings?.gameName || 'Unnamed Game',
+          host_name: game.hostName,
+          mode: game.mode,
+          status: game.status,
+          player_count: game.players?.length || 0,
+          max_players: game.settings?.maxPlayers || 10,
+          created_at: game.createdAt,
+          allow_spectators: game.settings?.allowSpectators ?? true,
+          location: game.location
+        });
+      }
+    }
+    
+    // Also check database for any we might have missed
+    const dbGames = await gameDb.getPublicGames?.() || [];
+    for (const dbGame of dbGames) {
+      if (!publicGames.some(g => g.id === dbGame.id)) {
+        publicGames.push(dbGame);
+      }
+    }
+    
+    return publicGames;
+  }
+
+  // Spectate a game
+  async spectateGame(gameCode, spectator) {
+    const game = await this.getGameByCode(gameCode);
+    
+    if (!game) {
+      return { success: false, error: 'Game not found' };
+    }
+    
+    if (game.status === 'ended') {
+      return { success: false, error: 'Game has ended' };
+    }
+    
+    if (!game.settings?.allowSpectators) {
+      return { success: false, error: 'This game does not allow spectators' };
+    }
+    
+    // Initialize spectators array if needed
+    if (!game.spectators) {
+      game.spectators = [];
+    }
+    
+    // Check if already spectating
+    if (game.spectators.some(s => s.id === spectator.id)) {
+      return { success: true, game, alreadySpectating: true };
+    }
+    
+    // Check if user is a player (can't spectate own game)
+    if (game.players.some(p => p.id === spectator.id)) {
+      return { success: false, error: 'Cannot spectate a game you are playing in' };
+    }
+    
+    // Add as spectator
+    game.spectators.push({
+      id: spectator.id,
+      name: spectator.name,
+      joinedAt: Date.now()
+    });
+    
+    return { success: true, game };
+  }
+
+  // Remove spectator
+  removeSpectator(gameId, spectatorId) {
+    const game = this.activeGames.get(gameId);
+    if (game && game.spectators) {
+      game.spectators = game.spectators.filter(s => s.id !== spectatorId);
+    }
   }
 }

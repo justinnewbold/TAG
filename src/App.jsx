@@ -20,6 +20,13 @@ const Settings = lazy(() => import('./pages/Settings'));
 const GameHistory = lazy(() => import('./pages/GameHistory'));
 const Leaderboards = lazy(() => import('./pages/Leaderboards'));
 const Achievements = lazy(() => import('./pages/Achievements'));
+const GlobalLeaderboard = lazy(() => import('./pages/GlobalLeaderboard'));
+const Clans = lazy(() => import('./pages/Clans'));
+const Tournaments = lazy(() => import('./pages/Tournaments'));
+const PublicGames = lazy(() => import('./pages/PublicGames'));
+const PlayerProfile = lazy(() => import('./pages/PlayerProfile'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const CustomGameModeBuilder = lazy(() => import('./pages/CustomGameModeBuilder'));
 
 // Components
 import Navigation from './components/Navigation';
@@ -51,9 +58,9 @@ function App() {
     const initAuth = async () => {
       const existingToken = api.getToken();
 
-      if (existingToken && !user) {
+      if (existingToken) {
         try {
-          // Try to login with existing token
+          // Always try to login/refresh with existing token to get fresh credentials
           const { user: authUser } = await api.login(existingToken);
           setUser(authUser);
 
@@ -69,12 +76,17 @@ function App() {
             // No current game, that's ok
           }
         } catch (err) {
-          // Token invalid, clear it
+          // Token invalid, clear it and user state
           if (import.meta.env.DEV) console.log('Auth token invalid, clearing');
           api.logout();
+          setUser(null); // Clear persisted user state too
           setShowSignup(true);
         }
       } else if (!user) {
+        setShowSignup(true);
+      } else {
+        // User exists in state but no token - clear and show signup
+        setUser(null);
         setShowSignup(true);
       }
 
@@ -180,6 +192,14 @@ function App() {
             <Route path="/history" element={<GameErrorBoundary><GameHistory /></GameErrorBoundary>} />
             <Route path="/leaderboards" element={<GameErrorBoundary><Leaderboards /></GameErrorBoundary>} />
             <Route path="/achievements" element={<GameErrorBoundary><Achievements /></GameErrorBoundary>} />
+            <Route path="/global-leaderboard" element={<GameErrorBoundary><GlobalLeaderboard /></GameErrorBoundary>} />
+            <Route path="/clans" element={<GameErrorBoundary><Clans /></GameErrorBoundary>} />
+            <Route path="/tournaments" element={<GameErrorBoundary><Tournaments /></GameErrorBoundary>} />
+            <Route path="/public-games" element={<GameErrorBoundary><PublicGames /></GameErrorBoundary>} />
+            <Route path="/profile" element={<GameErrorBoundary><PlayerProfile /></GameErrorBoundary>} />
+            <Route path="/profile/:userId" element={<GameErrorBoundary><PlayerProfile /></GameErrorBoundary>} />
+            <Route path="/admin" element={<GameErrorBoundary><AdminDashboard /></GameErrorBoundary>} />
+            <Route path="/custom-mode" element={<GameErrorBoundary><CustomGameModeBuilder /></GameErrorBoundary>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

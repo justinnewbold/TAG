@@ -344,6 +344,12 @@ export const useStore = create(
             noTagTimes: settings.noTagTimes || [],
             potatoTimer: settings.potatoTimer || 45000,
             hideTime: settings.hideTime || 120000,
+            // New settings for public/private games, solo play, and scheduling
+            isPublic: settings.isPublic ?? false,
+            allowSoloPlay: settings.allowSoloPlay ?? false,
+            minPlayers: settings.minPlayers ?? null,
+            scheduledStartTime: settings.scheduledStartTime ?? null,
+            requireApproval: settings.requireApproval ?? false,
           },
           players: [{
             ...user,
