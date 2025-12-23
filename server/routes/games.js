@@ -569,17 +569,18 @@ router.post('/rematch', async (req, res) => {
     }
 
     // Only host can create rematch
-    if (originalGame.hostId !== req.user.id) {
+    if (originalGame.host !== req.user.id) {
       return res.status(403).json({ error: 'Only host can create rematch' });
     }
 
     // Create new game with same settings
     const rematchSettings = {
-      mode: settings?.mode || originalGame.mode,
-      tagRadius: settings?.tagRadius || originalGame.tagRadius,
-      gameDuration: settings?.gameDuration || originalGame.gameDuration,
-      isPublic: settings?.isPublic ?? originalGame.isPublic,
+      gameMode: settings?.gameMode || originalGame.gameMode,
+      tagRadius: settings?.tagRadius || originalGame.settings?.tagRadius,
+      duration: settings?.duration || originalGame.settings?.duration,
+      isPublic: settings?.isPublic ?? originalGame.settings?.isPublic,
       gameName: `${originalGame.settings?.gameName || 'Game'} (Rematch)`,
+      maxPlayers: originalGame.settings?.maxPlayers,
       ...settings
     };
 

@@ -554,32 +554,9 @@ export class GameManager {
     return { success: true, game, rejectedPlayer: pendingPlayer };
   }
 
-  // Get public games (for game browser)
+  // Get public games (for game browser) - delegates to unified method
   async getPublicGames(limit = 20) {
-    // Get games that are public, waiting, and have room
-    const allGames = [];
-    
-    // Check cached games first
-    for (const game of this.activeGames.values()) {
-      if (game.settings.isPublic && game.status === 'waiting' && 
-          game.players.length < game.settings.maxPlayers) {
-        allGames.push({
-          id: game.id,
-          code: game.code,
-          gameName: game.settings.gameName,
-          hostName: game.hostName,
-          gameMode: game.gameMode,
-          playerCount: game.players.length,
-          maxPlayers: game.settings.maxPlayers,
-          tagRadius: game.settings.tagRadius,
-          scheduledStartTime: game.settings.scheduledStartTime,
-          requireApproval: game.settings.requireApproval,
-          createdAt: game.createdAt,
-        });
-      }
-    }
-
-    return allGames.slice(0, limit);
+    return this.getPublicGamesForBrowser(limit);
   }
 
   async startGame(gameId, hostId) {
@@ -1112,7 +1089,7 @@ export class GameManager {
       return { success: false, error: 'Only the host can end the game' };
     }
 
-    if (game.status !== 'active') {
+    if (game.status !== 'active' && game.status !== 'hiding') {
       return { success: false, error: 'Game is not active' };
     }
 
@@ -1219,29 +1196,31 @@ export class GameManager {
     await gameDb.cleanupOldGames(maxAgeMs);
   }
 
-  // Get public games for browsing
-  async getPublicGames() {
+  // Get public games for browsing (unified method)
+  async getPublicGamesForBrowser(limit = 20) {
     const publicGames = [];
-    
+
     // Check cached active games first
     for (const game of this.activeGames.values()) {
-      if (game.isPublic && (game.status === 'waiting' || game.status === 'active')) {
+      if (game.settings?.isPublic && (game.status === 'waiting' || game.status === 'active')) {
         publicGames.push({
           id: game.id,
           code: game.code,
           name: game.settings?.gameName || 'Unnamed Game',
           host_name: game.hostName,
-          mode: game.mode,
+          gameMode: game.gameMode,
           status: game.status,
           player_count: game.players?.length || 0,
           max_players: game.settings?.maxPlayers || 10,
           created_at: game.createdAt,
           allow_spectators: game.settings?.allowSpectators ?? true,
-          location: game.location
+          tagRadius: game.settings?.tagRadius,
+          requireApproval: game.settings?.requireApproval,
+          scheduledStartTime: game.settings?.scheduledStartTime,
         });
       }
     }
-    
+
     // Also check database for any we might have missed
     const dbGames = await gameDb.getPublicGames?.() || [];
     for (const dbGame of dbGames) {
@@ -1249,8 +1228,8 @@ export class GameManager {
         publicGames.push(dbGame);
       }
     }
-    
-    return publicGames;
+
+    return publicGames.slice(0, limit);
   }
 
   // Spectate a game

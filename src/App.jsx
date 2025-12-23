@@ -184,7 +184,7 @@ function App() {
             <Route path="/create" element={user ? <CreateGame /> : <Navigate to="/" />} />
             <Route path="/join" element={user ? <JoinGame /> : <Navigate to="/" />} />
             <Route path="/lobby" element={currentGame ? <GameErrorBoundary><GameLobby /></GameErrorBoundary> : <Navigate to="/" />} />
-            <Route path="/game" element={currentGame?.status === 'active' ? <GameErrorBoundary><ActiveGame /></GameErrorBoundary> : <Navigate to="/" />} />
+            <Route path="/game" element={(currentGame?.status === 'active' || currentGame?.status === 'hiding') ? <GameErrorBoundary><ActiveGame /></GameErrorBoundary> : <Navigate to="/" />} />
             <Route path="/stats" element={<GameErrorBoundary><Stats /></GameErrorBoundary>} />
             <Route path="/stats/enhanced" element={<GameErrorBoundary><EnhancedStats /></GameErrorBoundary>} />
             <Route path="/friends" element={<GameErrorBoundary><Friends /></GameErrorBoundary>} />
