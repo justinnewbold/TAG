@@ -1,35 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { gameDb, userDb } from '../db/index.js';
+import { getDistance, generateGameCode } from '../../shared/utils.js';
+import { GAME_MODES, GAME_LIMITS } from '../../shared/constants.js';
 
-// Game mode configurations (must match client-side GAME_MODES)
-export const GAME_MODES = {
-  classic: { id: 'classic', name: 'Classic Tag', minPlayers: 2 },
-  freezeTag: { id: 'freezeTag', name: 'Freeze Tag', minPlayers: 3 },
-  infection: { id: 'infection', name: 'Infection', minPlayers: 3 },
-  teamTag: { id: 'teamTag', name: 'Team Tag', minPlayers: 4 },
-  manhunt: { id: 'manhunt', name: 'Manhunt', minPlayers: 3 },
-  hotPotato: { id: 'hotPotato', name: 'Hot Potato', minPlayers: 3, defaultTimer: 45000 },
-  hideAndSeek: { id: 'hideAndSeek', name: 'Hide & Seek', minPlayers: 3, defaultHideTime: 120000 },
-};
-
-// Generate 6-character game code
-const generateGameCode = () => {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-};
-
-// Haversine formula for distance calculation
-const getDistance = (lat1, lng1, lat2, lng2) => {
-  const R = 6371e3; // Earth's radius in meters
-  const φ1 = (lat1 * Math.PI) / 180;
-  const φ2 = (lat2 * Math.PI) / 180;
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-};
+// Re-export for backward compatibility
+export { GAME_MODES };
 
 // Check if current time is in a no-tag period
 const isInNoTagTime = (noTagTimes) => {

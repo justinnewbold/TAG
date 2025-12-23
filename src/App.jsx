@@ -34,6 +34,8 @@ import SignupModal from './components/SignupModal';
 import AchievementToast from './components/AchievementToast';
 import OnboardingTutorial from './components/OnboardingTutorial';
 import { GameErrorBoundary } from './components/ErrorBoundary';
+import GlobalErrorBoundary from './components/GlobalErrorBoundary';
+import ConnectionStatus from './components/ConnectionStatus';
 
 // Loading fallback for lazy loaded pages
 function PageLoader() {
@@ -169,15 +171,19 @@ function App() {
   }
   
   return (
-    <div className="min-h-screen bg-dark-900 text-white">
-      {/* Background gradient */}
-      <div className="fixed inset-0 bg-gradient-to-br from-neon-purple/5 via-transparent to-neon-cyan/5 pointer-events-none" />
-      
-      {/* Achievement Toast */}
-      <AchievementToast />
-      
-      {/* Main content */}
-      <main className="relative pb-24">
+    <GlobalErrorBoundary>
+      <div className="min-h-screen bg-dark-900 text-white">
+        {/* Connection Status Banner */}
+        <ConnectionStatus />
+
+        {/* Background gradient */}
+        <div className="fixed inset-0 bg-gradient-to-br from-neon-purple/5 via-transparent to-neon-cyan/5 pointer-events-none" />
+
+        {/* Achievement Toast */}
+        <AchievementToast />
+
+        {/* Main content */}
+        <main className="relative pb-24">
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/" element={<Home />} />
@@ -223,14 +229,15 @@ function App() {
       
       {/* Onboarding Tutorial */}
       {showOnboarding && (
-        <OnboardingTutorial 
+        <OnboardingTutorial
           onComplete={() => {
             setShowOnboarding(false);
             updateSettings({ hasSeenOnboarding: true });
-          }} 
+          }}
         />
       )}
-    </div>
+      </div>
+    </GlobalErrorBoundary>
   );
 }
 

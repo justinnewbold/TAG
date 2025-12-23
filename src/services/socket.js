@@ -1,5 +1,6 @@
 import { io } from 'socket.io-client';
 import { api } from './api';
+import { useStore } from '../store';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
@@ -8,13 +9,33 @@ class SocketService {
     this.socket = null;
     this.listeners = new Map();
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
+    this.maxReconnectAttempts = 10;
+    this.connectionCallbacks = new Set();
+  }
+
+  // Add callback for connection status changes
+  onConnectionChange(callback) {
+    this.connectionCallbacks.add(callback);
+    return () => this.connectionCallbacks.delete(callback);
+  }
+
+  // Notify all callbacks of connection status change
+  notifyConnectionChange(status, error = null) {
+    // Update store directly
+    try {
+      useStore.getState().setConnectionStatus(status, error);
+    } catch (e) {
+      // Store might not be ready yet
+    }
+    // Notify callbacks
+    this.connectionCallbacks.forEach(cb => cb(status, error));
   }
 
   connect() {
     const token = api.getToken();
     if (!token) {
       if (import.meta.env.DEV) console.warn('Cannot connect socket: no auth token');
+      this.notifyConnectionChange('disconnected', 'No auth token');
       return null;
     }
 
@@ -22,27 +43,61 @@ class SocketService {
       return this.socket;
     }
 
+    this.notifyConnectionChange('connecting');
+
     this.socket = io(SOCKET_URL, {
       auth: { token },
       reconnection: true,
       reconnectionAttempts: this.maxReconnectAttempts,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionDelayMax: 10000,
+      timeout: 20000,
     });
 
     this.socket.on('connect', () => {
       if (import.meta.env.DEV) console.log('Socket connected');
       this.reconnectAttempts = 0;
+      this.notifyConnectionChange('connected');
       this.emit('reconnect:game');
     });
 
     this.socket.on('disconnect', (reason) => {
       if (import.meta.env.DEV) console.log('Socket disconnected:', reason);
+      this.notifyConnectionChange('disconnected', reason);
+    });
+
+    this.socket.on('reconnect_attempt', (attempt) => {
+      this.reconnectAttempts = attempt;
+      this.notifyConnectionChange('reconnecting', `Attempt ${attempt}/${this.maxReconnectAttempts}`);
+    });
+
+    this.socket.on('reconnect', (attempt) => {
+      if (import.meta.env.DEV) console.log('Socket reconnected after', attempt, 'attempts');
+      this.notifyConnectionChange('connected');
+    });
+
+    this.socket.on('reconnect_failed', () => {
+      this.notifyConnectionChange('disconnected', 'Reconnection failed after max attempts');
     });
 
     this.socket.on('connect_error', (error) => {
       if (import.meta.env.DEV) console.error('Socket connection error:', error.message);
       this.reconnectAttempts++;
+      this.notifyConnectionChange('error', error.message);
+    });
+
+    // Handle anti-cheat warnings
+    this.socket.on('warning:anticheat', (data) => {
+      console.warn('[AntiCheat Warning]', data.message);
+      // Could trigger a UI toast here
+    });
+
+    this.socket.on('error:anticheat', (data) => {
+      console.error('[AntiCheat Error]', data.message);
+    });
+
+    this.socket.on('error:rateLimit', (data) => {
+      console.warn('[Rate Limit]', data.message);
     });
 
     return this.socket;

@@ -1,156 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { getDistance, generateId, generateGameCode } from '../shared/utils.js';
+import { GAME_MODES, ACHIEVEMENTS } from '../shared/constants.js';
 
-// Generate unique IDs
-const generateId = () => Math.random().toString(36).substring(2, 9);
-const generateGameCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
-
-// Game Mode definitions
-export const GAME_MODES = {
-  classic: {
-    id: 'classic',
-    name: 'Classic Tag',
-    description: 'One player is IT and must tag others. Tagged player becomes the new IT.',
-    icon: '🏃',
-    color: 'neon-cyan',
-    minPlayers: 2,
-    features: ['Single IT player', 'Tag transfers IT', 'Last non-IT survives longest wins'],
-  },
-  freezeTag: {
-    id: 'freezeTag',
-    name: 'Freeze Tag',
-    description: 'Tagged players are frozen until unfrozen by a teammate touching them.',
-    icon: '🧊',
-    color: 'blue-400',
-    minPlayers: 3,
-    features: ['Frozen players can\'t move', 'Teammates can unfreeze', 'IT wins when all frozen'],
-  },
-  infection: {
-    id: 'infection',
-    name: 'Infection',
-    description: 'Tagged players become infected and join the IT team. Last survivor wins!',
-    icon: '🧟',
-    color: 'green-400',
-    minPlayers: 3,
-    features: ['Multiple IT players', 'Infection spreads', 'Last survivor wins'],
-  },
-  teamTag: {
-    id: 'teamTag',
-    name: 'Team Tag',
-    description: 'Two teams compete! Tag players on the opposing team to eliminate them.',
-    icon: '⚔️',
-    color: 'neon-purple',
-    minPlayers: 4,
-    features: ['Red vs Blue teams', 'Tag enemies only', 'Last team standing wins'],
-  },
-  manhunt: {
-    id: 'manhunt',
-    name: 'Manhunt',
-    description: 'One hunter vs all runners. Runners must survive until time runs out!',
-    icon: '🎯',
-    color: 'neon-orange',
-    minPlayers: 3,
-    features: ['One dedicated hunter', 'Runners can\'t tag back', 'Survival time matters'],
-  },
-  hotPotato: {
-    id: 'hotPotato',
-    name: 'Hot Potato',
-    description: 'The IT player has a countdown timer. Pass the tag before time runs out or lose!',
-    icon: '🥔',
-    color: 'amber-400',
-    minPlayers: 3,
-    features: ['30-60s countdown', 'Tag resets timer', 'Timer out = eliminated'],
-    settings: {
-      potatoTimer: 45000, // 45 seconds default
-    },
-  },
-  hideAndSeek: {
-    id: 'hideAndSeek',
-    name: 'Hide & Seek',
-    description: 'Seeker waits while others hide. After hiding phase, the hunt begins!',
-    icon: '👀',
-    color: 'pink-400',
-    minPlayers: 3,
-    features: ['Hiding phase (2-5 min)', 'Seeker GPS disabled during hide', 'Find all hiders to win'],
-    settings: {
-      hideTime: 120000, // 2 minutes default
-    },
-  },
-};
-
-// Achievement definitions
-export const ACHIEVEMENTS = {
-  firstTag: {
-    id: 'firstTag',
-    name: 'First Blood',
-    description: 'Tag your first player',
-    icon: '🎯',
-    requirement: (stats) => stats.totalTags >= 1
-  },
-  tagged10: {
-    id: 'tagged10',
-    name: 'Tag Master',
-    description: 'Tag 10 players total',
-    icon: '🏃',
-    requirement: (stats) => stats.totalTags >= 10
-  },
-  tagged50: {
-    id: 'tagged50',
-    name: 'Tag Legend',
-    description: 'Tag 50 players total',
-    icon: '👑',
-    requirement: (stats) => stats.totalTags >= 50
-  },
-  survivor: {
-    id: 'survivor',
-    name: 'Survivor',
-    description: 'Survive for 5 minutes without being tagged',
-    icon: '🛡️',
-    requirement: (stats) => stats.longestSurvival >= 300000
-  },
-  firstWin: {
-    id: 'firstWin',
-    name: 'Victory Royale',
-    description: 'Win your first game',
-    icon: '🏆',
-    requirement: (stats) => stats.gamesWon >= 1
-  },
-  win5: {
-    id: 'win5',
-    name: 'Champion',
-    description: 'Win 5 games',
-    icon: '⭐',
-    requirement: (stats) => stats.gamesWon >= 5
-  },
-  social: {
-    id: 'social',
-    name: 'Social Butterfly',
-    description: 'Play with 10 different friends',
-    icon: '🦋',
-    requirement: (stats) => stats.uniqueFriendsPlayed >= 10
-  },
-  marathoner: {
-    id: 'marathoner',
-    name: 'Marathoner',
-    description: 'Play 10 games',
-    icon: '🏅',
-    requirement: (stats) => stats.gamesPlayed >= 10
-  },
-  quickTag: {
-    id: 'quickTag',
-    name: 'Speed Demon',
-    description: 'Tag someone within 30 seconds of being IT',
-    icon: '⚡',
-    requirement: (stats) => stats.fastestTag && stats.fastestTag <= 30000
-  },
-  nightOwl: {
-    id: 'nightOwl',
-    name: 'Night Owl',
-    description: 'Play a game after 10 PM',
-    icon: '🦉',
-    requirement: (stats) => stats.playedAtNight
-  },
-};
+// Re-export for backward compatibility
+export { GAME_MODES, ACHIEVEMENTS };
 
 // Helper to check if current time is in a no-tag period
 export const isInNoTagTime = (noTagTimes) => {
@@ -182,20 +36,7 @@ export const isInNoTagTime = (noTagTimes) => {
 // Helper to check if location is in a no-tag zone
 export const isInNoTagZone = (location, noTagZones) => {
   if (!location || !noTagZones || noTagZones.length === 0) return false;
-  
-  const getDistance = (lat1, lng1, lat2, lng2) => {
-    const R = 6371e3;
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lng2 - lng1) * Math.PI) / 180;
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-  
+
   return noTagZones.some(zone => {
     const distance = getDistance(location.lat, location.lng, zone.lat, zone.lng);
     return distance <= zone.radius;
@@ -282,6 +123,16 @@ const initialState = {
   // Game pause state
   isPaused: false,
   pausedAt: null,
+  // Chat messages
+  chatMessages: [],
+  unreadChatCount: 0,
+  // Spectator mode
+  spectating: false,
+  spectatorTarget: null,
+  spectatorCount: 0,
+  // Connection status
+  connectionStatus: 'disconnected', // 'connected', 'disconnected', 'reconnecting'
+  lastConnectionError: null,
 };
 
 export const useStore = create(
@@ -1031,6 +882,69 @@ export const useStore = create(
       }),
 
       clearLastGameSummary: () => set({ lastGameSummary: null }),
+
+      // Chat messaging actions
+      addChatMessage: (message) => set((state) => ({
+        chatMessages: [...state.chatMessages.slice(-99), { // Keep last 100 messages
+          id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          ...message,
+          timestamp: Date.now(),
+        }],
+        unreadChatCount: state.unreadChatCount + 1,
+      })),
+
+      clearChatMessages: () => set({ chatMessages: [], unreadChatCount: 0 }),
+
+      markChatAsRead: () => set({ unreadChatCount: 0 }),
+
+      sendChatMessage: (content, type = 'text') => {
+        const state = get();
+        if (!state.user || !state.currentGame) return false;
+
+        const message = {
+          senderId: state.user.id,
+          senderName: state.user.name,
+          senderAvatar: state.user.avatar,
+          content,
+          type, // 'text', 'emoji', 'quick'
+          gameId: state.currentGame.id,
+        };
+
+        // Add to local state immediately
+        set((s) => ({
+          chatMessages: [...s.chatMessages.slice(-99), {
+            id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            ...message,
+            timestamp: Date.now(),
+            isLocal: true, // Mark as not yet confirmed by server
+          }],
+        }));
+
+        return message;
+      },
+
+      // Spectator mode actions
+      setSpectating: (spectating) => set({ spectating }),
+
+      setSpectatorTarget: (targetId) => set({ spectatorTarget: targetId }),
+
+      updateSpectatorCount: (count) => set({ spectatorCount: count }),
+
+      enterSpectatorMode: (targetId = null) => set({
+        spectating: true,
+        spectatorTarget: targetId,
+      }),
+
+      exitSpectatorMode: () => set({
+        spectating: false,
+        spectatorTarget: null,
+      }),
+
+      // Connection status actions
+      setConnectionStatus: (status, error = null) => set({
+        connectionStatus: status,
+        lastConnectionError: error,
+      }),
     }),
     {
       name: 'tag-game-storage',
