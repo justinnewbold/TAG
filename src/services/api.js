@@ -1,8 +1,51 @@
+import { offlineQueue } from './offlineQueue';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+// Endpoints that can be queued when offline (non-critical updates)
+const QUEUEABLE_ENDPOINTS = [
+  '/auth/profile',
+];
+
+// Endpoints that should NOT be queued (require immediate feedback)
+const NON_QUEUEABLE_METHODS = ['GET'];
 
 class ApiService {
   constructor() {
     this.token = localStorage.getItem('tag-auth-token');
+    this._setupOfflineQueueHandler();
+  }
+
+  _setupOfflineQueueHandler() {
+    // Process queue when back online
+    if (typeof window !== 'undefined') {
+      window.addEventListener('offlineQueueReady', async () => {
+        const result = await offlineQueue.processQueue(
+          (endpoint, options) => this.request(endpoint, options)
+        );
+        if (import.meta.env.DEV && (result.processed > 0 || result.failed > 0)) {
+          console.log(`[API] Processed offline queue: ${result.processed} succeeded, ${result.failed} failed`);
+        }
+      });
+    }
+  }
+
+  /**
+   * Check if a request can be queued for offline retry
+   */
+  _canQueue(endpoint, options) {
+    if (NON_QUEUEABLE_METHODS.includes(options.method || 'GET')) {
+      return false;
+    }
+    return QUEUEABLE_ENDPOINTS.some(e => endpoint.startsWith(e));
+  }
+
+  isOnline() {
+    return offlineQueue.isOnline();
+  }
+
+  getQueueStatus() {
+    return offlineQueue.getStatus();
   }
 
   setToken(token) {
@@ -37,7 +80,14 @@ class ApiService {
         credentials: 'same-origin', // Explicit for Safari compatibility
       });
     } catch (fetchError) {
-      // Network error or CORS issue
+      // Network error or CORS issue - queue if eligible
+      if (this._canQueue(endpoint, options)) {
+        offlineQueue.enqueue(endpoint, {
+          ...options,
+          headers: { 'Content-Type': 'application/json' },
+        });
+        return { queued: true, message: 'Request queued for when you are back online' };
+      }
       throw new Error('Unable to connect to server. Please check your connection.');
     }
 

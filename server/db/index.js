@@ -82,7 +82,7 @@ const initSchema = () => {
       PRIMARY KEY (game_id, user_id)
     );
 
-    -- Game tags history
+    -- Game tags history (privacy: stores distance instead of exact coordinates)
     CREATE TABLE IF NOT EXISTS game_tags (
       id TEXT PRIMARY KEY,
       game_id TEXT REFERENCES games(id) ON DELETE CASCADE,
@@ -90,15 +90,22 @@ const initSchema = () => {
       tagged_id TEXT NOT NULL,
       timestamp INTEGER NOT NULL,
       tag_time INTEGER,
-      location_lat REAL,
-      location_lng REAL
+      distance INTEGER
     );
 
     -- Indexes for performance
     CREATE INDEX IF NOT EXISTS idx_games_code ON games(code);
     CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
+    CREATE INDEX IF NOT EXISTS idx_games_host ON games(host_id);
+    CREATE INDEX IF NOT EXISTS idx_games_created_at ON games(created_at);
+    CREATE INDEX IF NOT EXISTS idx_games_ended_at ON games(ended_at);
     CREATE INDEX IF NOT EXISTS idx_game_players_user ON game_players(user_id);
+    CREATE INDEX IF NOT EXISTS idx_game_players_game ON game_players(game_id);
     CREATE INDEX IF NOT EXISTS idx_game_tags_game ON game_tags(game_id);
+    CREATE INDEX IF NOT EXISTS idx_game_tags_tagger ON game_tags(tagger_id);
+    CREATE INDEX IF NOT EXISTS idx_game_tags_tagged ON game_tags(tagged_id);
+    CREATE INDEX IF NOT EXISTS idx_game_tags_timestamp ON game_tags(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_id);
   `);
 };
 
@@ -288,7 +295,7 @@ export const gameDb = {
       taggedId: t.tagged_id,
       timestamp: t.timestamp,
       tagTime: t.tag_time,
-      location: t.location_lat ? { lat: t.location_lat, lng: t.location_lng } : null,
+      distance: t.distance,
     }));
 
     return {
@@ -371,8 +378,8 @@ export const gameDb = {
 
   addTag(gameId, tag) {
     db.prepare(`
-      INSERT INTO game_tags (id, game_id, tagger_id, tagged_id, timestamp, tag_time, location_lat, location_lng)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO game_tags (id, game_id, tagger_id, tagged_id, timestamp, tag_time, distance)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       tag.id,
       gameId,
@@ -380,8 +387,7 @@ export const gameDb = {
       tag.taggedId,
       tag.timestamp,
       tag.tagTime,
-      tag.location?.lat,
-      tag.location?.lng
+      tag.distance
     );
   },
 

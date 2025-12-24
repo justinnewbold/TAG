@@ -102,16 +102,16 @@ function Leaderboards() {
       <div className="flex items-center gap-4 mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
         >
-          <ArrowLeft className="w-6 h-6" />
+          <ArrowLeft className="w-6 h-6 text-gray-600" />
         </button>
         <div>
-          <h1 className="text-2xl font-display font-bold">Leaderboards</h1>
-          <p className="text-sm text-white/50">See who's on top</p>
+          <h1 className="text-2xl font-display font-bold text-gray-900">Leaderboards</h1>
+          <p className="text-sm text-gray-500">See who's on top</p>
         </div>
       </div>
-      
+
       {/* Board Type Tabs */}
       <div className="grid grid-cols-4 gap-2 mb-6">
         {[
@@ -125,8 +125,8 @@ function Leaderboards() {
             onClick={() => setActiveBoard(key)}
             className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${
               activeBoard === key
-                ? 'bg-neon-cyan/20 border border-neon-cyan/50 text-neon-cyan'
-                : 'bg-white/5 border border-white/10 text-white/60 hover:bg-white/10'
+                ? 'bg-indigo-100 border border-indigo-300 text-indigo-600'
+                : 'bg-gray-50 border border-gray-200 text-gray-500 hover:bg-gray-100'
             }`}
           >
             <Icon className="w-5 h-5" />
@@ -142,13 +142,13 @@ function Leaderboards() {
           <div className="grid grid-cols-3 gap-2 mb-6">
             {leaderboards[activeBoard].slice(0, 3).map((player, index) => {
               const positions = [
-                { bg: 'bg-amber-500/20', border: 'border-amber-500/50', text: 'text-amber-400', crown: '👑' },
-                { bg: 'bg-gray-400/20', border: 'border-gray-400/50', text: 'text-gray-300', crown: '🥈' },
-                { bg: 'bg-amber-700/20', border: 'border-amber-700/50', text: 'text-amber-600', crown: '🥉' },
+                { bg: 'bg-amber-100', border: 'border-amber-300', text: 'text-amber-600', crown: '👑' },
+                { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-600', crown: '🥈' },
+                { bg: 'bg-orange-100', border: 'border-orange-300', text: 'text-orange-600', crown: '🥉' },
               ];
               const pos = positions[index];
               const isUser = player.id === user?.id;
-              
+
               return (
                 <div
                   key={player.id}
@@ -157,49 +157,49 @@ function Leaderboards() {
                   } ${index === 1 ? 'sm:order-1' : ''} ${index === 2 ? 'sm:order-3' : ''}`}
                 >
                   <div className="text-3xl mb-2">{pos.crown}</div>
-                  <div className={`text-2xl mb-1 ${isUser ? 'ring-2 ring-neon-cyan rounded-full inline-block p-1' : ''}`}>
+                  <div className={`text-2xl mb-1 ${isUser ? 'ring-2 ring-indigo-500 rounded-full inline-block p-1' : ''}`}>
                     {player.avatar}
                   </div>
                   <h3 className={`font-semibold ${pos.text} truncate`}>
                     {player.name}
                     {isUser && ' (You)'}
                   </h3>
-                  <div className="mt-2 text-2xl font-bold">
+                  <div className="mt-2 text-2xl font-bold text-gray-900">
                     {getStatValue(player)}
                   </div>
-                  <p className="text-xs text-white/40">{getStatLabel()}</p>
+                  <p className="text-xs text-gray-400">{getStatLabel()}</p>
                 </div>
               );
             })}
           </div>
-          
+
           {/* Rest of Leaderboard */}
           {leaderboards[activeBoard].slice(3).map((player, index) => {
             const isUser = player.id === user?.id;
-            
+
             return (
               <div
                 key={player.id}
                 className={`card p-4 flex items-center gap-4 ${
-                  isUser ? 'border border-neon-cyan/30 bg-neon-cyan/5' : ''
+                  isUser ? 'border border-indigo-200 bg-indigo-50' : ''
                 }`}
               >
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold">
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">
                   {index + 4}
                 </div>
                 <div className="text-2xl">{player.avatar}</div>
                 <div className="flex-1">
-                  <h3 className="font-medium">
+                  <h3 className="font-medium text-gray-900">
                     {player.name}
-                    {isUser && <span className="text-neon-cyan ml-2">(You)</span>}
+                    {isUser && <span className="text-indigo-600 ml-2">(You)</span>}
                   </h3>
-                  <p className="text-xs text-white/40">
+                  <p className="text-xs text-gray-400">
                     {player.gamesPlayed} games • {player.wins} wins
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-bold">{getStatValue(player)}</p>
-                  <p className="text-xs text-white/40">{getStatLabel()}</p>
+                  <p className="text-xl font-bold text-gray-900">{getStatValue(player)}</p>
+                  <p className="text-xs text-gray-400">{getStatLabel()}</p>
                 </div>
               </div>
             );
@@ -207,11 +207,11 @@ function Leaderboards() {
         </div>
       ) : (
         <div className="text-center py-16">
-          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
-            <BoardIcon className="w-10 h-10 text-white/20" />
+          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+            <BoardIcon className="w-10 h-10 text-gray-300" />
           </div>
-          <h3 className="text-lg font-medium text-white/60 mb-2">No Data Yet</h3>
-          <p className="text-sm text-white/40 mb-6">
+          <h3 className="text-lg font-medium text-gray-500 mb-2">No Data Yet</h3>
+          <p className="text-sm text-gray-400 mb-6">
             Play games to see leaderboard rankings!
           </p>
           <button
@@ -222,12 +222,12 @@ function Leaderboards() {
           </button>
         </div>
       )}
-      
+
       {/* Your Rank Card */}
       {user && allPlayerStats.length > 0 && (
-        <div className="mt-8 card-glow p-4">
-          <h3 className="font-semibold mb-3 flex items-center gap-2">
-            <Medal className="w-5 h-5 text-neon-cyan" />
+        <div className="mt-8 card p-4 shadow-lg bg-gradient-to-r from-indigo-50 to-purple-50">
+          <h3 className="font-semibold mb-3 flex items-center gap-2 text-gray-900">
+            <Medal className="w-5 h-5 text-indigo-500" />
             Your Rankings
           </h3>
           <div className="grid grid-cols-4 gap-3">
@@ -235,14 +235,14 @@ function Leaderboards() {
               const sorted = leaderboards[board];
               const userRank = sorted.findIndex(p => p.id === user.id) + 1;
               const Icon = boardIcons[board];
-              
+
               return (
-                <div key={board} className="text-center p-2 bg-white/5 rounded-lg">
-                  <Icon className="w-4 h-4 mx-auto text-white/40 mb-1" />
-                  <p className="text-lg font-bold">
+                <div key={board} className="text-center p-2 bg-white/80 rounded-lg">
+                  <Icon className="w-4 h-4 mx-auto text-gray-400 mb-1" />
+                  <p className="text-lg font-bold text-gray-900">
                     {userRank > 0 ? `#${userRank}` : '-'}
                   </p>
-                  <p className="text-xs text-white/40 capitalize">{board}</p>
+                  <p className="text-xs text-gray-400 capitalize">{board}</p>
                 </div>
               );
             })}

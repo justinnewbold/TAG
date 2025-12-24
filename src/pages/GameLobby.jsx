@@ -166,29 +166,29 @@ function GameLobby() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <button onClick={handleLeave} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
-            <ArrowLeft className="w-6 h-6" />
+          <button onClick={handleLeave} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+            <ArrowLeft className="w-6 h-6 text-gray-600" />
           </button>
           <div>
-            <h1 className="text-xl font-display font-bold">
+            <h1 className="text-xl font-display font-bold text-gray-900">
               {currentGame.settings?.gameName || 'Game Lobby'}
             </h1>
-            <p className="text-sm text-white/50">Waiting for players...</p>
+            <p className="text-sm text-gray-500">Waiting for players...</p>
           </div>
         </div>
       </div>
-      
+
       {/* Game Code Card */}
-      <div className="card-glow p-6 mb-6 text-center bg-gradient-to-b from-neon-cyan/10 to-transparent">
-        <p className="text-sm text-white/50 mb-2">Game Code</p>
+      <div className="card p-6 mb-6 text-center bg-gradient-to-b from-indigo-50 to-white shadow-lg">
+        <p className="text-sm text-gray-500 mb-2">Game Code</p>
         <div className="flex items-center justify-center gap-4">
-          <span className="text-4xl font-display font-bold tracking-widest text-neon-cyan">
+          <span className="text-4xl font-display font-bold tracking-widest text-indigo-600">
             {currentGame.code}
           </span>
           <button
             onClick={handleCopyCode}
             className={`p-3 rounded-xl transition-all ${
-              copied ? 'bg-green-500/20 text-green-400' : 'bg-white/10 hover:bg-white/20'
+              copied ? 'bg-green-100 text-green-600' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
             }`}
           >
             {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
@@ -196,76 +196,76 @@ function GameLobby() {
         </div>
         <button
           onClick={() => setShowInvite(true)}
-          className="mt-4 text-sm text-neon-cyan hover:underline flex items-center justify-center gap-2 mx-auto"
+          className="mt-4 text-sm text-indigo-600 hover:underline flex items-center justify-center gap-2 mx-auto"
         >
           <Share2 className="w-4 h-4" />
           Share invite link
         </button>
       </div>
-      
+
       {/* Game Settings */}
       <div className="card p-4 mb-6">
-        <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-3">Game Settings</h3>
+        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Game Settings</h3>
         <div className="grid grid-cols-2 gap-3">
-          <div className="p-3 bg-white/5 rounded-lg">
+          <div className="p-3 bg-gray-50 rounded-lg">
             <div className="flex items-center gap-2 mb-1">
-              <Clock className="w-4 h-4 text-neon-cyan" />
-              <span className="text-xs text-white/50">GPS Update</span>
+              <Clock className="w-4 h-4 text-indigo-500" />
+              <span className="text-xs text-gray-500">GPS Update</span>
             </div>
-            <p className="font-medium">{formatInterval(currentGame.settings?.gpsInterval)}</p>
+            <p className="font-medium text-gray-900">{formatInterval(currentGame.settings?.gpsInterval)}</p>
           </div>
-          <div className="p-3 bg-white/5 rounded-lg">
+          <div className="p-3 bg-gray-50 rounded-lg">
             <div className="flex items-center gap-2 mb-1">
-              <Target className="w-4 h-4 text-neon-purple" />
-              <span className="text-xs text-white/50">Tag Radius</span>
+              <Target className="w-4 h-4 text-purple-500" />
+              <span className="text-xs text-gray-500">Tag Radius</span>
             </div>
-            <p className="font-medium">{currentGame.settings?.tagRadius}m</p>
+            <p className="font-medium text-gray-900">{currentGame.settings?.tagRadius}m</p>
           </div>
-          <div className="p-3 bg-white/5 rounded-lg">
+          <div className="p-3 bg-gray-50 rounded-lg">
             <div className="flex items-center gap-2 mb-1">
-              <Users className="w-4 h-4 text-neon-orange" />
-              <span className="text-xs text-white/50">Max Players</span>
+              <Users className="w-4 h-4 text-orange-500" />
+              <span className="text-xs text-gray-500">Max Players</span>
             </div>
-            <p className="font-medium">{currentGame.settings?.maxPlayers}</p>
+            <p className="font-medium text-gray-900">{currentGame.settings?.maxPlayers}</p>
           </div>
-          <div className="p-3 bg-white/5 rounded-lg">
+          <div className="p-3 bg-gray-50 rounded-lg">
             <div className="flex items-center gap-2 mb-1">
-              <Clock className="w-4 h-4 text-amber-400" />
-              <span className="text-xs text-white/50">Duration</span>
+              <Clock className="w-4 h-4 text-amber-500" />
+              <span className="text-xs text-gray-500">Duration</span>
             </div>
-            <p className="font-medium">{formatDuration(currentGame.settings?.duration)}</p>
+            <p className="font-medium text-gray-900">{formatDuration(currentGame.settings?.duration)}</p>
           </div>
         </div>
         
         {/* No-Tag Zones */}
         {currentGame.settings?.noTagZones?.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-white/10">
+          <div className="mt-4 pt-4 border-t border-gray-100">
             <div className="flex items-center gap-2 mb-2">
-              <Shield className="w-4 h-4 text-green-400" />
-              <span className="text-sm font-medium text-green-400">Safe Zones ({currentGame.settings.noTagZones.length})</span>
+              <Shield className="w-4 h-4 text-green-500" />
+              <span className="text-sm font-medium text-green-600">Safe Zones ({currentGame.settings.noTagZones.length})</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {currentGame.settings.noTagZones.map((zone) => (
-                <span key={zone.id} className="text-xs bg-green-400/10 text-green-400 px-2 py-1 rounded-full">
+                <span key={zone.id} className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded-full border border-green-200">
                   {zone.name} ({zone.radius}m)
                 </span>
               ))}
             </div>
           </div>
         )}
-        
+
         {/* No-Tag Times */}
         {currentGame.settings?.noTagTimes?.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-white/10">
+          <div className="mt-4 pt-4 border-t border-gray-100">
             <div className="flex items-center gap-2 mb-2">
-              <Calendar className="w-4 h-4 text-blue-400" />
-              <span className="text-sm font-medium text-blue-400">Protected Times ({currentGame.settings.noTagTimes.length})</span>
+              <Calendar className="w-4 h-4 text-blue-500" />
+              <span className="text-sm font-medium text-blue-600">Protected Times ({currentGame.settings.noTagTimes.length})</span>
             </div>
             <div className="space-y-1">
               {currentGame.settings.noTagTimes.map((time) => (
-                <div key={time.id} className="text-xs bg-blue-400/10 text-blue-400 px-2 py-1 rounded-lg">
+                <div key={time.id} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-200">
                   <span className="font-medium">{time.name}:</span> {time.startTime} - {time.endTime}
-                  <span className="text-blue-400/60 ml-1">
+                  <span className="text-blue-400 ml-1">
                     ({time.days.length === 7 ? 'Daily' : time.days.map(d => daysOfWeek[d]).join(', ')})
                   </span>
                 </div>
@@ -278,65 +278,65 @@ function GameLobby() {
       {/* Players List */}
       <div className="card p-4 mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider">
+          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
             Players ({playerCount}/{currentGame.settings?.maxPlayers})
           </h3>
           <button
             onClick={() => setShowInvite(true)}
-            className="text-sm text-neon-cyan hover:underline flex items-center gap-1"
+            className="text-sm text-indigo-600 hover:underline flex items-center gap-1"
           >
             <UserPlus className="w-4 h-4" />
             Invite
           </button>
         </div>
-        
+
         <div className="space-y-3">
           {currentGame.players?.map((player) => (
             <div
               key={player.id}
               className={`flex items-center gap-3 p-3 rounded-xl ${
-                player.id === user?.id 
-                  ? 'bg-neon-cyan/10 border border-neon-cyan/30' 
-                  : 'bg-white/5'
+                player.id === user?.id
+                  ? 'bg-indigo-50 border border-indigo-200'
+                  : 'bg-gray-50'
               }`}
             >
               <div className="text-2xl">{player.avatar || '👤'}</div>
               <div className="flex-1">
-                <p className="font-medium">
+                <p className="font-medium text-gray-900">
                   {player.name}
-                  {player.id === user?.id && <span className="text-neon-cyan ml-2">(You)</span>}
+                  {player.id === user?.id && <span className="text-indigo-600 ml-2">(You)</span>}
                 </p>
-                <p className="text-xs text-white/40">
+                <p className="text-xs text-gray-400">
                   {player.id === currentGame.host ? '👑 Host' : 'Player'}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 {player.location && (
-                  <div className="flex items-center gap-1 text-green-400">
+                  <div className="flex items-center gap-1 text-green-500">
                     <MapPin className="w-4 h-4" />
                     <span className="text-xs">Ready</span>
                   </div>
                 )}
                 {player.isOnline !== false ? (
-                  <Wifi className="w-4 h-4 text-green-400" />
+                  <Wifi className="w-4 h-4 text-green-500" />
                 ) : (
-                  <WifiOff className="w-4 h-4 text-white/30" />
+                  <WifiOff className="w-4 h-4 text-gray-300" />
                 )}
               </div>
             </div>
           ))}
         </div>
-        
+
         {playerCount < 2 && (
-          <p className="text-center text-sm text-white/40 mt-4 py-4 border-t border-white/10">
+          <p className="text-center text-sm text-gray-400 mt-4 py-4 border-t border-gray-100">
             Need at least 2 players to start
           </p>
         )}
       </div>
-      
+
       {/* Error Display */}
       {error && (
-        <div className="p-3 mb-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+        <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
           {error}
         </div>
       )}
@@ -348,8 +348,8 @@ function GameLobby() {
           disabled={!canStart || isStarting}
           className={`w-full p-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all ${
             canStart && !isStarting
-              ? 'bg-gradient-to-r from-neon-cyan to-neon-purple hover:opacity-90'
-              : 'bg-white/10 text-white/40 cursor-not-allowed'
+              ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:opacity-90 shadow-lg'
+              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
           }`}
         >
           {isStarting ? (
@@ -365,19 +365,19 @@ function GameLobby() {
           )}
         </button>
       )}
-      
+
       {!isHost && (
         <div className="text-center p-4 card">
-          <p className="text-white/60">Waiting for host to start the game...</p>
+          <p className="text-gray-500">Waiting for host to start the game...</p>
         </div>
       )}
-      
+
       {/* Countdown Overlay */}
       {countdown !== null && (
-        <div className="fixed inset-0 z-50 bg-dark-900/95 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 bg-gray-900/90 flex items-center justify-center">
           <div className="text-center animate-pulse">
-            <div className="text-9xl font-display font-bold text-neon-cyan mb-4">{countdown}</div>
-            <p className="text-2xl text-white/60">Get Ready!</p>
+            <div className="text-9xl font-display font-bold text-indigo-500 mb-4">{countdown}</div>
+            <p className="text-2xl text-gray-300">Get Ready!</p>
           </div>
         </div>
       )}

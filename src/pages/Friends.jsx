@@ -60,8 +60,8 @@ function Friends() {
     <div className="min-h-screen p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-display font-bold">Friends</h1>
-          <span className="text-sm text-white/50">({friends.length})</span>
+          <h1 className="text-2xl font-display font-bold text-gray-900">Friends</h1>
+          <span className="text-sm text-gray-500">({friends.length})</span>
         </div>
         <button
           onClick={() => setShowInviteModal(true)}
@@ -71,9 +71,9 @@ function Friends() {
           Add
         </button>
       </div>
-      
+
       <div className="relative mb-6">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
         <input
           type="text"
           value={searchQuery}
@@ -82,7 +82,7 @@ function Friends() {
           className="input-field pl-12"
         />
       </div>
-      
+
       <div className="space-y-3">
         {filteredFriends.length > 0 ? (
           filteredFriends.map((friend) => {
@@ -93,19 +93,19 @@ function Friends() {
                   {friend.avatar || '👤'}
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-medium">{friend.name}</h3>
-                  <p className="text-xs text-white/50">
+                  <h3 className="font-medium text-gray-900">{friend.name}</h3>
+                  <p className="text-xs text-gray-500">
                     {friend.email || friend.phone || 'No contact'}
                   </p>
                   {stats.gamesPlayed > 0 && (
-                    <p className="text-xs text-neon-cyan mt-1">
+                    <p className="text-xs text-indigo-600 mt-1">
                       {stats.gamesPlayed} games together
                     </p>
                   )}
                 </div>
                 <button
                   onClick={() => removeFriend(friend.id)}
-                  className="p-2 hover:bg-red-500/20 rounded-lg text-red-400 transition-colors"
+                  className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -114,38 +114,38 @@ function Friends() {
           })
         ) : (
           <div className="text-center py-12">
-            <Users className="w-12 h-12 text-white/20 mx-auto mb-4" />
-            <p className="text-white/50">
+            <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500">
               {searchQuery ? 'No friends found' : 'No friends yet'}
             </p>
             <button
               onClick={() => setShowInviteModal(true)}
-              className="mt-4 text-neon-cyan hover:underline text-sm"
+              className="mt-4 text-indigo-600 hover:underline text-sm"
             >
               Invite friends to play
             </button>
           </div>
         )}
       </div>
-      
+
       {showInviteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
-          <div className="card-glow p-6 w-full max-w-md animate-slide-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-gray-900/50 backdrop-blur-sm">
+          <div className="card p-6 w-full max-w-md animate-slide-up shadow-xl">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-neon-cyan/10 rounded-xl">
-                  <UserPlus className="w-6 h-6 text-neon-cyan" />
+                <div className="p-3 bg-indigo-100 rounded-xl">
+                  <UserPlus className="w-6 h-6 text-indigo-600" />
                 </div>
                 <div>
-                  <h2 className="font-display font-bold text-xl">Add Friend</h2>
-                  <p className="text-sm text-white/50">Send an invite</p>
+                  <h2 className="font-display font-bold text-xl text-gray-900">Add Friend</h2>
+                  <p className="text-sm text-gray-500">Send an invite</p>
                 </div>
               </div>
-              <button onClick={() => setShowInviteModal(false)} className="p-2 hover:bg-white/10 rounded-lg">
-                <X className="w-5 h-5" />
+              <button onClick={() => setShowInviteModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="label">Name</label>

@@ -1,12 +1,15 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Target, Users, Clock, X, Zap, AlertTriangle, Flag, Shield, Calendar, Loader2 } from 'lucide-react';
-import { useStore, useSounds, isInNoTagTime, isInNoTagZone, canTagNow } from '../store';
+import { useStore, isInNoTagTime, isInNoTagZone, canTagNow } from '../store';
+import { useUIStore, useSounds } from '../stores/uiStore';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import GameEndSummary from '../components/GameEndSummary';
+import SyncButton from '../components/SyncButton';
+import { getDistance, formatDistance } from '../utils/distance';
 
 // Custom marker icons
 const createIcon = (color, isIt = false, emoji = '📍') => {
@@ -47,26 +50,24 @@ function MapController({ center }) {
 function ActiveGame() {
   const navigate = useNavigate();
   const { currentGame, user, tagPlayer, endGame, updatePlayerLocation, syncGameState, games } = useStore();
+  const { showError } = useUIStore();
   const { playSound, vibrate } = useSounds();
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showEndSummary, setShowEndSummary] = useState(false);
   const [endedGame, setEndedGame] = useState(null);
   const [gameTime, setGameTime] = useState(0);
   const [tagAnimation, setTagAnimation] = useState(false);
-  const [tagError, setTagError] = useState(null);
   const [isTagging, setIsTagging] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [noTagStatus, setNoTagStatus] = useState({ inZone: false, inTime: false });
   const intervalRef = useRef(null);
   const prevItRef = useRef(null);
   const animationTimeoutRef = useRef(null);
-  const errorTimeoutRef = useRef(null);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current);
-      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
     };
   }, []);
 
@@ -155,26 +156,14 @@ function ActiveGame() {
   const isIt = currentGame.itPlayerId === user?.id;
   const itPlayer = currentGame.players?.find((p) => p.id === currentGame.itPlayerId);
   const otherPlayers = currentGame.players?.filter((p) => p.id !== user?.id) || [];
-  
-  const getDistance = (lat1, lng1, lat2, lng2) => {
-    const R = 6371e3;
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lng2 - lng1) * Math.PI) / 180;
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-  
-  const getNearestTaggable = () => {
+
+  // Memoize nearest taggable player calculation
+  const { player: nearestPlayer, distance: nearestDistance } = useMemo(() => {
     if (!isIt || !user?.location) return { player: null, distance: Infinity };
-    
+
     let nearest = null;
     let nearestDist = Infinity;
-    
+
     otherPlayers.forEach((player) => {
       if (player.location) {
         const dist = getDistance(
@@ -187,11 +176,9 @@ function ActiveGame() {
         }
       }
     });
-    
+
     return { player: nearest, distance: nearestDist };
-  };
-  
-  const { player: nearestPlayer, distance: nearestDistance } = getNearestTaggable();
+  }, [isIt, user?.location?.lat, user?.location?.lng, otherPlayers]);
   const inTagRange = isIt && nearestPlayer && nearestDistance <= (currentGame.settings?.tagRadius || 20);
   
   // Check if tagging is allowed
@@ -202,10 +189,9 @@ function ActiveGame() {
     if (!inTagRange || isTagging) return;
 
     if (!tagCheck.allowed) {
-      setTagError(tagCheck.reason);
+      showError(tagCheck.reason, 'Cannot Tag');
       playSound('error');
       vibrate([100, 50, 100]);
-      errorTimeoutRef.current = setTimeout(() => setTagError(null), 3000);
       return;
     }
 
@@ -235,10 +221,9 @@ function ActiveGame() {
             animationTimeoutRef.current = setTimeout(() => setTagAnimation(false), 500);
           }
         } else {
-          setTagError(err.message || 'Failed to tag');
+          showError(err.message || 'Failed to tag', 'Tag Failed');
           playSound('error');
           vibrate([100, 50, 100]);
-          errorTimeoutRef.current = setTimeout(() => setTagError(null), 3000);
         }
       } finally {
         setIsTagging(false);
@@ -288,26 +273,29 @@ function ActiveGame() {
   return (
     <div className="fixed inset-0 flex flex-col">
       {/* Header */}
-      <div className="relative z-10 bg-dark-900/90 backdrop-blur-sm">
+      <div className="relative z-10 bg-white/95 backdrop-blur-sm border-b border-gray-200">
         <div className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-white/50" />
-                <span className="font-mono text-lg font-bold">{formatTime(gameTime)}</span>
+                <Clock className="w-4 h-4 text-gray-400" />
+                <span className="font-mono text-lg font-bold text-gray-900">{formatTime(gameTime)}</span>
               </div>
               <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-white/50" />
-                <span>{currentGame.players?.length || 0}</span>
+                <Users className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-700">{currentGame.players?.length || 0}</span>
               </div>
-              <div className="flex items-center gap-1 text-xs text-white/40">
+              <div className="flex items-center gap-1 text-xs text-gray-400">
                 <span>GPS: {formatInterval(currentGame.settings?.gpsInterval)}</span>
               </div>
             </div>
-            
-            <button onClick={() => setShowEndConfirm(true)} className="p-2 hover:bg-white/10 rounded-lg">
-              <Flag className="w-5 h-5 text-white/50" />
-            </button>
+
+            <div className="flex items-center gap-1">
+              <SyncButton />
+              <button onClick={() => setShowEndConfirm(true)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <Flag className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
           </div>
           
           {/* No-Tag Status Banners */}
@@ -330,38 +318,31 @@ function ActiveGame() {
           
           {/* IT Status */}
           <div className={`mt-3 p-3 rounded-xl flex items-center justify-between ${
-            isIt 
-              ? 'bg-neon-orange/20 border border-neon-orange/30' 
-              : 'bg-neon-cyan/10 border border-neon-cyan/30'
+            isIt
+              ? 'bg-orange-50 border border-orange-200'
+              : 'bg-indigo-50 border border-indigo-200'
           }`}>
             <div className="flex items-center gap-3">
               {isIt ? (
                 <>
-                  <Target className="w-6 h-6 text-neon-orange animate-pulse" />
+                  <Target className="w-6 h-6 text-orange-500 animate-pulse" />
                   <div>
-                    <p className="font-display font-bold text-neon-orange">YOU'RE IT!</p>
-                    <p className="text-xs text-white/50">Tag someone to pass it on!</p>
+                    <p className="font-display font-bold text-orange-600">YOU'RE IT!</p>
+                    <p className="text-xs text-gray-500">Tag someone to pass it on!</p>
                   </div>
                 </>
               ) : (
                 <>
-                  <AlertTriangle className="w-6 h-6 text-neon-cyan" />
+                  <AlertTriangle className="w-6 h-6 text-indigo-500" />
                   <div>
-                    <p className="font-display font-bold text-neon-cyan">{itPlayer?.name} is IT!</p>
-                    <p className="text-xs text-white/50">Run and hide!</p>
+                    <p className="font-display font-bold text-indigo-600">{itPlayer?.name} is IT!</p>
+                    <p className="text-xs text-gray-500">Run and hide!</p>
                   </div>
                 </>
               )}
             </div>
           </div>
           
-          {/* Tag Error Message */}
-          {tagError && (
-            <div className="mt-2 p-2 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center gap-2 animate-slide-down">
-              <X className="w-4 h-4 text-red-400" />
-              <span className="text-sm text-red-400">{tagError}</span>
-            </div>
-          )}
         </div>
       </div>
       
@@ -375,7 +356,7 @@ function ActiveGame() {
         >
           <TileLayer
             attribution='&copy; OpenStreetMap'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           />
           
           <MapController center={userLocation} />
@@ -470,9 +451,7 @@ function ActiveGame() {
               </div>
               <div className={`text-right ${inTagRange && tagCheck.allowed ? 'text-neon-orange' : ''}`}>
                 <p className="font-bold">
-                  {nearestDistance < 1000 
-                    ? `${Math.round(nearestDistance)}m` 
-                    : `${(nearestDistance / 1000).toFixed(1)}km`}
+                  {formatDistance(nearestDistance)}
                 </p>
                 {inTagRange && tagCheck.allowed && (
                   <p className="text-xs text-neon-orange animate-pulse">In range!</p>
@@ -541,13 +520,13 @@ function ActiveGame() {
       
       {/* End Game Confirmation */}
       {showEndConfirm && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="card-glow p-6 max-w-sm w-full">
-            <h2 className="text-xl font-bold mb-4">End Game?</h2>
-            <p className="text-white/60 mb-6">This will end the game for all players.</p>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">End Game?</h2>
+            <p className="text-gray-500 mb-6">This will end the game for all players.</p>
             <div className="flex gap-3">
               <button onClick={() => setShowEndConfirm(false)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={() => { setShowEndConfirm(false); handleEndGame(); }} className="btn-primary flex-1 bg-red-500">End Game</button>
+              <button onClick={() => { setShowEndConfirm(false); handleEndGame(); }} className="flex-1 px-6 py-3 rounded-xl font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors">End Game</button>
             </div>
           </div>
         </div>

@@ -1,58 +1,18 @@
 import { v4 as uuidv4 } from 'uuid';
 import { gameDb, userDb } from '../db/index.js';
+import { getDistance } from '../utils/distance.js';
+import { isInNoTagTime, isInNoTagZone, canTagNow } from '../utils/gameLogic.js';
+
+// Game settings limits
+const MAX_NO_TAG_ZONES = 10;
+const MAX_NO_TAG_TIMES = 5;
+const MAX_GAME_NAME_LENGTH = 50;
+const MAX_ZONE_NAME_LENGTH = 30;
+const MAX_TIME_NAME_LENGTH = 30;
 
 // Generate 6-character game code
 const generateGameCode = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
-};
-
-// Haversine formula for distance calculation
-const getDistance = (lat1, lng1, lat2, lng2) => {
-  const R = 6371e3; // Earth's radius in meters
-  const φ1 = (lat1 * Math.PI) / 180;
-  const φ2 = (lat2 * Math.PI) / 180;
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-};
-
-// Check if current time is in a no-tag period
-const isInNoTagTime = (noTagTimes) => {
-  if (!noTagTimes || noTagTimes.length === 0) return false;
-
-  const now = new Date();
-  const currentDay = now.getDay();
-  const currentTime = now.getHours() * 60 + now.getMinutes();
-
-  return noTagTimes.some(rule => {
-    if (!rule.days.includes(currentDay)) return false;
-
-    const [startHour, startMin] = rule.startTime.split(':').map(Number);
-    const [endHour, endMin] = rule.endTime.split(':').map(Number);
-    const startMins = startHour * 60 + startMin;
-    const endMins = endHour * 60 + endMin;
-
-    // Handle overnight times
-    if (endMins < startMins) {
-      return currentTime >= startMins || currentTime <= endMins;
-    }
-
-    return currentTime >= startMins && currentTime <= endMins;
-  });
-};
-
-// Check if location is in a no-tag zone
-const isInNoTagZone = (location, noTagZones) => {
-  if (!location || !noTagZones || noTagZones.length === 0) return false;
-
-  return noTagZones.some(zone => {
-    const distance = getDistance(location.lat, location.lng, zone.lat, zone.lng);
-    return distance <= zone.radius;
-  });
 };
 
 export class GameManager {
@@ -94,6 +54,23 @@ export class GameManager {
   }
 
   createGame(host, settings) {
+    // Validate and sanitize settings
+    const noTagZones = Array.isArray(settings.noTagZones)
+      ? settings.noTagZones.slice(0, MAX_NO_TAG_ZONES).map(zone => ({
+          ...zone,
+          name: String(zone.name || '').slice(0, MAX_ZONE_NAME_LENGTH),
+        }))
+      : [];
+
+    const noTagTimes = Array.isArray(settings.noTagTimes)
+      ? settings.noTagTimes.slice(0, MAX_NO_TAG_TIMES).map(time => ({
+          ...time,
+          name: String(time.name || '').slice(0, MAX_TIME_NAME_LENGTH),
+        }))
+      : [];
+
+    const gameName = String(settings.gameName || `${host.name}'s Game`).slice(0, MAX_GAME_NAME_LENGTH);
+
     let gameCode;
     let attempts = 0;
     const maxAttempts = 100;
@@ -119,9 +96,9 @@ export class GameManager {
         tagRadius: settings.tagRadius || 20,
         duration: settings.duration || null,
         maxPlayers: settings.maxPlayers || 10,
-        gameName: settings.gameName || `${host.name}'s Game`,
-        noTagZones: settings.noTagZones || [],
-        noTagTimes: settings.noTagTimes || [],
+        gameName,
+        noTagZones,
+        noTagTimes,
       },
       players: [{
         id: host.id,
@@ -390,13 +367,14 @@ export class GameManager {
     const now = Date.now();
     const tagTime = tagger.becameItAt ? now - tagger.becameItAt : null;
 
+    // Privacy: Only store the distance at which the tag occurred, not exact coordinates
     const tag = {
       id: uuidv4(),
       taggerId,
       taggedId: targetId,
       timestamp: now,
       tagTime,
-      location: { ...target.location },
+      distance: Math.round(distance), // Only store distance in meters, not exact location
     };
 
     game.tags.push(tag);

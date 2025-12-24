@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { getDistance } from './utils/distance';
+// Re-export shared game logic utilities for backward compatibility
+export { isInNoTagTime, isInNoTagZone, canTagNow } from './utils/gameLogic';
 
 // Generate unique IDs
 const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -79,76 +82,6 @@ export const ACHIEVEMENTS = {
   },
 };
 
-// Helper to check if current time is in a no-tag period
-export const isInNoTagTime = (noTagTimes) => {
-  if (!noTagTimes || noTagTimes.length === 0) return false;
-  
-  const now = new Date();
-  const currentDay = now.getDay();
-  const currentTime = now.getHours() * 60 + now.getMinutes();
-  
-  return noTagTimes.some(rule => {
-    // Check if current day is included
-    if (!rule.days.includes(currentDay)) return false;
-    
-    // Parse times
-    const [startHour, startMin] = rule.startTime.split(':').map(Number);
-    const [endHour, endMin] = rule.endTime.split(':').map(Number);
-    const startMins = startHour * 60 + startMin;
-    const endMins = endHour * 60 + endMin;
-    
-    // Handle overnight times (e.g., 22:00 - 06:00)
-    if (endMins < startMins) {
-      return currentTime >= startMins || currentTime <= endMins;
-    }
-    
-    return currentTime >= startMins && currentTime <= endMins;
-  });
-};
-
-// Helper to check if location is in a no-tag zone
-export const isInNoTagZone = (location, noTagZones) => {
-  if (!location || !noTagZones || noTagZones.length === 0) return false;
-  
-  const getDistance = (lat1, lng1, lat2, lng2) => {
-    const R = 6371e3;
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lng2 - lng1) * Math.PI) / 180;
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-  
-  return noTagZones.some(zone => {
-    const distance = getDistance(location.lat, location.lng, zone.lat, zone.lng);
-    return distance <= zone.radius;
-  });
-};
-
-// Check if tagging is currently allowed
-export const canTagNow = (game, taggerLocation, targetLocation) => {
-  // Check no-tag times
-  if (isInNoTagTime(game?.settings?.noTagTimes)) {
-    return { allowed: false, reason: 'No-tag time period active' };
-  }
-  
-  // Check if tagger is in no-tag zone
-  if (isInNoTagZone(taggerLocation, game?.settings?.noTagZones)) {
-    return { allowed: false, reason: 'You are in a safe zone' };
-  }
-  
-  // Check if target is in no-tag zone
-  if (isInNoTagZone(targetLocation, game?.settings?.noTagZones)) {
-    return { allowed: false, reason: 'Target is in a safe zone' };
-  }
-  
-  return { allowed: true, reason: null };
-};
-
 // Initial state
 const initialState = {
   user: null,
@@ -177,6 +110,7 @@ const initialState = {
     showDistance: true,
   },
   pendingInvites: [],
+  toast: null, // { type: 'error' | 'success' | 'warning' | 'info', message: string, title?: string, duration?: number }
 };
 
 export const useStore = create(
@@ -216,6 +150,14 @@ export const useStore = create(
       },
       
       clearNewAchievement: () => set({ newAchievement: null }),
+
+      // Toast notifications
+      showToast: (toast) => set({ toast: typeof toast === 'string' ? { type: 'error', message: toast } : toast }),
+      showError: (message, title) => set({ toast: { type: 'error', message, title } }),
+      showSuccess: (message, title) => set({ toast: { type: 'success', message, title } }),
+      showWarning: (message, title) => set({ toast: { type: 'warning', message, title } }),
+      showInfo: (message, title) => set({ toast: { type: 'info', message, title } }),
+      clearToast: () => set({ toast: null }),
       
       // Game actions
       createGame: (settings) => {
@@ -804,6 +746,8 @@ export const useStore = create(
       name: 'tag-game-storage',
       partialize: (state) => ({
         user: state.user,
+        currentGame: state.currentGame, // Cache current game for offline recovery
+        currentGameCachedAt: state.currentGame ? Date.now() : null, // Track when game state was cached
         games: state.games,
         friends: state.friends,
         stats: state.stats,
@@ -814,72 +758,5 @@ export const useStore = create(
   )
 );
 
-// Sound effects hook
-export const useSounds = () => {
-  const { settings } = useStore();
-  
-  const playSound = (soundName) => {
-    if (!settings.sound) return;
-    
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      
-      switch (soundName) {
-        case 'tag':
-          oscillator.frequency.value = 800;
-          gainNode.gain.value = 0.3;
-          oscillator.start();
-          oscillator.stop(ctx.currentTime + 0.1);
-          break;
-        case 'tagged':
-          oscillator.frequency.value = 300;
-          gainNode.gain.value = 0.3;
-          oscillator.start();
-          oscillator.stop(ctx.currentTime + 0.3);
-          break;
-        case 'gameStart':
-          oscillator.frequency.value = 440;
-          gainNode.gain.value = 0.2;
-          oscillator.start();
-          oscillator.frequency.linearRampToValueAtTime(880, ctx.currentTime + 0.2);
-          oscillator.stop(ctx.currentTime + 0.3);
-          break;
-        case 'achievement':
-          oscillator.type = 'triangle';
-          oscillator.frequency.value = 523;
-          gainNode.gain.value = 0.2;
-          oscillator.start();
-          oscillator.frequency.setValueAtTime(659, ctx.currentTime + 0.1);
-          oscillator.frequency.setValueAtTime(784, ctx.currentTime + 0.2);
-          oscillator.stop(ctx.currentTime + 0.4);
-          break;
-        case 'error':
-          oscillator.frequency.value = 200;
-          gainNode.gain.value = 0.2;
-          oscillator.start();
-          oscillator.stop(ctx.currentTime + 0.2);
-          break;
-        default:
-          oscillator.frequency.value = 440;
-          gainNode.gain.value = 0.1;
-          oscillator.start();
-          oscillator.stop(ctx.currentTime + 0.1);
-      }
-    } catch (e) {
-      // Audio context not available
-    }
-  };
-  
-  const vibrate = (pattern = [100]) => {
-    if (settings.vibration && 'vibrate' in navigator) {
-      navigator.vibrate(pattern);
-    }
-  };
-  
-  return { playSound, vibrate };
-};
+// Re-export useSounds from uiStore for backward compatibility
+export { useSounds } from './stores/uiStore';

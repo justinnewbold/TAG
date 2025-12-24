@@ -75,23 +75,29 @@ function SignupModal({ onClose }) {
   };
   
   return (
-    <div className="fixed inset-0 z-50 bg-dark-900/95 backdrop-blur-sm flex items-center justify-center p-6">
+    <div
+      className="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="signup-title"
+    >
       <div className="w-full max-w-md animate-slide-up">
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-5xl font-display font-bold mb-2">
-            <span className="text-neon-cyan">TAG</span>
-            <span className="text-neon-purple">!</span>
+          <h1 id="signup-title" className="text-5xl font-display font-bold mb-2">
+            <span className="text-indigo-600">TAG</span>
+            <span className="text-purple-500">!</span>
           </h1>
-          <p className="text-white/60">Hunt your friends with GPS</p>
+          <p className="text-gray-500">Hunt your friends with GPS</p>
         </div>
-        
-        <form onSubmit={handleSubmit} className="card-glow p-6 space-y-6">
+
+        <form onSubmit={handleSubmit} className="card p-6 space-y-6" aria-label="Create account form">
           <div>
-            <label className="label">Your Name</label>
+            <label htmlFor="player-name" className="label">Your Name</label>
             <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
               <input
+                id="player-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -100,22 +106,26 @@ function SignupModal({ onClose }) {
                 maxLength={20}
                 autoFocus
                 required
+                aria-required="true"
               />
             </div>
           </div>
-          
+
           <div>
-            <label className="label">Choose Avatar</label>
-            <div className="flex flex-wrap gap-2">
-              {avatars.map((a) => (
+            <label id="avatar-label" className="label">Choose Avatar</label>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="avatar-label">
+              {avatars.map((a, index) => (
                 <button
                   key={a}
                   type="button"
                   onClick={() => setAvatar(a)}
+                  role="radio"
+                  aria-checked={avatar === a}
+                  aria-label={`Avatar option ${index + 1}`}
                   className={`text-2xl p-3 rounded-xl transition-all ${
                     avatar === a
-                      ? 'bg-neon-cyan/20 ring-2 ring-neon-cyan scale-110'
-                      : 'bg-white/5 hover:bg-white/10'
+                      ? 'bg-indigo-100 ring-2 ring-indigo-500 scale-110'
+                      : 'bg-gray-100 hover:bg-gray-200'
                   }`}
                 >
                   {a}
@@ -123,7 +133,7 @@ function SignupModal({ onClose }) {
               ))}
             </div>
           </div>
-          
+
           <div>
             <label className="label">Location Access</label>
             <button
@@ -132,10 +142,10 @@ function SignupModal({ onClose }) {
               disabled={locationStatus === 'granted'}
               className={`w-full p-4 rounded-xl flex items-center gap-3 transition-all ${
                 locationStatus === 'granted'
-                  ? 'bg-green-500/20 border border-green-500/50 text-green-400'
+                  ? 'bg-green-50 border border-green-300 text-green-600'
                   : locationStatus === 'denied'
-                  ? 'bg-red-500/20 border border-red-500/50 text-red-400'
-                  : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                  ? 'bg-red-50 border border-red-300 text-red-600'
+                  : 'bg-gray-50 border border-gray-200 text-gray-700 hover:bg-gray-100'
               }`}
             >
               {locationStatus === 'granted' ? (
@@ -150,13 +160,17 @@ function SignupModal({ onClose }) {
                 {locationStatus === 'denied' && 'Location Denied - Tap to retry'}
               </span>
             </button>
-            <p className="text-xs text-white/40 mt-2">
+            <p className="text-xs text-gray-400 mt-2">
               Required to play TAG! Your location is only shared during active games.
             </p>
           </div>
-          
+
           {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+            <div
+              className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm"
+              role="alert"
+              aria-live="polite"
+            >
               {error}
             </div>
           )}
@@ -176,8 +190,8 @@ function SignupModal({ onClose }) {
             )}
           </button>
         </form>
-        
-        <p className="text-center text-xs text-white/30 mt-6">
+
+        <p className="text-center text-xs text-gray-400 mt-6">
           By playing, you agree to share your location with other players during games.
         </p>
       </div>

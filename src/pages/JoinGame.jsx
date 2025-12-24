@@ -89,28 +89,28 @@ function JoinGame() {
       <div className="flex items-center gap-4 mb-8">
         <button
           onClick={() => navigate('/')}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
         >
-          <ArrowLeft className="w-6 h-6" />
+          <ArrowLeft className="w-6 h-6 text-gray-600" />
         </button>
         <div>
-          <h1 className="text-2xl font-display font-bold">Join Game</h1>
-          <p className="text-sm text-white/50">Enter the game code to join</p>
+          <h1 className="text-2xl font-display font-bold text-gray-900">Join Game</h1>
+          <p className="text-sm text-gray-500">Enter the game code to join</p>
         </div>
       </div>
-      
+
       {/* Join Form */}
-      <div className="card-glow p-6 mb-6">
+      <div className="card p-6 mb-6 shadow-lg">
         <div className="flex items-center gap-4 mb-6">
-          <div className="p-4 bg-neon-purple/10 rounded-2xl">
-            <Users className="w-8 h-8 text-neon-purple" />
+          <div className="p-4 bg-purple-100 rounded-2xl">
+            <Users className="w-8 h-8 text-purple-600" />
           </div>
           <div>
-            <h2 className="font-bold text-lg">Enter Game Code</h2>
-            <p className="text-sm text-white/50">Get the code from the game host</p>
+            <h2 className="font-bold text-lg text-gray-900">Enter Game Code</h2>
+            <p className="text-sm text-gray-500">Get the code from the game host</p>
           </div>
         </div>
-        
+
         <div className="space-y-4">
           <div>
             <label className="label">Game Code</label>
@@ -125,14 +125,14 @@ function JoinGame() {
               autoFocus
             />
           </div>
-          
+
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400">
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600">
               <AlertCircle className="w-5 h-5" />
               <span className="text-sm">{error}</span>
             </div>
           )}
-          
+
           <button
             onClick={() => handleJoin()}
             disabled={gameCode.length < 6 || isJoining}
@@ -152,21 +152,21 @@ function JoinGame() {
           </button>
         </div>
       </div>
-      
+
       {/* Tips */}
       <div className="card p-4">
-        <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-3">Tips</h3>
-        <ul className="space-y-2 text-sm text-white/60">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Tips</h3>
+        <ul className="space-y-2 text-sm text-gray-500">
           <li className="flex items-start gap-2">
-            <span className="text-neon-cyan">•</span>
+            <span className="text-indigo-500">•</span>
             Ask the game host for the 6-character code
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-neon-purple">•</span>
+            <span className="text-purple-500">•</span>
             You can also scan a QR code to join instantly
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-neon-orange">•</span>
+            <span className="text-orange-500">•</span>
             Make sure location services are enabled
           </li>
         </ul>

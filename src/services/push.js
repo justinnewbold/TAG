@@ -1,10 +1,12 @@
 import { api } from './api';
+import { logger } from './errorLogger';
 
 class PushNotificationService {
   constructor() {
     this.registration = null;
     this.subscription = null;
     this.supported = 'serviceWorker' in navigator && 'PushManager' in window;
+    this.log = logger.scope('Push');
   }
 
   // Check if push notifications are supported
@@ -39,7 +41,7 @@ class PushNotificationService {
   // Subscribe to push notifications
   async subscribe() {
     if (!this.supported) {
-      if (import.meta.env.DEV) console.log('Push notifications not supported');
+      this.log.debug('Push notifications not supported');
       return false;
     }
 
@@ -47,21 +49,21 @@ class PushNotificationService {
       // Request permission first
       const permission = await this.requestPermission();
       if (permission !== 'granted') {
-        if (import.meta.env.DEV) console.log('Push notification permission denied');
+        this.log.info('Push notification permission denied');
         return false;
       }
 
       // Get VAPID public key from server
       const { publicKey, enabled } = await api.request('/push/vapid-public-key');
       if (!enabled || !publicKey) {
-        if (import.meta.env.DEV) console.log('Push notifications not configured on server');
+        this.log.info('Push notifications not configured on server');
         return false;
       }
 
       // Get service worker registration
       const registration = await this.getRegistration();
       if (!registration) {
-        if (import.meta.env.DEV) console.log('Service worker not registered');
+        this.log.warn('Service worker not registered');
         return false;
       }
 
@@ -84,10 +86,10 @@ class PushNotificationService {
         body: JSON.stringify({ subscription: subscription.toJSON() }),
       });
 
-      if (import.meta.env.DEV) console.log('Push notifications subscribed');
+      this.log.info('Push notifications subscribed successfully');
       return true;
     } catch (error) {
-      if (import.meta.env.DEV) console.error('Failed to subscribe to push notifications:', error);
+      this.log.captureException(error, { action: 'subscribe' });
       return false;
     }
   }
@@ -109,10 +111,10 @@ class PushNotificationService {
       await api.request('/push/unsubscribe', { method: 'POST' });
 
       this.subscription = null;
-      if (import.meta.env.DEV) console.log('Push notifications unsubscribed');
+      this.log.info('Push notifications unsubscribed');
       return true;
     } catch (error) {
-      if (import.meta.env.DEV) console.error('Failed to unsubscribe from push notifications:', error);
+      this.log.captureException(error, { action: 'unsubscribe' });
       return false;
     }
   }
@@ -166,9 +168,40 @@ class PushNotificationService {
         return true;
       }
     } catch (error) {
-      if (import.meta.env.DEV) console.error('Failed to show notification:', error);
+      this.log.captureException(error, { action: 'showNotification', title });
     }
     return false;
+  }
+
+  // Convenience methods for game-specific notifications
+  async notifyTagged(taggerName) {
+    return this.showLocalNotification('You were tagged!', {
+      body: `${taggerName} tagged you. You're now IT!`,
+      tag: 'tag-event',
+      renotify: true,
+      vibrate: [200, 100, 200],
+    });
+  }
+
+  async notifyGameStarted(gameName) {
+    return this.showLocalNotification('Game Started!', {
+      body: `${gameName} has begun. Find your target!`,
+      tag: 'game-start',
+    });
+  }
+
+  async notifyPlayerJoined(playerName, gameName) {
+    return this.showLocalNotification('Player Joined', {
+      body: `${playerName} joined ${gameName}`,
+      tag: 'player-join',
+    });
+  }
+
+  async notifyGameEnded(winnerName) {
+    return this.showLocalNotification('Game Over!', {
+      body: `${winnerName} won the game!`,
+      tag: 'game-end',
+    });
   }
 }
 

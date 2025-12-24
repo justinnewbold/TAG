@@ -87,89 +87,89 @@ function GameEndSummary({ game, onClose }) {
   };
   
   return (
-    <div className="fixed inset-0 z-50 bg-dark-900/95 backdrop-blur-sm flex items-center justify-center p-6">
-      <div className="card-glow w-full max-w-md animate-slide-up">
+    <div className="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-6">
+      <div className="card w-full max-w-md animate-slide-up shadow-xl">
         {/* Header */}
-        <div className={`p-6 text-center ${
-          isWinner 
-            ? 'bg-gradient-to-b from-neon-cyan/20 to-transparent' 
-            : 'bg-gradient-to-b from-neon-orange/20 to-transparent'
+        <div className={`p-6 text-center rounded-t-2xl ${
+          isWinner
+            ? 'bg-gradient-to-b from-indigo-100 to-white'
+            : 'bg-gradient-to-b from-orange-100 to-white'
         }`}>
           <div className="text-6xl mb-4">
             {isWinner ? '🏆' : userPlayer?.isIt ? '💀' : '🎮'}
           </div>
-          <h2 className="text-3xl font-display font-bold mb-2">
+          <h2 className="text-3xl font-display font-bold mb-2 text-gray-900">
             {isWinner ? 'Victory!' : userPlayer?.isIt ? 'Tagged Out!' : 'Game Over!'}
           </h2>
-          <p className="text-white/60">
-            {isWinner 
-              ? 'You outlasted everyone!' 
+          <p className="text-gray-500">
+            {isWinner
+              ? 'You outlasted everyone!'
               : `${winner?.name || 'Someone'} won this round`}
           </p>
         </div>
-        
+
         {/* Your Stats */}
-        <div className="p-6 border-t border-white/10">
-          <h3 className="text-sm text-white/40 uppercase tracking-wider mb-4">Your Performance</h3>
+        <div className="p-6 border-t border-gray-100">
+          <h3 className="text-sm text-gray-400 uppercase tracking-wider mb-4">Your Performance</h3>
           <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-3 bg-white/5 rounded-xl">
-              <Target className="w-5 h-5 mx-auto text-neon-cyan mb-2" />
-              <p className="text-2xl font-bold">{userTags}</p>
-              <p className="text-xs text-white/40">Tags</p>
+            <div className="text-center p-3 bg-gray-50 rounded-xl">
+              <Target className="w-5 h-5 mx-auto text-indigo-500 mb-2" />
+              <p className="text-2xl font-bold text-gray-900">{userTags}</p>
+              <p className="text-xs text-gray-400">Tags</p>
             </div>
-            <div className="text-center p-3 bg-white/5 rounded-xl">
-              <Clock className="w-5 h-5 mx-auto text-neon-purple mb-2" />
-              <p className="text-2xl font-bold">{formatDuration(gameDuration)}</p>
-              <p className="text-xs text-white/40">Duration</p>
+            <div className="text-center p-3 bg-gray-50 rounded-xl">
+              <Clock className="w-5 h-5 mx-auto text-purple-500 mb-2" />
+              <p className="text-2xl font-bold text-gray-900">{formatDuration(gameDuration)}</p>
+              <p className="text-xs text-gray-400">Duration</p>
             </div>
-            <div className="text-center p-3 bg-white/5 rounded-xl">
-              <Users className="w-5 h-5 mx-auto text-neon-orange mb-2" />
-              <p className="text-2xl font-bold">{game?.players?.length || 0}</p>
-              <p className="text-xs text-white/40">Players</p>
+            <div className="text-center p-3 bg-gray-50 rounded-xl">
+              <Users className="w-5 h-5 mx-auto text-orange-500 mb-2" />
+              <p className="text-2xl font-bold text-gray-900">{game?.players?.length || 0}</p>
+              <p className="text-xs text-gray-400">Players</p>
             </div>
           </div>
         </div>
-        
+
         {/* Leaderboard */}
         <div className="px-6 pb-4">
-          <h3 className="text-sm text-white/40 uppercase tracking-wider mb-3">Final Standings</h3>
+          <h3 className="text-sm text-gray-400 uppercase tracking-wider mb-3">Final Standings</h3>
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {sortedPlayers.slice(0, 5).map((player, index) => (
               <div
                 key={player.id}
                 className={`flex items-center gap-3 p-2 rounded-lg ${
-                  player.id === user?.id ? 'bg-neon-cyan/10 border border-neon-cyan/30' : 'bg-white/5'
-                } ${player.id === game?.winnerId ? 'ring-2 ring-neon-cyan/50' : ''}`}
+                  player.id === user?.id ? 'bg-indigo-50 border border-indigo-200' : 'bg-gray-50'
+                } ${player.id === game?.winnerId ? 'ring-2 ring-indigo-300' : ''}`}
               >
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${
-                  index === 0 ? 'bg-amber-500 text-black' :
-                  index === 1 ? 'bg-gray-400 text-black' :
+                  index === 0 ? 'bg-amber-500 text-white' :
+                  index === 1 ? 'bg-gray-400 text-white' :
                   index === 2 ? 'bg-amber-700 text-white' :
-                  'bg-white/10'
+                  'bg-gray-200 text-gray-600'
                 }`}>
                   {index + 1}
                 </div>
                 <span className="text-xl">{player.avatar || '👤'}</span>
                 <div className="flex-1">
-                  <p className="font-medium text-sm">
+                  <p className="font-medium text-sm text-gray-900">
                     {player.name}
                     {player.id === user?.id && ' (You)'}
                   </p>
-                  <p className="text-xs text-white/40">
+                  <p className="text-xs text-gray-400">
                     {player.tagCount || 0} tags
                   </p>
                 </div>
                 {player.id === game?.winnerId && (
-                  <Trophy className="w-4 h-4 text-neon-cyan" />
+                  <Trophy className="w-4 h-4 text-indigo-500" />
                 )}
                 {player.isIt && (
-                  <span className="text-xs bg-neon-orange/20 text-neon-orange px-2 py-0.5 rounded">IT</span>
+                  <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded">IT</span>
                 )}
               </div>
             ))}
           </div>
         </div>
-        
+
         {/* Actions */}
         <div className="p-6 pt-2 grid grid-cols-2 gap-3">
           <button

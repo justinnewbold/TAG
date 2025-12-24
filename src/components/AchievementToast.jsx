@@ -34,35 +34,35 @@ function AchievementToast() {
   
   return (
     <div className="fixed top-4 left-4 right-4 z-50 animate-slide-down">
-      <div className="card-glow p-4 bg-gradient-to-r from-neon-cyan/20 to-neon-purple/20 border border-neon-cyan/50">
+      <div className="card p-4 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 shadow-lg">
         <div className="flex items-center gap-4">
           {/* Icon */}
-          <div className="text-4xl p-3 bg-white/10 rounded-xl animate-bounce">
+          <div className="text-4xl p-3 bg-white rounded-xl shadow-sm animate-bounce">
             {newAchievement.icon}
           </div>
-          
+
           {/* Content */}
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <Award className="w-4 h-4 text-neon-cyan" />
-              <span className="text-xs text-neon-cyan font-semibold uppercase tracking-wider">
+              <Award className="w-4 h-4 text-indigo-600" />
+              <span className="text-xs text-indigo-600 font-semibold uppercase tracking-wider">
                 Achievement Unlocked!
               </span>
             </div>
-            <h3 className="font-display font-bold text-lg mt-1">
+            <h3 className="font-display font-bold text-lg mt-1 text-gray-900">
               {newAchievement.name}
             </h3>
-            <p className="text-sm text-white/60">
+            <p className="text-sm text-gray-500">
               {newAchievement.description}
             </p>
           </div>
-          
+
           {/* Close */}
           <button
             onClick={clearNewAchievement}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <X className="w-5 h-5 text-white/50" />
+            <X className="w-5 h-5 text-gray-400" />
           </button>
         </div>
       </div>

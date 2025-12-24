@@ -1,17 +1,22 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Import Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap');
-
 :root {
-  --neon-cyan: #00f5ff;
-  --neon-purple: #a855f7;
-  --neon-orange: #f97316;
-  --dark-900: #0f0f1a;
-  --dark-800: #1a1a2e;
-  --dark-700: #252542;
+  --primary: #6366f1;
+  --primary-light: #818cf8;
+  --accent: #f97316;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --light-50: #fafafa;
+  --light-100: #f5f5f5;
+  --light-200: #e5e5e5;
+  --light-300: #d4d4d4;
+  --gray-500: #737373;
+  --gray-700: #404040;
+  --gray-900: #171717;
 }
 
 * {
@@ -26,8 +31,8 @@ html {
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: var(--dark-900);
-  color: white;
+  background-color: var(--light-50);
+  color: var(--gray-900);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -39,122 +44,125 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--dark-800);
+  background: var(--light-100);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--dark-700);
+  background: var(--light-300);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--neon-cyan);
+  background: var(--primary);
 }
 
-/* Leaflet overrides */
+/* Leaflet overrides for light theme */
 .leaflet-container {
-  background: var(--dark-900) !important;
+  background: var(--light-100) !important;
 }
 
 .leaflet-popup-content-wrapper {
-  background: var(--dark-800) !important;
-  color: white !important;
+  background: white !important;
+  color: var(--gray-900) !important;
   border-radius: 12px !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
 }
 
 .leaflet-popup-tip {
-  background: var(--dark-800) !important;
+  background: white !important;
 }
 
 .leaflet-popup-close-button {
-  color: white !important;
+  color: var(--gray-500) !important;
 }
 
 /* Custom Classes */
 @layer components {
   .font-display {
-    font-family: 'Orbitron', sans-serif;
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
   }
-  
+
   .card {
-    @apply bg-dark-800/80 backdrop-blur-sm rounded-2xl border border-white/5;
+    @apply bg-white rounded-2xl border border-gray-200 shadow-sm;
   }
-  
+
   .card-glow {
-    @apply bg-dark-800/80 backdrop-blur-sm rounded-2xl border border-white/10;
-    box-shadow: 0 0 30px rgba(0, 245, 255, 0.05);
+    @apply bg-white rounded-2xl border border-gray-200;
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.1);
   }
-  
+
   .btn-primary {
-    @apply px-6 py-3 rounded-xl font-semibold transition-all;
-    @apply bg-gradient-to-r from-neon-cyan to-neon-purple;
+    @apply px-6 py-3 rounded-xl font-semibold transition-all text-white;
+    @apply bg-gradient-to-r from-indigo-500 to-purple-500;
     @apply hover:opacity-90 hover:scale-[1.02] active:scale-[0.98];
+    @apply shadow-md shadow-indigo-500/20;
   }
-  
+
   .btn-secondary {
     @apply px-6 py-3 rounded-xl font-semibold transition-all;
-    @apply bg-white/10 border border-white/20;
-    @apply hover:bg-white/20 hover:border-white/30;
+    @apply bg-gray-100 border border-gray-200 text-gray-700;
+    @apply hover:bg-gray-200 hover:border-gray-300;
   }
-  
+
   .input-field {
     @apply w-full px-4 py-3 rounded-xl;
-    @apply bg-white/5 border border-white/10;
-    @apply focus:outline-none focus:border-neon-cyan/50 focus:bg-white/10;
-    @apply placeholder:text-white/30 transition-all;
+    @apply bg-gray-50 border border-gray-200 text-gray-900;
+    @apply focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100;
+    @apply placeholder:text-gray-400 transition-all;
   }
-  
+
   .label {
-    @apply block text-sm text-white/60 mb-2;
+    @apply block text-sm text-gray-600 mb-2 font-medium;
   }
-  
+
+  /* Legacy color classes mapped to new theme */
   .text-neon-cyan {
-    color: var(--neon-cyan);
+    color: var(--primary);
   }
-  
+
   .text-neon-purple {
-    color: var(--neon-purple);
+    color: #a855f7;
   }
-  
+
   .text-neon-orange {
-    color: var(--neon-orange);
+    color: var(--accent);
   }
-  
+
   .bg-neon-cyan {
-    background-color: var(--neon-cyan);
+    background-color: var(--primary);
   }
-  
+
   .bg-neon-purple {
-    background-color: var(--neon-purple);
+    background-color: #a855f7;
   }
-  
+
   .bg-neon-orange {
-    background-color: var(--neon-orange);
+    background-color: var(--accent);
   }
-  
+
   .bg-dark-900 {
-    background-color: var(--dark-900);
+    background-color: var(--light-50);
   }
-  
+
   .bg-dark-800 {
-    background-color: var(--dark-800);
+    background-color: white;
   }
-  
+
   .bg-dark-700 {
-    background-color: var(--dark-700);
+    background-color: var(--light-100);
   }
-  
+
   .border-neon-cyan {
-    border-color: var(--neon-cyan);
+    border-color: var(--primary);
   }
-  
+
   .border-neon-purple {
-    border-color: var(--neon-purple);
+    border-color: #a855f7;
   }
-  
+
   .border-neon-orange {
-    border-color: var(--neon-orange);
+    border-color: var(--accent);
   }
 }
 
@@ -188,10 +196,10 @@ body {
 
 @keyframes pulse-glow {
   0%, 100% {
-    box-shadow: 0 0 20px var(--neon-cyan);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
   }
   50% {
-    box-shadow: 0 0 40px var(--neon-cyan), 0 0 60px var(--neon-purple);
+    box-shadow: 0 0 40px rgba(99, 102, 241, 0.4);
   }
 }
 
@@ -242,21 +250,21 @@ body {
 /* PWA install prompt styling */
 .pwa-install-prompt {
   @apply fixed bottom-20 left-4 right-4 p-4 rounded-2xl;
-  @apply bg-gradient-to-r from-neon-cyan/20 to-neon-purple/20;
-  @apply border border-neon-cyan/30 backdrop-blur-lg;
+  @apply bg-gradient-to-r from-indigo-50 to-purple-50;
+  @apply border border-indigo-200 shadow-lg;
   @apply animate-slide-up z-50;
 }
 
 /* Loading states */
 .skeleton {
-  @apply animate-pulse bg-white/10 rounded;
+  @apply animate-pulse bg-gray-200 rounded;
 }
 
 /* Focus visible for accessibility */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  @apply outline-none ring-2 ring-neon-cyan ring-offset-2 ring-offset-dark-900;
+  @apply outline-none ring-2 ring-indigo-400 ring-offset-2 ring-offset-white;
 }
 
 /* Custom marker animation */

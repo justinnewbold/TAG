@@ -22,6 +22,8 @@ import NotFound from './pages/NotFound';
 import Navigation from './components/Navigation';
 import SignupModal from './components/SignupModal';
 import AchievementToast from './components/AchievementToast';
+import ConnectionStatus from './components/ConnectionStatus';
+import ErrorToast from './components/ErrorToast';
 import { GameErrorBoundary } from './components/ErrorBoundary';
 
 function App() {
@@ -78,31 +80,34 @@ function App() {
     }
   }, [user, isInitializing, currentGame?.id]);
 
-  // Request location permission and send updates
+  // Request location permission and send updates - only when in active game to save battery
   useEffect(() => {
-    if (user && 'geolocation' in navigator) {
-      const watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          const location = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-          };
-
-          // Update store
-          useStore.getState().updateUserLocation(location);
-
-          // Send to server via socket if in active game and connected
-          if (currentGame?.status === 'active' && socketService.isConnected()) {
-            socketService.updateLocation(location);
-          }
-        },
-        (error) => { if (import.meta.env.DEV) console.log('Location error:', error); },
-        { enableHighAccuracy: true, maximumAge: 5000 }
-      );
-
-      return () => navigator.geolocation.clearWatch(watchId);
+    // Only track location during active gameplay
+    if (!user || !currentGame?.status || currentGame.status !== 'active' || !('geolocation' in navigator)) {
+      return;
     }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const location = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        };
+
+        // Update store
+        useStore.getState().updateUserLocation(location);
+
+        // Send to server via socket if connected
+        if (socketService.isConnected()) {
+          socketService.updateLocation(location);
+        }
+      },
+      (error) => { if (import.meta.env.DEV) console.log('Location error:', error); },
+      { enableHighAccuracy: true, maximumAge: 5000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
   }, [user, currentGame?.status]);
 
   // Register service worker for PWA
@@ -127,25 +132,29 @@ function App() {
   // Show loading while initializing
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-dark-900 text-white flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 text-gray-900 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-4xl font-display font-bold mb-4">
-            <span className="text-neon-cyan">TAG</span>
-            <span className="text-neon-purple">!</span>
+            <span className="text-indigo-600">TAG</span>
+            <span className="text-purple-500">!</span>
           </h1>
-          <div className="w-8 h-8 border-2 border-neon-cyan border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
         </div>
       </div>
     );
   }
   
   return (
-    <div className="min-h-screen bg-dark-900 text-white">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       {/* Background gradient */}
-      <div className="fixed inset-0 bg-gradient-to-br from-neon-purple/5 via-transparent to-neon-cyan/5 pointer-events-none" />
-      
-      {/* Achievement Toast */}
+      <div className="fixed inset-0 bg-gradient-to-br from-indigo-50 via-white to-purple-50 pointer-events-none" />
+
+      {/* Connection Status Banner */}
+      {user && <ConnectionStatus />}
+
+      {/* Toasts */}
       <AchievementToast />
+      <ErrorToast />
       
       {/* Main content */}
       <main className="relative pb-24">
