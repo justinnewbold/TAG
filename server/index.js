@@ -210,11 +210,24 @@ app.use((err, req, res, next) => {
 // Periodic cleanup of old games (every hour)
 setInterval(async () => {
   try {
+    logger.info('Running scheduled game cleanup...');
     await gameManager.cleanupOldGames();
+    logger.info('Game cleanup completed successfully');
   } catch (error) {
-    console.error('Game cleanup error:', error);
+    logger.error('Game cleanup error', { error: error.message, stack: error.stack });
   }
 }, 60 * 60 * 1000);
+
+// Run cleanup on startup (after a short delay to let everything initialize)
+setTimeout(async () => {
+  try {
+    logger.info('Running initial game cleanup...');
+    await gameManager.cleanupOldGames();
+    logger.info('Initial game cleanup completed');
+  } catch (error) {
+    logger.error('Initial cleanup error', { error: error.message });
+  }
+}, 5000);
 
 // Graceful shutdown
 const shutdown = async () => {

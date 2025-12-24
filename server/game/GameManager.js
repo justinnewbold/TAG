@@ -1,35 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { gameDb, userDb } from '../db/index.js';
+import { getDistance, generateGameCode } from '../../shared/utils.js';
+import { GAME_MODES, GAME_LIMITS } from '../../shared/constants.js';
 
-// Game mode configurations (must match client-side GAME_MODES)
-export const GAME_MODES = {
-  classic: { id: 'classic', name: 'Classic Tag', minPlayers: 2 },
-  freezeTag: { id: 'freezeTag', name: 'Freeze Tag', minPlayers: 3 },
-  infection: { id: 'infection', name: 'Infection', minPlayers: 3 },
-  teamTag: { id: 'teamTag', name: 'Team Tag', minPlayers: 4 },
-  manhunt: { id: 'manhunt', name: 'Manhunt', minPlayers: 3 },
-  hotPotato: { id: 'hotPotato', name: 'Hot Potato', minPlayers: 3, defaultTimer: 45000 },
-  hideAndSeek: { id: 'hideAndSeek', name: 'Hide & Seek', minPlayers: 3, defaultHideTime: 120000 },
-};
-
-// Generate 6-character game code
-const generateGameCode = () => {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-};
-
-// Haversine formula for distance calculation
-const getDistance = (lat1, lng1, lat2, lng2) => {
-  const R = 6371e3; // Earth's radius in meters
-  const φ1 = (lat1 * Math.PI) / 180;
-  const φ2 = (lat2 * Math.PI) / 180;
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-};
+// Re-export for backward compatibility
+export { GAME_MODES };
 
 // Check if current time is in a no-tag period
 const isInNoTagTime = (noTagTimes) => {
@@ -554,32 +529,9 @@ export class GameManager {
     return { success: true, game, rejectedPlayer: pendingPlayer };
   }
 
-  // Get public games (for game browser)
+  // Get public games (for game browser) - delegates to unified method
   async getPublicGames(limit = 20) {
-    // Get games that are public, waiting, and have room
-    const allGames = [];
-    
-    // Check cached games first
-    for (const game of this.activeGames.values()) {
-      if (game.settings.isPublic && game.status === 'waiting' && 
-          game.players.length < game.settings.maxPlayers) {
-        allGames.push({
-          id: game.id,
-          code: game.code,
-          gameName: game.settings.gameName,
-          hostName: game.hostName,
-          gameMode: game.gameMode,
-          playerCount: game.players.length,
-          maxPlayers: game.settings.maxPlayers,
-          tagRadius: game.settings.tagRadius,
-          scheduledStartTime: game.settings.scheduledStartTime,
-          requireApproval: game.settings.requireApproval,
-          createdAt: game.createdAt,
-        });
-      }
-    }
-
-    return allGames.slice(0, limit);
+    return this.getPublicGamesForBrowser(limit);
   }
 
   async startGame(gameId, hostId) {
@@ -1112,7 +1064,7 @@ export class GameManager {
       return { success: false, error: 'Only the host can end the game' };
     }
 
-    if (game.status !== 'active') {
+    if (game.status !== 'active' && game.status !== 'hiding') {
       return { success: false, error: 'Game is not active' };
     }
 
@@ -1219,29 +1171,31 @@ export class GameManager {
     await gameDb.cleanupOldGames(maxAgeMs);
   }
 
-  // Get public games for browsing
-  async getPublicGames() {
+  // Get public games for browsing (unified method)
+  async getPublicGamesForBrowser(limit = 20) {
     const publicGames = [];
-    
+
     // Check cached active games first
     for (const game of this.activeGames.values()) {
-      if (game.isPublic && (game.status === 'waiting' || game.status === 'active')) {
+      if (game.settings?.isPublic && (game.status === 'waiting' || game.status === 'active')) {
         publicGames.push({
           id: game.id,
           code: game.code,
           name: game.settings?.gameName || 'Unnamed Game',
           host_name: game.hostName,
-          mode: game.mode,
+          gameMode: game.gameMode,
           status: game.status,
           player_count: game.players?.length || 0,
           max_players: game.settings?.maxPlayers || 10,
           created_at: game.createdAt,
           allow_spectators: game.settings?.allowSpectators ?? true,
-          location: game.location
+          tagRadius: game.settings?.tagRadius,
+          requireApproval: game.settings?.requireApproval,
+          scheduledStartTime: game.settings?.scheduledStartTime,
         });
       }
     }
-    
+
     // Also check database for any we might have missed
     const dbGames = await gameDb.getPublicGames?.() || [];
     for (const dbGame of dbGames) {
@@ -1249,8 +1203,8 @@ export class GameManager {
         publicGames.push(dbGame);
       }
     }
-    
-    return publicGames;
+
+    return publicGames.slice(0, limit);
   }
 
   // Spectate a game

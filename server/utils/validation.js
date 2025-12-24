@@ -1,4 +1,5 @@
 import validator from 'validator';
+import { GAME_LIMITS } from '../../shared/constants.js';
 
 // Sanitize and validate user input
 export const sanitize = {
@@ -96,11 +97,11 @@ export const validate = {
       }
     }
 
-    // GPS interval: 5 minutes to 24 hours
+    // GPS interval: 5 seconds to 24 hours (using shared constants)
     if (settings.gpsInterval !== undefined) {
       const interval = parseInt(settings.gpsInterval);
-      if (isNaN(interval) || interval < 5 * 60 * 1000 || interval > 24 * 60 * 60 * 1000) {
-        errors.push('GPS interval must be between 5 minutes and 24 hours');
+      if (isNaN(interval) || interval < GAME_LIMITS.GPS_INTERVAL_MIN || interval > GAME_LIMITS.GPS_INTERVAL_MAX) {
+        errors.push('GPS interval must be between 5 seconds and 24 hours');
       } else {
         validated.gpsInterval = interval;
       }

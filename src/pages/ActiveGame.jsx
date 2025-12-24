@@ -54,7 +54,8 @@ function MapController({ center }) {
 
 function ActiveGame() {
   const navigate = useNavigate();
-  const { currentGame, user, tagPlayer, endGame, updatePlayerLocation, syncGameState, games, powerups, pauseGame, resumeGame, usePowerup, addChatMessage, chatMessages, spectating, setSpectating } = useStore();
+  const { currentGame, user, tagPlayer, endGame, updatePlayerLocation, syncGameState, games, powerupInventory, pauseGame, resumeGame, usePowerup } = useStore();
+  const [spectating, setSpectating] = useState(false);
   const { playSound, vibrate } = useSounds();
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showEndSummary, setShowEndSummary] = useState(false);
@@ -435,7 +436,7 @@ function ActiveGame() {
   const quickActions = [
     { id: 'chat', icon: MessageCircle, label: 'Chat', onAction: () => setShowChat(true) },
     { id: 'safety', icon: Shield, label: 'Safety', onAction: () => setShowSafety(true) },
-    ...(powerups?.length > 0 ? [{ id: 'powerups', icon: Gift, label: 'Powerups', onAction: () => setShowPowerups(true) }] : []),
+    ...(powerupInventory?.length > 0 ? [{ id: 'powerups', icon: Gift, label: 'Powerups', onAction: () => setShowPowerups(true) }] : []),
     { id: 'end', icon: Flag, label: 'End Game', onAction: () => setShowEndConfirm(true) },
   ];
   
@@ -902,11 +903,11 @@ function ActiveGame() {
       )}
       
       {/* Powerups Panel */}
-      {showPowerups && powerups?.length > 0 && (
+      {showPowerups && powerupInventory?.length > 0 && (
         <Suspense fallback={<div className="fixed bottom-20 right-4 z-50 card p-4">Loading powerups...</div>}>
           <div className="fixed bottom-20 right-4 z-50">
-            <PowerupInventory 
-              powerups={powerups}
+            <PowerupInventory
+              powerups={powerupInventory}
               onUsePowerup={(id) => {
                 usePowerup(id);
                 playSound('powerup');

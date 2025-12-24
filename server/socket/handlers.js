@@ -1,5 +1,104 @@
 import { validate } from '../utils/validation.js';
 import { pushService } from '../services/push.js';
+import { getDistance, calculateSpeed, isValidSpeed } from '../../shared/utils.js';
+import { ANTI_CHEAT, SOCKET_RATE_LIMITS } from '../../shared/constants.js';
+
+// Rate limiter for socket events
+class RateLimiter {
+  constructor() {
+    this.events = new Map(); // userId -> { eventType -> { count, resetTime } }
+  }
+
+  check(userId, eventType, limit) {
+    const now = Date.now();
+    const userEvents = this.events.get(userId) || new Map();
+    const eventData = userEvents.get(eventType) || { count: 0, resetTime: now + 60000 };
+
+    // Reset if minute has passed
+    if (now > eventData.resetTime) {
+      eventData.count = 0;
+      eventData.resetTime = now + 60000;
+    }
+
+    eventData.count++;
+    userEvents.set(eventType, eventData);
+    this.events.set(userId, userEvents);
+
+    return eventData.count <= limit;
+  }
+
+  // Cleanup old entries periodically
+  cleanup() {
+    const now = Date.now();
+    for (const [userId, userEvents] of this.events) {
+      for (const [eventType, data] of userEvents) {
+        if (now > data.resetTime + 60000) {
+          userEvents.delete(eventType);
+        }
+      }
+      if (userEvents.size === 0) {
+        this.events.delete(userId);
+      }
+    }
+  }
+}
+
+// Anti-cheat: track player location history
+class LocationTracker {
+  constructor() {
+    this.history = new Map(); // playerId -> { lat, lng, timestamp }
+    this.violations = new Map(); // playerId -> { count, lastViolation }
+  }
+
+  update(playerId, location) {
+    const now = Date.now();
+    const previous = this.history.get(playerId);
+    let cheatCheck = { valid: true };
+
+    if (previous && previous.timestamp) {
+      const speed = calculateSpeed(
+        { ...previous, timestamp: previous.timestamp },
+        { ...location, timestamp: now }
+      );
+
+      cheatCheck = isValidSpeed(speed);
+
+      if (!cheatCheck.valid) {
+        // Track violations
+        const violations = this.violations.get(playerId) || { count: 0, lastViolation: 0 };
+        violations.count++;
+        violations.lastViolation = now;
+        this.violations.set(playerId, violations);
+
+        console.warn(`[AntiCheat] Player ${playerId}: ${cheatCheck.reason} (speed: ${speed.toFixed(1)} m/s, violations: ${violations.count})`);
+      }
+    }
+
+    // Store current location for next check
+    this.history.set(playerId, { ...location, timestamp: now });
+
+    return cheatCheck;
+  }
+
+  getViolationCount(playerId) {
+    return this.violations.get(playerId)?.count || 0;
+  }
+
+  // Check if player should be flagged for cheating
+  shouldFlag(playerId) {
+    const violations = this.violations.get(playerId);
+    if (!violations) return false;
+    // Flag if 5+ violations in last 5 minutes
+    return violations.count >= 5 && (Date.now() - violations.lastViolation < 300000);
+  }
+}
+
+// Global instances
+const rateLimiter = new RateLimiter();
+const locationTracker = new LocationTracker();
+
+// Cleanup rate limiter every 5 minutes
+setInterval(() => rateLimiter.cleanup(), 300000);
 
 export function setupSocketHandlers(io, socket, gameManager) {
   const user = socket.user;
@@ -33,6 +132,12 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
   // Update player location (synchronous for performance - uses cache only)
   socket.on('location:update', (location) => {
+    // Rate limiting check
+    if (!rateLimiter.check(user.id, 'location:update', SOCKET_RATE_LIMITS.LOCATION_UPDATE)) {
+      socket.emit('error:rateLimit', { event: 'location:update', message: 'Too many location updates' });
+      return;
+    }
+
     // Validate location data
     const locationValidation = validate.location(location);
     if (!locationValidation.valid) {
@@ -40,6 +145,25 @@ export function setupSocketHandlers(io, socket, gameManager) {
     }
 
     const validLocation = { lat: locationValidation.lat, lng: locationValidation.lng };
+
+    // Anti-cheat: check for teleportation/speed hacks
+    const cheatCheck = locationTracker.update(user.id, validLocation);
+    if (!cheatCheck.valid && cheatCheck.severity === 'high') {
+      // Teleport detected - reject this location update
+      socket.emit('error:anticheat', {
+        reason: cheatCheck.reason,
+        message: 'Invalid location update detected',
+      });
+      return;
+    }
+
+    // Flag player if they have too many violations
+    if (locationTracker.shouldFlag(user.id)) {
+      socket.emit('warning:anticheat', {
+        message: 'Multiple suspicious location updates detected. Please ensure GPS is working properly.',
+      });
+    }
+
     const game = gameManager.updatePlayerLocation(user.id, validLocation);
 
     if (game && (game.status === 'active' || game.status === 'hiding')) {
@@ -148,6 +272,12 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
   // Tag attempt via WebSocket (alternative to REST)
   socket.on('tag:attempt', async ({ targetId }) => {
+    // Rate limiting check
+    if (!rateLimiter.check(user.id, 'tag:attempt', SOCKET_RATE_LIMITS.TAG_ATTEMPT)) {
+      socket.emit('tag:result', { success: false, error: 'Too many tag attempts. Please wait.' });
+      return;
+    }
+
     // Validate targetId
     const targetValidation = validate.uuid(targetId);
     if (!targetValidation.valid) {
@@ -336,18 +466,4 @@ export function setupSocketHandlers(io, socket, gameManager) {
       });
     }
   });
-}
-
-// Haversine formula (duplicated for socket handlers - could be moved to shared utils)
-function getDistance(lat1, lng1, lat2, lng2) {
-  const R = 6371e3;
-  const φ1 = (lat1 * Math.PI) / 180;
-  const φ2 = (lat2 * Math.PI) / 180;
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
 }
