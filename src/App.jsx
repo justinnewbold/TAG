@@ -28,6 +28,11 @@ const PlayerProfile = lazy(() => import('./pages/PlayerProfile'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const CustomGameModeBuilder = lazy(() => import('./pages/CustomGameModeBuilder'));
 
+// Legal and marketing pages
+const Landing = lazy(() => import('./pages/Landing'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+
 // Components
 import Navigation from './components/Navigation';
 import SignupModal from './components/SignupModal';
@@ -206,6 +211,9 @@ function App() {
             <Route path="/profile/:userId" element={<GameErrorBoundary><PlayerProfile /></GameErrorBoundary>} />
             <Route path="/admin" element={<GameErrorBoundary><AdminDashboard /></GameErrorBoundary>} />
             <Route path="/custom-mode" element={<GameErrorBoundary><CustomGameModeBuilder /></GameErrorBoundary>} />
+            <Route path="/landing" element={<Landing />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
