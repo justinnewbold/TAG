@@ -14,6 +14,7 @@ import { adminRouter } from './routes/admin.js';
 import { weatherRouter } from './routes/weather.js';
 import { powerupRouter } from './routes/powerups.js';
 import { usersRouter } from './routes/users.js';
+import healthRouter from './routes/health.js';
 import { GameManager } from './game/GameManager.js';
 import { setupSocketHandlers } from './socket/handlers.js';
 import { logger } from './utils/logger.js';
@@ -130,6 +131,8 @@ app.get('/health', (req, res) => {
 });
 
 // Routes with specific rate limits
+// Health check routes (no auth required)
+app.use('/api', healthRouter);
 app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/games', authenticateToken, gameLimiter, gameRouter);
 app.use('/api/push', authenticateToken, pushRouter);
