@@ -1,64 +1,181 @@
-import React from 'react';
-import { Wifi, WifiOff, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Wifi, WifiOff, RefreshCw, AlertCircle } from 'lucide-react';
+import { socketService } from '../services/socket';
 import { useStore } from '../store';
 
 /**
- * ConnectionStatus - Displays the current socket connection status
- * Shows a banner when disconnected or reconnecting
+ * Real-time connection status indicator
+ * Shows WebSocket connection state with reconnection controls
  */
-function ConnectionStatus() {
-  const { connectionStatus, lastConnectionError } = useStore();
+export default function ConnectionStatus() {
+  const { connectionStatus, connectionError } = useStore();
+  const [ping, setPing] = useState(null);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
-  // Don't show anything if connected
-  if (connectionStatus === 'connected') {
-    return null;
-  }
+  // Measure ping periodically when connected
+  useEffect(() => {
+    if (connectionStatus !== 'connected') {
+      setPing(null);
+      return;
+    }
 
-  const statusConfig = {
-    disconnected: {
-      icon: WifiOff,
-      text: 'Disconnected',
-      bgColor: 'bg-red-500/90',
-      textColor: 'text-white',
-    },
-    reconnecting: {
-      icon: Loader2,
-      text: 'Reconnecting...',
-      bgColor: 'bg-yellow-500/90',
-      textColor: 'text-dark-950',
-      animate: true,
-    },
-    connecting: {
-      icon: Loader2,
-      text: 'Connecting...',
-      bgColor: 'bg-blue-500/90',
-      textColor: 'text-white',
-      animate: true,
-    },
-    error: {
-      icon: WifiOff,
-      text: 'Connection Error',
-      bgColor: 'bg-red-600/90',
-      textColor: 'text-white',
-    },
+    const measurePing = async () => {
+      const latency = await socketService.ping();
+      if (latency >= 0) {
+        setPing(latency);
+      }
+    };
+
+    measurePing();
+    const interval = setInterval(measurePing, 10000);
+    return () => clearInterval(interval);
+  }, [connectionStatus]);
+
+  const handleReconnect = async () => {
+    setIsReconnecting(true);
+    socketService.disconnect();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    socketService.connect();
+    setIsReconnecting(false);
   };
 
-  const config = statusConfig[connectionStatus] || statusConfig.disconnected;
+  const getStatusConfig = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return {
+          icon: Wifi,
+          color: 'text-green-400',
+          bgColor: 'bg-green-500/10',
+          borderColor: 'border-green-500/30',
+          label: 'Connected',
+          showPing: true,
+        };
+      case 'connecting':
+      case 'reconnecting':
+        return {
+          icon: RefreshCw,
+          color: 'text-yellow-400',
+          bgColor: 'bg-yellow-500/10',
+          borderColor: 'border-yellow-500/30',
+          label: connectionStatus === 'reconnecting' ? 'Reconnecting...' : 'Connecting...',
+          animate: true,
+        };
+      case 'error':
+        return {
+          icon: AlertCircle,
+          color: 'text-red-400',
+          bgColor: 'bg-red-500/10',
+          borderColor: 'border-red-500/30',
+          label: 'Error',
+          showReconnect: true,
+        };
+      default:
+        return {
+          icon: WifiOff,
+          color: 'text-gray-400',
+          bgColor: 'bg-dark-700',
+          borderColor: 'border-dark-600',
+          label: 'Offline',
+          showReconnect: true,
+        };
+    }
+  };
+
+  const config = getStatusConfig();
   const Icon = config.icon;
 
-  return (
-    <div className={`fixed top-0 left-0 right-0 z-50 ${config.bgColor} ${config.textColor} py-2 px-4`}>
-      <div className="flex items-center justify-center gap-2 text-sm font-medium">
-        <Icon className={`w-4 h-4 ${config.animate ? 'animate-spin' : ''}`} />
-        <span>{config.text}</span>
-        {lastConnectionError && (
-          <span className="opacity-75 text-xs">
-            ({typeof lastConnectionError === 'string' ? lastConnectionError : 'Unknown error'})
+  const getPingColor = () => {
+    if (!ping) return 'text-gray-500';
+    if (ping < 100) return 'text-green-400';
+    if (ping < 300) return 'text-yellow-400';
+    return 'text-red-400';
+  };
+
+  // Minimal indicator for top bar
+  if (!showDetails) {
+    return (
+      <button
+        onClick={() => setShowDetails(true)}
+        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg ${config.bgColor} ${config.borderColor} border transition-colors`}
+      >
+        <Icon className={`w-4 h-4 ${config.color} ${config.animate ? 'animate-spin' : ''}`} />
+        {config.showPing && ping !== null && (
+          <span className={`text-xs font-medium ${getPingColor()}`}>
+            {ping}ms
           </span>
         )}
+      </button>
+    );
+  }
+
+  // Expanded details panel
+  return (
+    <div className="fixed bottom-20 left-4 right-4 z-50 max-w-sm mx-auto">
+      <div className={`${config.bgColor} ${config.borderColor} border rounded-xl p-4 backdrop-blur-sm`}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Icon className={`w-5 h-5 ${config.color} ${config.animate ? 'animate-spin' : ''}`} />
+            <span className={`font-medium ${config.color}`}>{config.label}</span>
+          </div>
+          <button
+            onClick={() => setShowDetails(false)}
+            className="text-gray-500 hover:text-white text-sm"
+          >
+            Close
+          </button>
+        </div>
+
+        {connectionError && (
+          <p className="text-sm text-gray-400 mb-3">{connectionError}</p>
+        )}
+
+        <div className="flex items-center gap-4 text-sm">
+          {config.showPing && ping !== null && (
+            <div className="flex items-center gap-1">
+              <span className="text-gray-500">Ping:</span>
+              <span className={getPingColor()}>{ping}ms</span>
+            </div>
+          )}
+
+          {config.showReconnect && (
+            <button
+              onClick={handleReconnect}
+              disabled={isReconnecting}
+              className="flex items-center gap-1 px-3 py-1.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white rounded-lg text-sm transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${isReconnecting ? 'animate-spin' : ''}`} />
+              Reconnect
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-export default ConnectionStatus;
+/**
+ * Inline connection badge for headers
+ */
+export function ConnectionBadge() {
+  const { connectionStatus } = useStore();
+
+  const configs = {
+    connected: { color: 'bg-green-500', pulse: false },
+    connecting: { color: 'bg-yellow-500', pulse: true },
+    reconnecting: { color: 'bg-yellow-500', pulse: true },
+    error: { color: 'bg-red-500', pulse: false },
+    disconnected: { color: 'bg-gray-500', pulse: false },
+  };
+
+  const config = configs[connectionStatus] || configs.disconnected;
+
+  return (
+    <div className="relative">
+      <div className={`w-2.5 h-2.5 rounded-full ${config.color}`} />
+      {config.pulse && (
+        <div className={`absolute inset-0 w-2.5 h-2.5 rounded-full ${config.color} animate-ping`} />
+      )}
+    </div>
+  );
+}
