@@ -19,6 +19,7 @@ async function initAuthTables() {
         ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_id TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS supabase_id TEXT;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'anonymous';
       EXCEPTION WHEN others THEN NULL;
       END $$;
@@ -28,6 +29,7 @@ async function initAuthTables() {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique ON users(phone) WHERE phone IS NOT NULL;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id_unique ON users(google_id) WHERE google_id IS NOT NULL;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_users_apple_id_unique ON users(apple_id) WHERE apple_id IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_supabase_id_unique ON users(supabase_id) WHERE supabase_id IS NOT NULL;
 
       -- Verification codes table
       CREATE TABLE IF NOT EXISTS verification_codes (
@@ -86,7 +88,7 @@ async function initAuthTables() {
     `);
 
     // Add columns if they don't exist (SQLite doesn't have IF NOT EXISTS for columns)
-    const columns = ['email', 'email_verified', 'phone', 'phone_verified', 'password_hash', 'google_id', 'apple_id', 'auth_provider'];
+    const columns = ['email', 'email_verified', 'phone', 'phone_verified', 'password_hash', 'google_id', 'apple_id', 'supabase_id', 'auth_provider'];
     const tableInfo = db.prepare('PRAGMA table_info(users)').all();
     const existingColumns = tableInfo.map(c => c.name);
 
@@ -262,6 +264,15 @@ export const authDb = {
     }
   },
 
+  async getUserBySupabaseId(supabaseId) {
+    if (usePostgres) {
+      const result = await db.query(`SELECT * FROM users WHERE supabase_id = $1`, [supabaseId]);
+      return result.rows[0] || null;
+    } else {
+      return db.prepare(`SELECT * FROM users WHERE supabase_id = ?`).get(supabaseId) || null;
+    }
+  },
+
   async emailExists(email) {
     if (usePostgres) {
       const result = await db.query(`SELECT 1 FROM users WHERE LOWER(email) = LOWER($1)`, [email]);
@@ -293,6 +304,7 @@ export const authDb = {
     if (updates.passwordHash !== undefined) { fields.push(usePostgres ? `password_hash = $${idx++}` : 'password_hash = ?'); values.push(updates.passwordHash); }
     if (updates.googleId !== undefined) { fields.push(usePostgres ? `google_id = $${idx++}` : 'google_id = ?'); values.push(updates.googleId); }
     if (updates.appleId !== undefined) { fields.push(usePostgres ? `apple_id = $${idx++}` : 'apple_id = ?'); values.push(updates.appleId); }
+    if (updates.supabaseId !== undefined) { fields.push(usePostgres ? `supabase_id = $${idx++}` : 'supabase_id = ?'); values.push(updates.supabaseId); }
     if (updates.authProvider !== undefined) { fields.push(usePostgres ? `auth_provider = $${idx++}` : 'auth_provider = ?'); values.push(updates.authProvider); }
 
     // No actual updates provided
@@ -318,8 +330,8 @@ export const authDb = {
 
     if (usePostgres) {
       await db.query(`
-        INSERT INTO users (id, name, avatar, email, email_verified, phone, phone_verified, password_hash, google_id, apple_id, auth_provider, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
+        INSERT INTO users (id, name, avatar, email, email_verified, phone, phone_verified, password_hash, google_id, apple_id, supabase_id, auth_provider, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
       `, [
         id,
         userData.name,
@@ -331,14 +343,15 @@ export const authDb = {
         userData.passwordHash || null,
         userData.googleId || null,
         userData.appleId || null,
+        userData.supabaseId || null,
         userData.authProvider || 'anonymous',
         now
       ]);
       await db.query(`INSERT INTO user_stats (user_id) VALUES ($1)`, [id]);
     } else {
       db.prepare(`
-        INSERT INTO users (id, name, avatar, email, email_verified, phone, phone_verified, password_hash, google_id, apple_id, auth_provider, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (id, name, avatar, email, email_verified, phone, phone_verified, password_hash, google_id, apple_id, supabase_id, auth_provider, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         userData.name,
@@ -350,6 +363,7 @@ export const authDb = {
         userData.passwordHash || null,
         userData.googleId || null,
         userData.appleId || null,
+        userData.supabaseId || null,
         userData.authProvider || 'anonymous',
         now,
         now
