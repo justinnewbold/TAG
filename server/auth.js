@@ -839,6 +839,75 @@ router.get('/providers', (req, res) => {
   });
 });
 
+
+// ============ SUPABASE AUTH SYNC ============
+// This endpoint syncs Supabase-authenticated users with our game backend
+
+router.post('/supabase', async (req, res) => {
+  try {
+    const { supabaseId, email, phone, name, avatar, provider } = req.body;
+
+    if (!supabaseId) {
+      return res.status(400).json({ error: 'Supabase ID required' });
+    }
+
+    // Check if user already exists by Supabase ID
+    let user = await authDb.getUserBySupabaseId(supabaseId);
+
+    if (!user) {
+      // Check by email if provided
+      if (email) {
+        user = await authDb.getUserByEmail(email);
+        if (user) {
+          // Link Supabase ID to existing account
+          await authDb.updateUserAuth(user.id, { supabaseId });
+        }
+      }
+
+      // Check by phone if provided
+      if (!user && phone) {
+        user = await authDb.getUserByPhone(phone);
+        if (user) {
+          await authDb.updateUserAuth(user.id, { supabaseId });
+        }
+      }
+
+      // Create new user if not found
+      if (!user) {
+        const id = uuidv4();
+        user = await authDb.createUserWithAuth({
+          id,
+          name: name || 'Player',
+          avatar: avatar || '😀',
+          email: email?.toLowerCase(),
+          emailVerified: !!email,
+          phone,
+          phoneVerified: !!phone,
+          supabaseId,
+          authProvider: provider || 'supabase',
+        });
+      }
+    }
+
+    // Get full user data
+    const fullUser = await userDb.getById(user.id);
+    
+    // Generate tokens
+    const token = generateToken(fullUser);
+    const refreshToken = generateRefreshToken();
+    await authDb.createRefreshToken(fullUser.id, hashRefreshToken(refreshToken), req.headers['user-agent'], req.ip);
+
+    res.json({
+      user: sanitizeUser(fullUser),
+      token,
+      refreshToken,
+    });
+  } catch (error) {
+    console.error('Supabase auth sync error:', error);
+    res.status(500).json({ error: 'Authentication failed' });
+  }
+});
+
 // ============ MIDDLEWARE ============
 
 export function authenticateToken(req, res, next) {
@@ -890,3 +959,4 @@ export function addAchievement(userId, achievementId) {
 }
 
 export { router as authRouter };
+
