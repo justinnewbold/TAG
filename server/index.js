@@ -48,9 +48,36 @@ if (!JWT_SECRET || DEFAULT_SECRETS.some(s => JWT_SECRET.includes(s))) {
 const app = express();
 const httpServer = createServer(app);
 
+// Define allowed origins for CORS
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://tag.newbold.cloud',
+  'https://tag-weld.vercel.app',
+  'https://tag-newbold-cloud.vercel.app',
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
+// CORS origin checker function
+const corsOriginChecker = (origin, callback) => {
+  // Allow requests with no origin (mobile apps, curl, etc.)
+  if (!origin) {
+    return callback(null, true);
+  }
+  
+  // Check if origin is in allowed list or matches Vercel preview pattern
+  if (allowedOrigins.includes(origin) || 
+      origin.endsWith('.vercel.app') || 
+      origin.endsWith('.newbold.cloud')) {
+    return callback(null, true);
+  }
+  
+  callback(new Error('Not allowed by CORS'));
+};
+
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: corsOriginChecker,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
   }
@@ -75,7 +102,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "blob:", "https://*.tile.openstreetmap.org"],
-      connectSrc: ["'self'", "ws:", "wss:", process.env.CLIENT_URL || 'http://localhost:5173'],
+      connectSrc: ["'self'", "ws:", "wss:", ...allowedOrigins],
     },
   },
   crossOriginEmbedderPolicy: false, // Required for maps
@@ -108,7 +135,7 @@ const gameLimiter = rateLimit({
 
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: corsOriginChecker,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -256,6 +283,7 @@ httpServer.listen(PORT, () => {
   logger.info('Server started', {
     port: PORT,
     env: process.env.NODE_ENV || 'development',
+    allowedOrigins: allowedOrigins,
   });
 });
 
