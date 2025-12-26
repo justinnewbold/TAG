@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, Loader2, ArrowLeft, Smartphone, Zap } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Loader2, ArrowLeft, Smartphone, Zap, AlertCircle } from 'lucide-react';
 import { supabaseAuth } from '../services/supabase';
 import { api } from '../services/api';
 import { useStore } from '../store';
@@ -22,6 +22,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [awaitingCode, setAwaitingCode] = useState(false);
+  const [phoneAuthAvailable, setPhoneAuthAvailable] = useState(true);
   
   // Check if Supabase is available
   const supabaseAvailable = supabaseAuth.isConfigured();
@@ -184,6 +185,10 @@ export default function Login() {
         setAwaitingCode(true);
       }
     } catch (err) {
+      // If phone auth isn't available, suggest alternatives
+      if (err.message?.includes('not enabled') || err.message?.includes('not available')) {
+        setPhoneAuthAvailable(false);
+      }
       setError(err.message || 'Failed to send verification code');
     } finally {
       setIsLoading(false);
@@ -278,6 +283,13 @@ export default function Login() {
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  // Format phone number as user types
+  const formatPhoneNumber = (value) => {
+    // Keep the + and digits only
+    const cleaned = value.replace(/[^\d+]/g, '');
+    setPhone(cleaned);
   };
   
   return (
@@ -392,8 +404,9 @@ export default function Login() {
                 </div>
                 
                 {error && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
-                    {error}
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                    <span>{error}</span>
                   </div>
                 )}
                 
@@ -427,8 +440,9 @@ export default function Login() {
                 </div>
                 
                 {error && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
-                    {error}
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                    <span>{error}</span>
                   </div>
                 )}
                 
@@ -450,61 +464,79 @@ export default function Login() {
             )}
             
             {mode === 'phone' && (
-              <form onSubmit={awaitingCode ? handleVerifyCode : handlePhoneLogin} className="space-y-4">
-                {!awaitingCode ? (
-                  <div>
-                    <label className="block text-sm text-white/60 mb-2">Phone Number</label>
-                    <div className="relative">
-                      <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="+1 555 123 4567"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-indigo-500 transition"
-                        required
-                      />
+              <>
+                {!phoneAuthAvailable && (
+                  <div className="p-4 mb-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-amber-400 font-medium">Phone Auth Not Available</p>
+                        <p className="text-white/60 text-sm mt-1">
+                          Phone authentication requires additional setup. Please use Email, Magic Link, or Quick Play instead.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                ) : (
-                  <div>
-                    <label className="block text-sm text-white/60 mb-2">Verification Code</label>
-                    <input
-                      type="text"
-                      value={verificationCode}
-                      onChange={(e) => setVerificationCode(e.target.value)}
-                      placeholder="123456"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-4 text-white text-center text-2xl tracking-widest placeholder-white/30 focus:outline-none focus:border-indigo-500 transition"
-                      maxLength={6}
-                      required
-                    />
-                    <p className="text-sm text-white/40 mt-2 text-center">
-                      Code sent to {phone}
-                    </p>
-                  </div>
                 )}
                 
-                {error && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
-                    {error}
-                  </div>
-                )}
-                
-                {success && (
-                  <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-xl text-green-400 text-sm">
-                    {success}
-                  </div>
-                )}
-                
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                  {awaitingCode ? 'Verify Code' : 'Send Code'}
-                </button>
-              </form>
+                <form onSubmit={awaitingCode ? handleVerifyCode : handlePhoneLogin} className="space-y-4">
+                  {!awaitingCode ? (
+                    <div>
+                      <label className="block text-sm text-white/60 mb-2">Phone Number</label>
+                      <div className="relative">
+                        <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+                        <input
+                          type="tel"
+                          value={phone}
+                          onChange={(e) => formatPhoneNumber(e.target.value)}
+                          placeholder="+1 555 123 4567"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-indigo-500 transition"
+                          required
+                        />
+                      </div>
+                      <p className="text-xs text-white/40 mt-2">Include country code (e.g., +1 for US)</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm text-white/60 mb-2">Verification Code</label>
+                      <input
+                        type="text"
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                        placeholder="123456"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-4 text-white text-center text-2xl tracking-widest placeholder-white/30 focus:outline-none focus:border-indigo-500 transition"
+                        maxLength={6}
+                        required
+                      />
+                      <p className="text-sm text-white/40 mt-2 text-center">
+                        Code sent to {phone}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {error && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-start gap-2">
+                      <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+                  
+                  {success && (
+                    <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-xl text-green-400 text-sm">
+                      {success}
+                    </div>
+                  )}
+                  
+                  <button
+                    type="submit"
+                    disabled={isLoading || (!phoneAuthAvailable && !awaitingCode)}
+                    className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
+                    {awaitingCode ? 'Verify Code' : 'Send Code'}
+                  </button>
+                </form>
+              </>
             )}
             
             {/* Divider */}
