@@ -1,312 +1,406 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Circle, useMap } from 'react-leaflet';
+import React, { useState, useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Circle, Polyline, useMap } from 'react-leaflet';
+import { Eye, EyeOff, Users, Target, Clock, Trophy, MessageSquare, 
+         ChevronLeft, ChevronRight, Volume2, VolumeX, Maximize2 } from 'lucide-react';
 import L from 'leaflet';
-import { Eye, Users, Target, Clock, MessageCircle, X, Volume2, VolumeX } from 'lucide-react';
-import { socketService } from '../services/socket';
-import GameChat from './GameChat';
+import { useStore } from '../store';
 
-// Custom marker icons
-const createIcon = (color, isIt = false, emoji = '📍') => {
-  return L.divIcon({
-    className: 'custom-marker',
-    html: `
-      <div style="
-        width: ${isIt ? '44px' : '36px'};
-        height: ${isIt ? '44px' : '36px'};
-        background: ${color};
-        border-radius: 50%;
-        border: 3px solid white;
-        box-shadow: 0 0 ${isIt ? '20px' : '10px'} ${color}, 0 4px 8px rgba(0,0,0,0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: ${isIt ? '22px' : '18px'};
-        ${isIt ? 'animation: pulse 1s infinite;' : ''}
-      ">
-        ${emoji}
-      </div>
-    `,
-    iconSize: [isIt ? 44 : 36, isIt ? 44 : 36],
-    iconAnchor: [isIt ? 22 : 18, isIt ? 22 : 18],
-  });
-};
+/**
+ * Spectator Mode - Watch live games
+ */
 
-function MapController({ center }) {
+// Player marker for spectator view
+const createSpectatorMarker = (player, isIt, isFollowed) => L.divIcon({
+  className: 'spectator-marker',
+  html: `
+    <div style="
+      width: ${isFollowed ? '48px' : '36px'};
+      height: ${isFollowed ? '48px' : '36px'};
+      background: ${isIt ? '#ef4444' : '#22c55e'};
+      border-radius: 50%;
+      border: 3px solid ${isFollowed ? '#fbbf24' : 'white'};
+      box-shadow: 0 0 ${isFollowed ? '20px' : '10px'} ${isIt ? '#ef4444' : '#22c55e'};
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: ${isFollowed ? '20px' : '14px'};
+      transition: all 0.3s ease;
+    ">
+      ${player.avatar || '👤'}
+    </div>
+    <div style="
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      white-space: nowrap;
+      margin-top: 4px;
+    ">
+      ${player.username}${isIt ? ' 👹' : ''}
+    </div>
+  `,
+  iconSize: [isFollowed ? 48 : 36, isFollowed ? 48 : 36],
+  iconAnchor: [isFollowed ? 24 : 18, isFollowed ? 24 : 18],
+});
+
+// Map follower component
+function MapFollower({ position, zoom = 17 }) {
   const map = useMap();
+  
   useEffect(() => {
-    if (center) {
-      map.setView([center.lat, center.lng], map.getZoom());
+    if (position) {
+      map.flyTo(position, zoom, { duration: 0.5 });
     }
-  }, [center, map]);
+  }, [position, zoom, map]);
+  
   return null;
 }
 
-function SpectatorMode({ game, onExit }) {
-  const [followPlayer, setFollowPlayer] = useState(null);
+export default function SpectatorMode({ gameId, onExit }) {
+  const { user } = useStore();
+  const [gameData, setGameData] = useState(null);
+  const [players, setPlayers] = useState([]);
+  const [followedPlayer, setFollowedPlayer] = useState(null);
   const [showChat, setShowChat] = useState(false);
-  const [gameTime, setGameTime] = useState(0);
-  const [commentary, setCommentary] = useState([]);
-  const [muteCommentary, setMuteCommentary] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [spectatorCount, setSpectatorCount] = useState(0);
+  const [recentEvents, setRecentEvents] = useState([]);
 
-  // Update game timer
+  // Simulate real-time updates (replace with WebSocket)
   useEffect(() => {
-    if (game?.startedAt) {
-      const interval = setInterval(() => {
-        setGameTime(Date.now() - game.startedAt);
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [game?.startedAt]);
-
-  // Listen for game events to generate commentary
-  useEffect(() => {
-    const handleTag = ({ taggerId, taggedId }) => {
-      const tagger = game?.players?.find(p => p.id === taggerId);
-      const tagged = game?.players?.find(p => p.id === taggedId);
-      if (tagger && tagged) {
-        addCommentary(`🎯 ${tagger.name} tagged ${tagged.name}!`);
+    const fetchGameData = async () => {
+      try {
+        const res = await fetch(`/api/games/${gameId}/spectate`);
+        const data = await res.json();
+        setGameData(data.game);
+        setPlayers(data.players);
+        setSpectatorCount(data.spectatorCount);
+      } catch (err) {
+        console.error('Failed to fetch game data:', err);
       }
     };
 
-    const handlePlayerJoined = ({ player }) => {
-      addCommentary(`👋 ${player.name} joined as spectator`);
-    };
+    fetchGameData();
+    const interval = setInterval(fetchGameData, 1000);
+    return () => clearInterval(interval);
+  }, [gameId]);
 
-    socketService.on('player:tagged', handleTag);
-    socketService.on('spectator:joined', handlePlayerJoined);
-
-    return () => {
-      socketService.off('player:tagged', handleTag);
-      socketService.off('spectator:joined', handlePlayerJoined);
-    };
-  }, [game?.players]);
-
-  const addCommentary = (message) => {
-    setCommentary(prev => [...prev.slice(-9), { 
-      id: Date.now(), 
-      message, 
-      timestamp: Date.now() 
-    }]);
-  };
-
-  const formatTime = (ms) => {
-    const seconds = Math.floor(ms / 1000);
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const itPlayer = game?.players?.find(p => p.id === game?.itPlayerId);
-  const activePlayers = game?.players?.filter(p => !p.isEliminated) || [];
-  
-  // Get center for map
-  const getMapCenter = () => {
-    if (followPlayer) {
-      const player = game?.players?.find(p => p.id === followPlayer);
-      if (player?.location) return player.location;
+  // Get map center
+  const mapCenter = useMemo(() => {
+    if (followedPlayer) {
+      const player = players.find(p => p.id === followedPlayer);
+      if (player?.location) {
+        return [player.location.lat, player.location.lng];
+      }
     }
-    // Default to IT player or first player with location
-    if (itPlayer?.location) return itPlayer.location;
-    const withLocation = game?.players?.find(p => p.location);
-    return withLocation?.location || { lat: 37.7749, lng: -122.4194 };
+    if (players.length > 0 && players[0]?.location) {
+      return [players[0].location.lat, players[0].location.lng];
+    }
+    return [40.7128, -74.006];
+  }, [followedPlayer, players]);
+
+  // Cycle through players
+  const cyclePlayer = (direction) => {
+    const currentIndex = players.findIndex(p => p.id === followedPlayer);
+    let newIndex;
+    
+    if (direction === 'next') {
+      newIndex = currentIndex >= players.length - 1 ? 0 : currentIndex + 1;
+    } else {
+      newIndex = currentIndex <= 0 ? players.length - 1 : currentIndex - 1;
+    }
+    
+    setFollowedPlayer(players[newIndex]?.id);
   };
 
-  const center = getMapCenter();
+  // Send chat message
+  const sendMessage = (e) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    const message = {
+      id: Date.now(),
+      user: user?.username || 'Spectator',
+      text: newMessage,
+      timestamp: new Date(),
+    };
+
+    setChatMessages(prev => [...prev, message]);
+    setNewMessage('');
+  };
+
+  // Toggle fullscreen
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
+
+  // Get current "it" player
+  const itPlayer = players.find(p => p.isIt);
+  const followedPlayerData = players.find(p => p.id === followedPlayer);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-dark-900">
-      {/* Header */}
-      <div className="bg-dark-800/90 backdrop-blur-sm border-b border-white/10">
-        <div className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-neon-purple/20 rounded-xl">
-                <Eye className="w-5 h-5 text-neon-purple" />
-              </div>
-              <div>
-                <h2 className="font-display font-bold">Spectator Mode</h2>
-                <p className="text-xs text-white/50">{game?.settings?.gameName || 'Game'}</p>
-              </div>
+    <div className="fixed inset-0 bg-dark-900 z-50 flex flex-col">
+      {/* Top Bar */}
+      <div className="absolute top-0 left-0 right-0 z-50 p-4 bg-gradient-to-b from-black/80 to-transparent">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onExit}
+            className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            Exit
+          </button>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 rounded-full">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              <span className="text-red-400 text-sm font-medium">LIVE</span>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm">
-                <Clock className="w-4 h-4 text-white/50" />
-                <span className="font-mono">{formatTime(gameTime)}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Users className="w-4 h-4 text-white/50" />
-                <span>{activePlayers.length}</span>
-              </div>
-              <button
-                onClick={onExit}
-                className="p-2 hover:bg-white/10 rounded-lg"
-                aria-label="Exit spectator mode"
-              >
-                <X className="w-5 h-5 text-white/50" />
-              </button>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-full">
+              <Eye className="w-4 h-4 text-gray-400" />
+              <span className="text-white text-sm">{spectatorCount}</span>
             </div>
           </div>
 
-          {/* IT Status */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors"
+            >
+              {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={toggleFullscreen}
+              className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors"
+            >
+              <Maximize2 className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Game Info Bar */}
+      <div className="absolute top-20 left-4 right-4 z-40">
+        <div className="flex items-center justify-between bg-dark-800/90 backdrop-blur-sm rounded-xl p-3 border border-dark-700">
+          <div className="flex items-center gap-4">
+            <div className="text-center">
+              <p className="text-gray-400 text-xs">Mode</p>
+              <p className="text-white font-bold">{gameData?.mode || 'Classic Tag'}</p>
+            </div>
+            <div className="w-px h-8 bg-dark-600" />
+            <div className="text-center">
+              <p className="text-gray-400 text-xs">Players</p>
+              <p className="text-white font-bold">{players.length}</p>
+            </div>
+            <div className="w-px h-8 bg-dark-600" />
+            <div className="text-center">
+              <p className="text-gray-400 text-xs">Time</p>
+              <p className="text-white font-bold">{gameData?.timeRemaining || '--:--'}</p>
+            </div>
+          </div>
+
           {itPlayer && (
-            <div className="mt-3 flex items-center gap-3 p-3 bg-neon-orange/10 border border-neon-orange/20 rounded-xl">
-              <Target className="w-5 h-5 text-neon-orange" />
-              <span className="text-sm">
-                <span className="font-bold text-neon-orange">{itPlayer.name}</span> is IT
-              </span>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 rounded-lg">
+              <Target className="w-4 h-4 text-red-400" />
+              <span className="text-red-400 font-medium">{itPlayer.username} is IT</span>
             </div>
           )}
         </div>
       </div>
 
       {/* Map */}
-      <div className="flex-1 relative">
-        <MapContainer
-          center={[center.lat, center.lng]}
-          zoom={16}
-          style={{ height: '100%', width: '100%' }}
-          zoomControl={false}
-        >
-          <TileLayer
-            attribution='&copy; OpenStreetMap'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          />
-          
-          <MapController center={center} />
+      <MapContainer
+        center={mapCenter}
+        zoom={16}
+        className="flex-1 w-full"
+        zoomControl={false}
+      >
+        <TileLayer
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+        />
 
-          {/* Tag radius for IT */}
-          {itPlayer?.location && (
-            <Circle
-              center={[itPlayer.location.lat, itPlayer.location.lng]}
-              radius={game?.settings?.tagRadius || 20}
-              pathOptions={{
-                color: '#f97316',
-                fillColor: '#f97316',
-                fillOpacity: 0.1,
-                weight: 2,
-              }}
-            />
-          )}
+        {followedPlayer && (
+          <MapFollower position={mapCenter} />
+        )}
 
-          {/* All players */}
-          {game?.players?.map((player) => {
-            if (!player.location) return null;
-            const isIt = player.id === game?.itPlayerId;
-            
-            return (
+        {/* Player markers */}
+        {players.map(player => (
+          player.location && (
+            <React.Fragment key={player.id}>
               <Marker
-                key={player.id}
                 position={[player.location.lat, player.location.lng]}
-                icon={createIcon(
-                  player.isEliminated ? '#666' :
-                  player.team === 'red' ? '#ef4444' :
-                  player.team === 'blue' ? '#3b82f6' :
-                  isIt ? '#f97316' : '#22c55e',
-                  isIt && !player.isEliminated,
-                  player.isEliminated ? '💀' : player.avatar || '🏃'
-                )}
+                icon={createSpectatorMarker(player, player.isIt, player.id === followedPlayer)}
                 eventHandlers={{
-                  click: () => setFollowPlayer(player.id),
+                  click: () => setFollowedPlayer(player.id),
                 }}
               />
-            );
-          })}
-        </MapContainer>
+              {player.isIt && (
+                <Circle
+                  center={[player.location.lat, player.location.lng]}
+                  radius={gameData?.tagRadius || 25}
+                  pathOptions={{
+                    color: '#ef4444',
+                    fillColor: '#ef4444',
+                    fillOpacity: 0.1,
+                    weight: 2,
+                    dashArray: '5, 5',
+                  }}
+                />
+              )}
+            </React.Fragment>
+          )
+        ))}
+      </MapContainer>
 
-        {/* Commentary Overlay */}
-        {!muteCommentary && commentary.length > 0 && (
-          <div className="absolute top-4 left-4 right-20 z-10 space-y-2">
-            {commentary.slice(-3).map((item) => (
-              <div
-                key={item.id}
-                className="bg-dark-800/90 backdrop-blur-sm px-4 py-2 rounded-lg text-sm animate-slide-down"
+      {/* Player List (Left Side) */}
+      <div className="absolute left-4 top-40 bottom-32 w-56 z-40 flex flex-col">
+        <div className="bg-dark-800/90 backdrop-blur-sm rounded-xl border border-dark-700 overflow-hidden flex flex-col max-h-full">
+          <div className="p-3 border-b border-dark-700">
+            <h3 className="text-white font-bold flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              Players
+            </h3>
+          </div>
+          <div className="overflow-y-auto flex-1 p-2 space-y-1">
+            {players.map(player => (
+              <button
+                key={player.id}
+                onClick={() => setFollowedPlayer(player.id)}
+                className={`
+                  w-full flex items-center gap-2 p-2 rounded-lg transition-colors
+                  ${followedPlayer === player.id 
+                    ? 'bg-primary-500/30 border border-primary-500/50' 
+                    : 'hover:bg-white/10'
+                  }
+                `}
               >
-                {item.message}
+                <div className={`
+                  w-8 h-8 rounded-full flex items-center justify-center text-lg
+                  ${player.isIt ? 'bg-red-500' : 'bg-green-500'}
+                `}>
+                  {player.avatar || '👤'}
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-white text-sm font-medium truncate">
+                    {player.username}
+                  </p>
+                  <p className="text-gray-500 text-xs">
+                    {player.isIt ? '👹 IT' : player.tags || 0} tags
+                  </p>
+                </div>
+                {followedPlayer === player.id && (
+                  <Eye className="w-4 h-4 text-primary-400" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Player Navigation (Bottom Center) */}
+      {followedPlayer && (
+        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-40">
+          <div className="flex items-center gap-3 bg-dark-800/90 backdrop-blur-sm rounded-full px-4 py-2 border border-dark-700">
+            <button
+              onClick={() => cyclePlayer('prev')}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5 text-white" />
+            </button>
+            <div className="text-center min-w-[120px]">
+              <p className="text-white font-bold">{followedPlayerData?.username}</p>
+              <p className="text-gray-400 text-xs">
+                {followedPlayerData?.isIt ? 'Currently IT' : `${followedPlayerData?.tags || 0} tags`}
+              </p>
+            </div>
+            <button
+              onClick={() => cyclePlayer('next')}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            >
+              <ChevronRight className="w-5 h-5 text-white" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Recent Events (Right Side) */}
+      <div className="absolute right-4 top-40 w-64 z-40">
+        <div className="bg-dark-800/90 backdrop-blur-sm rounded-xl border border-dark-700 p-3">
+          <h3 className="text-white font-bold mb-2 flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-yellow-400" />
+            Live Feed
+          </h3>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {recentEvents.length === 0 ? (
+              <p className="text-gray-500 text-sm">Waiting for action...</p>
+            ) : (
+              recentEvents.map((event, i) => (
+                <div key={i} className="text-sm">
+                  <span className="text-gray-400">{event.time}</span>
+                  <span className="text-white ml-2">{event.text}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Spectator Chat Toggle */}
+      <button
+        onClick={() => setShowChat(!showChat)}
+        className="absolute bottom-4 right-4 z-50 p-3 bg-primary-500 hover:bg-primary-600 rounded-full shadow-lg transition-colors"
+      >
+        <MessageSquare className="w-6 h-6 text-white" />
+        {chatMessages.length > 0 && (
+          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+            {chatMessages.length}
+          </span>
+        )}
+      </button>
+
+      {/* Chat Panel */}
+      {showChat && (
+        <div className="absolute bottom-20 right-4 w-80 z-50 bg-dark-800/95 backdrop-blur-sm rounded-xl border border-dark-700 overflow-hidden">
+          <div className="p-3 border-b border-dark-700 flex items-center justify-between">
+            <h3 className="text-white font-bold">Spectator Chat</h3>
+            <button onClick={() => setShowChat(false)}>
+              <EyeOff className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
+          <div className="h-64 overflow-y-auto p-3 space-y-2">
+            {chatMessages.map(msg => (
+              <div key={msg.id} className="text-sm">
+                <span className="text-primary-400 font-medium">{msg.user}:</span>
+                <span className="text-white ml-1">{msg.text}</span>
               </div>
             ))}
           </div>
-        )}
-
-        {/* Mute Commentary Button */}
-        <button
-          onClick={() => setMuteCommentary(!muteCommentary)}
-          className="absolute top-4 right-4 z-10 p-3 bg-dark-800/90 backdrop-blur-sm rounded-full"
-          aria-label={muteCommentary ? 'Unmute commentary' : 'Mute commentary'}
-        >
-          {muteCommentary ? (
-            <VolumeX className="w-5 h-5 text-white/50" />
-          ) : (
-            <Volume2 className="w-5 h-5 text-white/70" />
-          )}
-        </button>
-
-        {/* Chat Button */}
-        <div className="absolute bottom-4 right-4 z-10">
-          {showChat ? (
-            <div className="w-80">
-              <GameChat
-                gameId={game?.id}
-                players={game?.players}
-                currentUserId={null} // Spectator has no ID
-                isMinimized={false}
-                onToggle={() => setShowChat(false)}
-              />
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowChat(true)}
-              className="p-4 bg-dark-800/90 backdrop-blur-sm rounded-full border border-white/10"
-              aria-label="Open chat"
-            >
-              <MessageCircle className="w-6 h-6 text-white/70" />
-            </button>
-          )}
+          <form onSubmit={sendMessage} className="p-3 border-t border-dark-700">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Say something..."
+              className="w-full px-3 py-2 bg-dark-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </form>
         </div>
-      </div>
-
-      {/* Player List */}
-      <div className="bg-dark-800/90 backdrop-blur-sm border-t border-white/10 p-4">
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {game?.players?.map((player) => {
-            const isIt = player.id === game?.itPlayerId;
-            const isFollowing = followPlayer === player.id;
-            
-            return (
-              <button
-                key={player.id}
-                onClick={() => setFollowPlayer(isFollowing ? null : player.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl flex-shrink-0 transition-all ${
-                  isFollowing
-                    ? 'bg-neon-cyan/20 border border-neon-cyan/50'
-                    : player.isEliminated
-                    ? 'bg-white/5 opacity-50'
-                    : 'bg-white/10 hover:bg-white/15'
-                }`}
-              >
-                <span className="text-lg">
-                  {player.isEliminated ? '💀' : player.avatar || '🏃'}
-                </span>
-                <span className={`text-sm font-medium ${
-                  isIt ? 'text-neon-orange' : 
-                  player.isEliminated ? 'text-white/40' : ''
-                }`}>
-                  {player.name}
-                </span>
-                {isIt && <Target className="w-4 h-4 text-neon-orange" />}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.1); opacity: 0.8; }
-        }
-      `}</style>
+      )}
     </div>
   );
 }
-
-export default SpectatorMode;
