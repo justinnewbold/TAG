@@ -1,101 +1,110 @@
-import React, { useState, useEffect } from 'react';
-import { MessageCircle, Send, X, Users, Smile } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { MessageCircle, Send, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { socketService } from '../services/socket';
+import { useStore } from '../store';
 
-// Quick emotes for fast communication
-const QUICK_EMOTES = [
-  { emoji: '👋', label: 'Wave' },
-  { emoji: '🏃', label: 'Running' },
-  { emoji: '😱', label: 'Scared' },
-  { emoji: '😂', label: 'Laughing' },
-  { emoji: '👀', label: 'Looking' },
-  { emoji: '🎯', label: 'Target' },
-  { emoji: '🛡️', label: 'Safe' },
-  { emoji: '💨', label: 'Fast' },
+// Quick chat presets
+const QUICK_MESSAGES = [
+  { emoji: '👋', text: "I see you!" },
+  { emoji: '🏃', text: "Run!" },
+  { emoji: '👀', text: "Behind you!" },
+  { emoji: '😈', text: "Coming for you!" },
+  { emoji: '🙈', text: "Can't find anyone" },
+  { emoji: '🤝', text: "Team up?" },
+  { emoji: '⏰', text: "Hurry!" },
+  { emoji: '😅', text: "That was close!" },
+  { emoji: '🎉', text: "GG!" },
+  { emoji: '📍', text: "Over here!" },
 ];
 
-function GameChat({ gameId, players, currentUserId, isMinimized = false, onToggle }) {
+export default function GameChat({ gameId, isTeamMode = false, teamId = null }) {
+  const { user } = useStore();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [showEmotes, setShowEmotes] = useState(false);
+  const [customMessage, setCustomMessage] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showQuickMessages, setShowQuickMessages] = useState(true);
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     // Listen for chat messages
-    const handleChatMessage = ({ senderId, senderName, message, timestamp, isEmote }) => {
-      setMessages(prev => [...prev.slice(-49), { // Keep last 50 messages
-        id: Date.now(),
-        senderId,
-        senderName,
-        message,
-        timestamp,
-        isEmote,
-      }]);
-
-      if (isMinimized && senderId !== currentUserId) {
+    const handleChatMessage = (message) => {
+      setMessages(prev => [...prev, message].slice(-50)); // Keep last 50 messages
+      
+      if (!isOpen) {
         setUnreadCount(prev => prev + 1);
       }
     };
 
-    socketService.on('chat:message', handleChatMessage);
+    socketService.on('game:chat', handleChatMessage);
 
     return () => {
-      socketService.off('chat:message', handleChatMessage);
+      socketService.off('game:chat', handleChatMessage);
     };
-  }, [isMinimized, currentUserId]);
+  }, [isOpen]);
 
   useEffect(() => {
-    if (!isMinimized) {
+    // Scroll to bottom on new messages
+    if (isOpen && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isOpen]);
+
+  useEffect(() => {
+    // Clear unread when opening
+    if (isOpen) {
       setUnreadCount(0);
     }
-  }, [isMinimized]);
+  }, [isOpen]);
 
-  const sendMessage = () => {
-    if (!newMessage.trim()) return;
+  const sendMessage = (text, isQuick = false) => {
+    if (!text.trim()) return;
 
-    socketService.emit('chat:send', {
+    const message = {
+      id: Date.now(),
+      userId: user.id,
+      userName: user.name,
+      userAvatar: user.avatar,
+      text: text.trim(),
+      isQuick,
+      teamOnly: isTeamMode && teamId,
+      timestamp: Date.now(),
+    };
+
+    // Emit to server
+    socketService.emit('game:chat', {
       gameId,
-      message: newMessage.trim(),
-      isEmote: false,
+      message,
+      teamId: isTeamMode ? teamId : null,
     });
 
-    setNewMessage('');
+    // Add to local messages immediately
+    setMessages(prev => [...prev, { ...message, isOwn: true }]);
+    setCustomMessage('');
   };
 
-  const sendEmote = (emoji) => {
-    socketService.emit('chat:send', {
-      gameId,
-      message: emoji,
-      isEmote: true,
-    });
-    setShowEmotes(false);
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    sendMessage(customMessage);
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+  const formatTime = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const getPlayerColor = (playerId) => {
-    const player = players?.find(p => p.id === playerId);
-    if (player?.isIt) return 'text-neon-orange';
-    if (player?.team === 'red') return 'text-red-400';
-    if (player?.team === 'blue') return 'text-blue-400';
-    return 'text-neon-cyan';
-  };
-
-  if (isMinimized) {
+  // Floating button when closed
+  if (!isOpen) {
     return (
       <button
-        onClick={onToggle}
-        className="relative p-3 bg-dark-800/90 backdrop-blur-sm rounded-full border border-white/10 shadow-lg"
-        aria-label="Open chat"
+        onClick={() => setIsOpen(true)}
+        className="fixed bottom-24 right-4 w-14 h-14 bg-indigo-500 rounded-full shadow-lg flex items-center justify-center z-40 hover:bg-indigo-600 transition-all hover:scale-105"
       >
-        <MessageCircle className="w-6 h-6 text-white/70" />
+        <MessageCircle className="w-6 h-6 text-white" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-neon-orange rounded-full text-xs font-bold flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full text-white text-xs font-bold flex items-center justify-center animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -104,101 +113,120 @@ function GameChat({ gameId, players, currentUserId, isMinimized = false, onToggl
   }
 
   return (
-    <div className="flex flex-col bg-dark-800/95 backdrop-blur-sm rounded-xl border border-white/10 shadow-xl overflow-hidden max-h-80">
+    <div className={`fixed bottom-24 right-4 w-80 bg-slate-900/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/10 z-40 overflow-hidden transition-all ${
+      isMinimized ? 'h-14' : 'h-96'
+    }`}>
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-white/10">
+      <div 
+        className="flex items-center justify-between p-3 bg-slate-800/50 border-b border-white/10 cursor-pointer"
+        onClick={() => setIsMinimized(!isMinimized)}
+      >
         <div className="flex items-center gap-2">
-          <MessageCircle className="w-4 h-4 text-neon-cyan" />
-          <span className="font-medium text-sm">Game Chat</span>
-          <span className="text-xs text-white/40">
-            <Users className="w-3 h-3 inline mr-1" />
-            {players?.length || 0}
+          <MessageCircle className="w-5 h-5 text-indigo-400" />
+          <span className="font-medium text-white">
+            {isTeamMode ? 'Team Chat' : 'Game Chat'}
           </span>
+          {messages.length > 0 && (
+            <span className="text-xs text-white/40">({messages.length})</span>
+          )}
         </div>
-        <button onClick={onToggle} className="p-1 hover:bg-white/10 rounded">
-          <X className="w-4 h-4 text-white/50" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button className="p-1 hover:bg-white/10 rounded transition">
+            {isMinimized ? <ChevronUp className="w-4 h-4 text-white/60" /> : <ChevronDown className="w-4 h-4 text-white/60" />}
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); setIsOpen(false); }}
+            className="p-1 hover:bg-white/10 rounded transition"
+          >
+            <X className="w-4 h-4 text-white/60" />
+          </button>
+        </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-32 max-h-48">
-        {messages.length === 0 ? (
-          <p className="text-center text-white/30 text-sm py-4">No messages yet</p>
-        ) : (
-          messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`${msg.senderId === currentUserId ? 'text-right' : ''}`}
-            >
-              {msg.isEmote ? (
-                <div className={`inline-block ${msg.senderId === currentUserId ? 'text-right' : ''}`}>
-                  <span className="text-2xl">{msg.message}</span>
-                  <p className={`text-xs ${getPlayerColor(msg.senderId)}`}>
-                    {msg.senderId === currentUserId ? 'You' : msg.senderName}
-                  </p>
+      {!isMinimized && (
+        <>
+          {/* Messages */}
+          <div className="h-48 overflow-y-auto p-3 space-y-2">
+            {messages.length === 0 ? (
+              <div className="text-center text-white/40 text-sm py-8">
+                No messages yet. Say hi! 👋
+              </div>
+            ) : (
+              messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex gap-2 ${msg.isOwn ? 'flex-row-reverse' : ''}`}
+                >
+                  <div className="text-xl flex-shrink-0">{msg.userAvatar}</div>
+                  <div className={`max-w-[75%] ${msg.isOwn ? 'items-end' : ''}`}>
+                    <div className={`px-3 py-2 rounded-2xl ${
+                      msg.isOwn 
+                        ? 'bg-indigo-500 text-white rounded-br-md' 
+                        : 'bg-white/10 text-white rounded-bl-md'
+                    }`}>
+                      {!msg.isOwn && (
+                        <div className="text-xs text-white/60 mb-1">{msg.userName}</div>
+                      )}
+                      <div className={msg.isQuick ? 'text-lg' : 'text-sm'}>{msg.text}</div>
+                    </div>
+                    <div className={`text-xs text-white/30 mt-1 ${msg.isOwn ? 'text-right' : ''}`}>
+                      {formatTime(msg.timestamp)}
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <div className={`inline-block max-w-[80%] ${
-                  msg.senderId === currentUserId 
-                    ? 'bg-neon-cyan/20 rounded-l-lg rounded-tr-lg' 
-                    : 'bg-white/10 rounded-r-lg rounded-tl-lg'
-                } px-3 py-2`}>
-                  <p className={`text-xs font-medium ${getPlayerColor(msg.senderId)}`}>
-                    {msg.senderId === currentUserId ? 'You' : msg.senderName}
-                  </p>
-                  <p className="text-sm">{msg.message}</p>
-                </div>
-              )}
+              ))
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Quick Messages Toggle */}
+          <button
+            onClick={() => setShowQuickMessages(!showQuickMessages)}
+            className="w-full px-3 py-1 text-xs text-white/40 hover:text-white/60 border-t border-white/10 flex items-center justify-center gap-1"
+          >
+            Quick messages {showQuickMessages ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+          </button>
+
+          {/* Quick Messages */}
+          {showQuickMessages && (
+            <div className="px-3 py-2 border-t border-white/10 overflow-x-auto">
+              <div className="flex gap-2">
+                {QUICK_MESSAGES.map((msg, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => sendMessage(`${msg.emoji} ${msg.text}`, true)}
+                    className="flex-shrink-0 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-full text-sm text-white/80 transition whitespace-nowrap"
+                  >
+                    {msg.emoji} {msg.text}
+                  </button>
+                ))}
+              </div>
             </div>
-          ))
-        )}
-      </div>
+          )}
 
-      {/* Quick Emotes */}
-      {showEmotes && (
-        <div className="px-3 py-2 border-t border-white/10 flex gap-2 overflow-x-auto">
-          {QUICK_EMOTES.map((emote) => (
-            <button
-              key={emote.emoji}
-              onClick={() => sendEmote(emote.emoji)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-all text-xl flex-shrink-0"
-              title={emote.label}
-            >
-              {emote.emoji}
-            </button>
-          ))}
-        </div>
+          {/* Custom Message Input */}
+          <form onSubmit={handleSubmit} className="p-3 border-t border-white/10">
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                type="text"
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                placeholder="Type a message..."
+                maxLength={100}
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-indigo-500 transition"
+              />
+              <button
+                type="submit"
+                disabled={!customMessage.trim()}
+                className="p-2 bg-indigo-500 rounded-xl hover:bg-indigo-600 transition disabled:opacity-50 disabled:hover:bg-indigo-500"
+              >
+                <Send className="w-5 h-5 text-white" />
+              </button>
+            </div>
+          </form>
+        </>
       )}
-
-      {/* Input */}
-      <div className="p-3 border-t border-white/10 flex gap-2">
-        <button
-          onClick={() => setShowEmotes(!showEmotes)}
-          className={`p-2 rounded-lg transition-all ${showEmotes ? 'bg-neon-cyan/20 text-neon-cyan' : 'hover:bg-white/10 text-white/50'}`}
-          aria-label="Toggle emotes"
-        >
-          <Smile className="w-5 h-5" />
-        </button>
-        <input
-          type="text"
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Type a message..."
-          className="flex-1 bg-white/5 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-neon-cyan/50"
-          maxLength={200}
-        />
-        <button
-          onClick={sendMessage}
-          disabled={!newMessage.trim()}
-          className="p-2 bg-neon-cyan/20 text-neon-cyan rounded-lg hover:bg-neon-cyan/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          aria-label="Send message"
-        >
-          <Send className="w-5 h-5" />
-        </button>
-      </div>
     </div>
   );
 }
-
-export default GameChat;
