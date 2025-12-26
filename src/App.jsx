@@ -1,5 +1,5 @@
 import React, { useEffect, useState, lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useStore } from './store';
 import { api } from './services/api';
 import { socketService } from './services/socket';
@@ -28,7 +28,7 @@ const PlayerProfile = lazy(() => import('./pages/PlayerProfile'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const CustomGameModeBuilder = lazy(() => import('./pages/CustomGameModeBuilder'));
 
-// Legal and marketing pages
+// Auth pages - always accessible
 const Landing = lazy(() => import('./pages/Landing'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
@@ -39,7 +39,6 @@ const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 
 // Components
 import Navigation from './components/Navigation';
-import SignupModal from './components/SignupModal';
 import AchievementToast from './components/AchievementToast';
 import OnboardingTutorial from './components/OnboardingTutorial';
 import { GameErrorBoundary } from './components/ErrorBoundary';
@@ -58,9 +57,21 @@ function PageLoader() {
   );
 }
 
+// Protected Route wrapper - redirects to login if not authenticated
+function ProtectedRoute({ children }) {
+  const { user } = useStore();
+  const location = useLocation();
+  
+  if (!user) {
+    // Redirect to login, saving the intended destination
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  
+  return children;
+}
+
 function App() {
   const { user, currentGame, setUser, syncGameState, settings, updateSettings } = useStore();
-  const [showSignup, setShowSignup] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -75,13 +86,11 @@ function App() {
           const { user: authUser } = await api.login(existingToken);
           setUser(authUser);
 
-          // Socket connection is handled by the useEffect that watches user state
           // Try to get current game if any
           try {
             const { game } = await api.getCurrentGame();
             if (game) {
               syncGameState(game);
-              // Join game room after socket connects (handled in useEffect)
             }
           } catch (e) {
             // No current game, that's ok
@@ -90,15 +99,8 @@ function App() {
           // Token invalid, clear it and user state
           if (import.meta.env.DEV) console.log('Auth token invalid, clearing');
           api.logout();
-          setUser(null); // Clear persisted user state too
-          setShowSignup(true);
+          setUser(null);
         }
-      } else if (!user) {
-        setShowSignup(true);
-      } else {
-        // User exists in state but no token - clear and show signup
-        setUser(null);
-        setShowSignup(true);
       }
 
       setIsInitializing(false);
@@ -195,53 +197,43 @@ function App() {
         <main className="relative pb-24">
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/create" element={user ? <CreateGame /> : <Navigate to="/" />} />
-            <Route path="/join" element={user ? <JoinGame /> : <Navigate to="/" />} />
-            <Route path="/lobby" element={currentGame ? <GameErrorBoundary><GameLobby /></GameErrorBoundary> : <Navigate to="/" />} />
-            <Route path="/game" element={(currentGame?.status === 'active' || currentGame?.status === 'hiding') ? <GameErrorBoundary><ActiveGame /></GameErrorBoundary> : <Navigate to="/" />} />
-            <Route path="/stats" element={<GameErrorBoundary><Stats /></GameErrorBoundary>} />
-            <Route path="/stats/enhanced" element={<GameErrorBoundary><EnhancedStats /></GameErrorBoundary>} />
-            <Route path="/friends" element={<GameErrorBoundary><Friends /></GameErrorBoundary>} />
-            <Route path="/settings" element={<GameErrorBoundary><Settings /></GameErrorBoundary>} />
-            <Route path="/history" element={<GameErrorBoundary><GameHistory /></GameErrorBoundary>} />
-            <Route path="/leaderboards" element={<GameErrorBoundary><Leaderboards /></GameErrorBoundary>} />
-            <Route path="/achievements" element={<GameErrorBoundary><Achievements /></GameErrorBoundary>} />
-            <Route path="/global-leaderboard" element={<GameErrorBoundary><GlobalLeaderboard /></GameErrorBoundary>} />
-            <Route path="/clans" element={<GameErrorBoundary><Clans /></GameErrorBoundary>} />
-            <Route path="/tournaments" element={<GameErrorBoundary><Tournaments /></GameErrorBoundary>} />
-            <Route path="/public-games" element={<GameErrorBoundary><PublicGames /></GameErrorBoundary>} />
-            <Route path="/profile" element={<GameErrorBoundary><PlayerProfile /></GameErrorBoundary>} />
-            <Route path="/profile/:userId" element={<GameErrorBoundary><PlayerProfile /></GameErrorBoundary>} />
-            <Route path="/admin" element={<GameErrorBoundary><AdminDashboard /></GameErrorBoundary>} />
-            <Route path="/custom-mode" element={<GameErrorBoundary><CustomGameModeBuilder /></GameErrorBoundary>} />
+            {/* Public auth routes - always accessible */}
+            <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+            <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/landing" element={<Landing />} />
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
+            
+            {/* Protected routes - require authentication */}
+            <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+            <Route path="/create" element={<ProtectedRoute><CreateGame /></ProtectedRoute>} />
+            <Route path="/join" element={<ProtectedRoute><JoinGame /></ProtectedRoute>} />
+            <Route path="/lobby" element={currentGame ? <ProtectedRoute><GameErrorBoundary><GameLobby /></GameErrorBoundary></ProtectedRoute> : <Navigate to="/" />} />
+            <Route path="/game" element={(currentGame?.status === 'active' || currentGame?.status === 'hiding') ? <ProtectedRoute><GameErrorBoundary><ActiveGame /></GameErrorBoundary></ProtectedRoute> : <Navigate to="/" />} />
+            <Route path="/stats" element={<ProtectedRoute><GameErrorBoundary><Stats /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/stats/enhanced" element={<ProtectedRoute><GameErrorBoundary><EnhancedStats /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/friends" element={<ProtectedRoute><GameErrorBoundary><Friends /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><GameErrorBoundary><Settings /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/history" element={<ProtectedRoute><GameErrorBoundary><GameHistory /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/leaderboards" element={<ProtectedRoute><GameErrorBoundary><Leaderboards /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/achievements" element={<ProtectedRoute><GameErrorBoundary><Achievements /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/global-leaderboard" element={<ProtectedRoute><GameErrorBoundary><GlobalLeaderboard /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/clans" element={<ProtectedRoute><GameErrorBoundary><Clans /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/tournaments" element={<ProtectedRoute><GameErrorBoundary><Tournaments /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/public-games" element={<ProtectedRoute><GameErrorBoundary><PublicGames /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><GameErrorBoundary><PlayerProfile /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/profile/:userId" element={<ProtectedRoute><GameErrorBoundary><PlayerProfile /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute><GameErrorBoundary><AdminDashboard /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/custom-mode" element={<ProtectedRoute><GameErrorBoundary><CustomGameModeBuilder /></GameErrorBoundary></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </main>
       
-      {/* Navigation */}
+      {/* Navigation - only show when logged in */}
       {user && <Navigation />}
-      
-      {/* Signup Modal */}
-      {showSignup && (
-        <SignupModal 
-          onClose={() => {
-            setShowSignup(false);
-            // Show onboarding after signup for new users
-            if (!settings.hasSeenOnboarding) {
-              setShowOnboarding(true);
-            }
-          }} 
-        />
-      )}
       
       {/* Onboarding Tutorial */}
       {showOnboarding && (
@@ -258,4 +250,3 @@ function App() {
 }
 
 export default App;
-
