@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useGameStore } from '../store';
+import { useStore } from '../store';
 import { Loader2, CheckCircle, XCircle, Sparkles } from 'lucide-react';
 
 export default function MagicLinkAuth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { setUser } = useGameStore();
+  const setUser = useStore(state => state.setUser);
   
   const [status, setStatus] = useState('verifying'); // verifying, success, error
   const [message, setMessage] = useState('Verifying your magic link...');
