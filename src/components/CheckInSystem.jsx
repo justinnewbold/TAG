@@ -59,7 +59,10 @@ export default function CheckInSystem({
       oscillator.frequency.setValueAtTime(1760, ctx.currentTime + 0.1);
       oscillator.frequency.setValueAtTime(880, ctx.currentTime + 0.2);
       oscillator.stop(ctx.currentTime + 0.3);
-    } catch (e) {}
+    } catch (e) {
+      // AudioContext may not be available in all browsers - sound is optional
+      console.debug('Could not play check-in alert sound:', e.message);
+    }
     
     setTimeout(() => setShowAnimation(false), 500);
   }, [windowDuration]);
