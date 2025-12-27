@@ -150,16 +150,35 @@ export default function Login() {
     
     setIsLoading(true);
     setError('');
+    setSuccess('');
     
     try {
-      if (supabaseAvailable) {
-        await supabaseAuth.signInWithMagicLink(email);
-        setSuccess('Check your email for the magic link!');
-      } else {
-        setError('Magic link login requires Supabase configuration');
+      // Try Resend API first for reliable email delivery
+      const response = await fetch('/api/magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send magic link');
       }
+      
+      setSuccess('Magic link sent! Check your email inbox (check spam too).');
     } catch (err) {
-      setError(err.message || 'Failed to send magic link');
+      // Fallback to Supabase if our API fails
+      if (supabaseAvailable) {
+        try {
+          await supabaseAuth.signInWithMagicLink(email);
+          setSuccess('Check your email for the magic link!');
+          return;
+        } catch (supaErr) {
+          console.error('Supabase fallback failed:', supaErr);
+        }
+      }
+      setError(err.message || 'Failed to send magic link. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -587,3 +606,4 @@ export default function Login() {
     </div>
   );
 }
+
