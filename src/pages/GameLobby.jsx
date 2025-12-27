@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Avatar from '../components/Avatar';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, Copy, Check, Play, UserPlus, Clock, Target, MapPin, Shield, Calendar, Share2, Loader2, Wifi, WifiOff, Zap, ChevronDown, ChevronUp, X, MoreVertical, Globe, Lock, UserCheck, UserX, Ban, Settings, Edit3 } from 'lucide-react';
 import { useStore, useSounds, GAME_MODES } from '../store';
@@ -402,7 +403,7 @@ function GameLobby() {
                   : 'bg-white/5'
               }`}
             >
-              <div className="text-3xl">{player.avatar || '👤'}</div>
+              <Avatar user={player} size="lg" />
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">
                   {player.name}
@@ -471,7 +472,7 @@ function GameLobby() {
                   key={player.id}
                   className="flex items-center gap-4 p-4 rounded-xl bg-amber-400/10 border border-amber-400/30 mb-2"
                 >
-                  <div className="text-3xl">{player.avatar || '👤'}</div>
+                  <Avatar user={player} size="lg" />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{player.name}</p>
                     <p className="text-xs text-white/40">Wants to join</p>
