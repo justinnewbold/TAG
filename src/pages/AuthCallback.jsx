@@ -190,10 +190,10 @@ export default function AuthCallback() {
         user = {
           id: supaUser.id,
           email: supaUser.email,
-          username: supaUser.user_metadata?.username || supaUser.email?.split('@')[0] || 'Player',
-          avatar: supaUser.user_metadata?.avatar_url,
+          name: supaUser.user_metadata?.full_name || supaUser.user_metadata?.name || supaUser.email?.split('@')[0] || 'Player',
+          avatarUrl: supaUser.user_metadata?.avatar_url || supaUser.user_metadata?.picture || null,
+          avatar: supaUser.user_metadata?.avatar || '👤',
         };
-        setUser(user);
       }
 
       // Only connect socket if we have a backend token
