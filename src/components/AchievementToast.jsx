@@ -1,17 +1,17 @@
 import React, { useEffect } from 'react';
 import { Award, X } from 'lucide-react';
-import { useStore, useSounds } from '../store';
+import { useStore } from '../store';
+import { useSoundHaptic } from '../hooks/useSoundHaptic';
 import confetti from 'canvas-confetti';
 
 function AchievementToast() {
   const { newAchievement, clearNewAchievement } = useStore();
-  const { playSound, vibrate } = useSounds();
+  const sound = useSoundHaptic();
   
   useEffect(() => {
     if (newAchievement) {
-      // Play sound and vibrate
-      playSound('achievement');
-      vibrate([100, 50, 100, 50, 200]);
+      // Play achievement sound with new sound service
+      sound.playAchievement();
       
       // Confetti!
       confetti({
@@ -28,7 +28,7 @@ function AchievementToast() {
       
       return () => clearTimeout(timer);
     }
-  }, [newAchievement]);
+  }, [newAchievement, sound, clearNewAchievement]);
   
   if (!newAchievement) return null;
   
