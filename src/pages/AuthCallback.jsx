@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Loader2, CheckCircle, XCircle, Mail, Lock, Chrome, AlertCircle } from 'lucide-react';
 import { api } from '../services/api';
 import { useStore } from '../store';
-import { socketService } from '../services/socket';
 import { supabase, supabaseAuth } from '../services/supabase';
 
 /**
@@ -36,11 +35,10 @@ export default function AuthCallback() {
   const handleAuthCallback = async () => {
     try {
       console.log('Auth callback starting...');
-      console.log('Location hash:', location.hash);
+      console.log('Location hash:', location.hash ? 'present' : 'empty');
       console.log('Search params:', Object.fromEntries(searchParams.entries()));
 
       // First, check if Supabase already detected and processed the session
-      // This happens automatically when detectSessionInUrl is true
       let session = null;
       
       // Try to get the session - Supabase may have already processed the hash
@@ -156,6 +154,7 @@ export default function AuthCallback() {
       }
 
       // Exchange Supabase session with our backend
+      let backendToken = null;
       try {
         const response = await api.request('/auth/token', {
           method: 'POST',
@@ -167,6 +166,7 @@ export default function AuthCallback() {
 
         if (response.token) {
           api.setToken(response.token);
+          backendToken = response.token;
           if (response.refreshToken) {
             api.setRefreshToken(response.refreshToken);
           }
@@ -179,29 +179,39 @@ export default function AuthCallback() {
 
       // Get user profile
       setMessage('Loading your profile...');
+      let user = null;
       try {
-        const { user } = await api.getMe();
+        const response = await api.getMe();
+        user = response.user;
         setUser(user);
       } catch (profileError) {
         console.warn('Backend profile fetch failed, using Supabase user');
-        const user = session.user;
-        setUser({
-          id: user.id,
-          email: user.email,
-          username: user.user_metadata?.username || user.email?.split('@')[0] || 'Player',
-          avatar: user.user_metadata?.avatar_url,
-        });
+        const supaUser = session.user;
+        user = {
+          id: supaUser.id,
+          email: supaUser.email,
+          username: supaUser.user_metadata?.username || supaUser.email?.split('@')[0] || 'Player',
+          avatar: supaUser.user_metadata?.avatar_url,
+        };
+        setUser(user);
       }
 
-      // Connect socket
-      socketService.connect();
+      // Only connect socket if we have a backend token
+      // This prevents ERR_INSUFFICIENT_RESOURCES from repeated connection attempts
+      if (backendToken) {
+        // Dynamically import socket service to avoid connection on module load
+        const { socketService } = await import('../services/socket');
+        socketService.connect();
+      }
 
-      // Try to get current game
-      try {
-        const { game } = await api.getCurrentGame();
-        if (game) syncGameState(game);
-      } catch (e) {
-        // No active game
+      // Try to get current game (only if backend is working)
+      if (backendToken) {
+        try {
+          const { game } = await api.getCurrentGame();
+          if (game) syncGameState(game);
+        } catch (e) {
+          // No active game
+        }
       }
 
       setStatus('success');
