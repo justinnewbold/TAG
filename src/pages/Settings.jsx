@@ -1,11 +1,12 @@
 import React, { useState, lazy, Suspense } from 'react';
 import Avatar, { hasUrlAvatar } from '../components/Avatar';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Volume2, Vibrate, MapPin, Moon, LogOut, Trash2, User, Info, ChevronRight, Shield, Download, Accessibility, Loader2, ArrowLeft, Check } from 'lucide-react';
+import { Bell, Volume2, Vibrate, MapPin, Moon, LogOut, Trash2, User, Info, ChevronRight, Shield, Download, Accessibility, Loader2, ArrowLeft, Check, Play } from 'lucide-react';
 import { useStore } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import BottomSheet from '../components/BottomSheet';
+import { useSoundHaptic } from '../hooks/useSoundHaptic';
 
 // Lazy load accessibility settings
 const AccessibilitySettings = lazy(() => import('../components/AccessibilitySettings'));
@@ -13,12 +14,15 @@ const AccessibilitySettings = lazy(() => import('../components/AccessibilitySett
 function Settings() {
   const navigate = useNavigate();
   const { user, settings, updateSettings, updateUserProfile, logout, reset, clearGameHistory } = useStore();
+  const sound = useSoundHaptic();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState(user?.name || '');
   const [showAccessibility, setShowAccessibility] = useState(false);
   const [showAvatarSheet, setShowAvatarSheet] = useState(false);
+  const [showSoundTest, setShowSoundTest] = useState(false);
+  const [testingSound, setTestingSound] = useState(null);
   
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   
@@ -66,7 +70,41 @@ function Settings() {
   
   const toggleSetting = (key) => {
     updateSettings({ [key]: !settings[key] });
+    if (key === 'sound' || key === 'vibration') {
+      sound.playToggle();
+    }
   };
+
+  const testSoundEffect = async (type) => {
+    setTestingSound(type);
+    switch (type) {
+      case 'tag': sound.playTagSuccess(); break;
+      case 'tagged': sound.playTaggedByOther(); break;
+      case 'start': sound.playGameStart(); break;
+      case 'victory': sound.playVictory(); break;
+      case 'defeat': sound.playDefeat(); break;
+      case 'powerup': sound.playPowerupCollected(); break;
+      case 'proximity': sound.playProximityWarning(); break;
+      case 'achievement': sound.playAchievement(); break;
+      case 'levelup': sound.playLevelUp(); break;
+      case 'notification': sound.playNotification(); break;
+      default: break;
+    }
+    setTimeout(() => setTestingSound(null), 1000);
+  };
+
+  const soundTests = [
+    { id: 'tag', label: 'Tag!', icon: '🎯' },
+    { id: 'tagged', label: 'Tagged', icon: '💥' },
+    { id: 'start', label: 'Start', icon: '🚀' },
+    { id: 'victory', label: 'Win', icon: '🏆' },
+    { id: 'defeat', label: 'Lose', icon: '😢' },
+    { id: 'powerup', label: 'Power', icon: '⚡' },
+    { id: 'proximity', label: 'Alert', icon: '⚠️' },
+    { id: 'achievement', label: 'Badge', icon: '🎖️' },
+    { id: 'levelup', label: 'Level', icon: '⬆️' },
+    { id: 'notification', label: 'Notify', icon: '🔔' },
+  ];
   
   const avatars = ['🏃', '🏃‍♀️', '🏃‍♂️', '🦊', '🐺', '🦁', '🐯', '🦅', '🦈', '🐉', '👤', '⭐', '🎮', '🎯', '🏆', '💎'];
   
@@ -160,6 +198,50 @@ function Settings() {
             />
           </div>
         </div>
+
+        {/* Sound Test Section */}
+        {(settings.sound || settings.vibration) && (
+          <div className="card overflow-hidden">
+            <button
+              onClick={() => setShowSoundTest(!showSoundTest)}
+              className="w-full flex items-center gap-4 p-4 active:bg-white/5 transition-colors"
+            >
+              <div className="touch-target-48 flex items-center justify-center">
+                <Play className="w-6 h-6 text-neon-purple" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-medium">Test Sound Effects</p>
+                <p className="text-xs text-white/50">Preview game sounds and haptics</p>
+              </div>
+              <ChevronRight className={`w-6 h-6 text-white/40 transition-transform ${showSoundTest ? 'rotate-90' : ''}`} />
+            </button>
+            
+            {showSoundTest && (
+              <div className="px-4 pb-4">
+                <div className="grid grid-cols-5 gap-2">
+                  {soundTests.map(({ id, label, icon }) => (
+                    <button
+                      key={id}
+                      onClick={() => testSoundEffect(id)}
+                      disabled={testingSound === id}
+                      className={`flex flex-col items-center gap-1 p-2 rounded-xl text-xs font-medium transition-all ${
+                        testingSound === id
+                          ? 'bg-neon-cyan/20 text-neon-cyan scale-95'
+                          : 'bg-white/5 text-white/70 hover:bg-white/10 active:scale-95'
+                      }`}
+                    >
+                      <span className="text-lg">{icon}</span>
+                      <span className="truncate w-full text-center">{label}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-white/30 mt-3 text-center">
+                  Tap to preview each sound effect
+                </p>
+              </div>
+            )}
+          </div>
+        )}
         
         {/* GPS & Privacy */}
         <div className="card overflow-hidden">
@@ -247,7 +329,7 @@ function Settings() {
       
         {/* App Info */}
         <div className="mt-6 text-center text-white/30 text-xs pb-4">
-          <p>TAG! GPS Game v2.0.0</p>
+          <p>TAG! GPS Game v2.1.0</p>
           <p className="mt-1">Made with ❤️</p>
         </div>
       </div>
