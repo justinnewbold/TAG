@@ -52,6 +52,10 @@ COPY server/routes ./server/routes
 COPY server/services ./server/services
 COPY server/socket ./server/socket
 COPY server/utils ./server/utils
+COPY server/managers ./server/managers
+
+# Copy shared utilities (used by both client and server)
+COPY shared ./shared
 
 # Create data directory for SQLite
 RUN mkdir -p /app/server/data && chown -R nodejs:nodejs /app/server/data
