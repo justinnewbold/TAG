@@ -113,7 +113,7 @@ export default function AppRatingPrompt() {
         <div className="p-4 border-b border-slate-700/50 flex justify-between items-center">
           <h3 className="text-lg font-semibold">
             {step === 'initial' && 'Enjoying TAG!?'}
-            {step === 'store' && 'We're glad! 🎉'}
+            {step === 'store' && "We're glad! 🎉"}
             {step === 'feedback' && 'Help us improve'}
             {step === 'thanks' && 'Thank you! 💜'}
           </h3>
@@ -131,7 +131,7 @@ export default function AppRatingPrompt() {
             <div className="text-center">
               <div className="text-5xl mb-4">🏃‍♂️</div>
               <p className="text-slate-300 mb-6">
-                You've had some great games! How would you rate your experience?
+                {"You've had some great games! How would you rate your experience?"}
               </p>
               
               {/* Star Rating */}
@@ -160,7 +160,7 @@ export default function AppRatingPrompt() {
                 onClick={() => handleClose(true)}
                 className="text-sm text-slate-500 hover:text-slate-400 transition"
               >
-                Don't ask again
+                {"Don't ask again"}
               </button>
             </div>
           )}
@@ -201,7 +201,7 @@ export default function AppRatingPrompt() {
             <div className="text-center">
               <div className="text-5xl mb-4">💬</div>
               <p className="text-slate-300 mb-6">
-                We'd love to hear how we can make TAG! better for you.
+                {"We'd love to hear how we can make TAG! better for you."}
               </p>
               
               <button
