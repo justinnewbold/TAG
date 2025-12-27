@@ -9,8 +9,11 @@ class SocketService {
     this.socket = null;
     this.listeners = new Map();
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 10;
+    this.maxReconnectAttempts = 5; // Reduced from 10
     this.connectionCallbacks = new Set();
+    this.isConnecting = false; // Prevent multiple simultaneous connections
+    this.lastConnectAttempt = 0;
+    this.minConnectInterval = 2000; // Minimum 2 seconds between connect attempts
   }
 
   // Add callback for connection status changes
@@ -32,64 +35,112 @@ class SocketService {
   }
 
   connect() {
+    // Prevent rapid connection attempts
+    const now = Date.now();
+    if (now - this.lastConnectAttempt < this.minConnectInterval) {
+      if (import.meta.env.DEV) console.log('Socket: Rate limiting connection attempts');
+      return this.socket;
+    }
+    this.lastConnectAttempt = now;
+
+    // If already connecting, don't create another connection
+    if (this.isConnecting) {
+      if (import.meta.env.DEV) console.log('Socket: Already connecting, skipping');
+      return this.socket;
+    }
+
+    // If already connected, just return the socket
+    if (this.socket?.connected) {
+      if (import.meta.env.DEV) console.log('Socket: Already connected');
+      return this.socket;
+    }
+
     const token = api.getToken();
     if (!token) {
-      if (import.meta.env.DEV) console.warn('Cannot connect socket: no auth token');
+      if (import.meta.env.DEV) console.warn('Socket: Cannot connect - no auth token');
       this.notifyConnectionChange('disconnected', 'No auth token');
       return null;
     }
 
-    if (this.socket?.connected) {
-      return this.socket;
+    // Clean up existing socket if any
+    if (this.socket) {
+      if (import.meta.env.DEV) console.log('Socket: Cleaning up existing socket');
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
     }
 
+    this.isConnecting = true;
     this.notifyConnectionChange('connecting');
+
+    if (import.meta.env.DEV) console.log('Socket: Creating new connection to', SOCKET_URL);
 
     this.socket = io(SOCKET_URL, {
       auth: { token },
       reconnection: true,
       reconnectionAttempts: this.maxReconnectAttempts,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 10000,
+      reconnectionDelay: 2000, // Start at 2 seconds
+      reconnectionDelayMax: 30000, // Max 30 seconds between attempts
       timeout: 20000,
+      transports: ['websocket', 'polling'], // Prefer WebSocket
+      forceNew: true, // Ensure fresh connection
     });
 
     this.socket.on('connect', () => {
-      if (import.meta.env.DEV) console.log('Socket connected');
+      if (import.meta.env.DEV) console.log('Socket: Connected successfully');
+      this.isConnecting = false;
       this.reconnectAttempts = 0;
       this.notifyConnectionChange('connected');
       this.emit('reconnect:game');
     });
 
     this.socket.on('disconnect', (reason) => {
-      if (import.meta.env.DEV) console.log('Socket disconnected:', reason);
+      if (import.meta.env.DEV) console.log('Socket: Disconnected -', reason);
+      this.isConnecting = false;
       this.notifyConnectionChange('disconnected', reason);
+      
+      // If server disconnected us, don't auto-reconnect immediately
+      if (reason === 'io server disconnect') {
+        if (import.meta.env.DEV) console.log('Socket: Server initiated disconnect, not reconnecting');
+      }
     });
 
     this.socket.on('reconnect_attempt', (attempt) => {
       this.reconnectAttempts = attempt;
+      if (import.meta.env.DEV) console.log(`Socket: Reconnect attempt ${attempt}/${this.maxReconnectAttempts}`);
       this.notifyConnectionChange('reconnecting', `Attempt ${attempt}/${this.maxReconnectAttempts}`);
     });
 
     this.socket.on('reconnect', (attempt) => {
-      if (import.meta.env.DEV) console.log('Socket reconnected after', attempt, 'attempts');
+      if (import.meta.env.DEV) console.log('Socket: Reconnected after', attempt, 'attempts');
+      this.isConnecting = false;
       this.notifyConnectionChange('connected');
     });
 
     this.socket.on('reconnect_failed', () => {
-      this.notifyConnectionChange('disconnected', 'Reconnection failed after max attempts');
+      if (import.meta.env.DEV) console.log('Socket: Reconnection failed after max attempts');
+      this.isConnecting = false;
+      this.notifyConnectionChange('disconnected', 'Reconnection failed');
     });
 
     this.socket.on('connect_error', (error) => {
-      if (import.meta.env.DEV) console.error('Socket connection error:', error.message);
+      if (import.meta.env.DEV) console.error('Socket: Connection error -', error.message);
+      this.isConnecting = false;
       this.reconnectAttempts++;
-      this.notifyConnectionChange('error', error.message);
+      
+      // Stop trying if we've hit the limit
+      if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+        if (import.meta.env.DEV) console.log('Socket: Max reconnect attempts reached, stopping');
+        this.socket?.disconnect();
+        this.notifyConnectionChange('disconnected', 'Connection failed');
+      } else {
+        this.notifyConnectionChange('error', error.message);
+      }
     });
 
     // Handle anti-cheat warnings
     this.socket.on('warning:anticheat', (data) => {
       console.warn('[AntiCheat Warning]', data.message);
-      // Could trigger a UI toast here
     });
 
     this.socket.on('error:anticheat', (data) => {
@@ -104,40 +155,45 @@ class SocketService {
   }
 
   disconnect() {
+    if (import.meta.env.DEV) console.log('Socket: Disconnecting');
+    this.isConnecting = false;
     if (this.socket) {
+      this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
     }
+    this.listeners.clear();
+    this.notifyConnectionChange('disconnected');
   }
 
   emit(event, data) {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
     } else if (import.meta.env.DEV) {
-      console.warn('Socket not connected, cannot emit:', event);
+      console.warn('Socket: Not connected, cannot emit:', event);
     }
   }
 
   on(event, callback) {
+    // Don't auto-connect just to add a listener
     if (!this.socket) {
-      this.connect();
+      if (import.meta.env.DEV) console.warn('Socket: No socket, cannot add listener for:', event);
+      return;
     }
 
-    if (this.socket) {
-      // Prevent duplicate listeners
-      const existingListeners = this.listeners.get(event) || [];
-      if (existingListeners.includes(callback)) {
-        return; // Already registered
-      }
-
-      this.socket.on(event, callback);
-
-      // Track listeners for cleanup
-      if (!this.listeners.has(event)) {
-        this.listeners.set(event, []);
-      }
-      this.listeners.get(event).push(callback);
+    // Prevent duplicate listeners
+    const existingListeners = this.listeners.get(event) || [];
+    if (existingListeners.includes(callback)) {
+      return; // Already registered
     }
+
+    this.socket.on(event, callback);
+
+    // Track listeners for cleanup
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, []);
+    }
+    this.listeners.get(event).push(callback);
   }
 
   off(event, callback) {
