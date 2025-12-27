@@ -350,7 +350,14 @@ if (usePostgres) {
 
 } else {
   // SQLite mode (local development)
-  const Database = (await import('better-sqlite3')).default;
+  let Database;
+  try {
+    Database = (await import('better-sqlite3')).default;
+  } catch (e) {
+    console.error('better-sqlite3 is not available. Set DATABASE_URL for PostgreSQL or install better-sqlite3 for local development.');
+    console.error('Error:', e.message);
+    process.exit(1);
+  }
   const path = await import('path');
   const { fileURLToPath } = await import('url');
   const fs = await import('fs');
