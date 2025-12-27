@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import Avatar from '../components/Avatar';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trophy, Target, Shield, Clock, Medal, Crown, Users, RefreshCw, Share2 } from 'lucide-react';
 import { useStore } from '../store';
@@ -193,8 +194,8 @@ function Leaderboards() {
                 <div className="flex-1 max-w-[120px]">
                   <div className="bg-gray-400/20 border border-gray-400/50 rounded-xl p-3 text-center">
                     <div className="text-2xl mb-1">🥈</div>
-                    <div className={`text-3xl mb-1 ${leaderboards[activeBoard][1].id === user?.id ? 'ring-2 ring-neon-cyan rounded-full inline-block p-1' : ''}`}>
-                      {leaderboards[activeBoard][1].avatar}
+                    <div className={`inline-block mb-1 ${leaderboards[activeBoard][1].id === user?.id ? 'ring-2 ring-neon-cyan rounded-full p-1' : ''}`}>
+                      <Avatar user={leaderboards[activeBoard][1]} size="lg" />
                     </div>
                     <h3 className="font-medium text-gray-300 truncate text-sm">
                       {leaderboards[activeBoard][1].name}
@@ -211,8 +212,8 @@ function Leaderboards() {
                 <div className="flex-1 max-w-[140px]">
                   <div className="bg-amber-500/20 border border-amber-500/50 rounded-xl p-4 text-center -mt-6">
                     <div className="text-3xl mb-1">👑</div>
-                    <div className={`text-4xl mb-1 ${leaderboards[activeBoard][0].id === user?.id ? 'ring-2 ring-neon-cyan rounded-full inline-block p-1' : ''}`}>
-                      {leaderboards[activeBoard][0].avatar}
+                    <div className={`inline-block mb-1 ${leaderboards[activeBoard][0].id === user?.id ? 'ring-2 ring-neon-cyan rounded-full p-1' : ''}`}>
+                      <Avatar user={leaderboards[activeBoard][0]} size="xl" />
                     </div>
                     <h3 className="font-semibold text-amber-400 truncate">
                       {leaderboards[activeBoard][0].name}
@@ -230,8 +231,8 @@ function Leaderboards() {
                 <div className="flex-1 max-w-[120px]">
                   <div className="bg-amber-700/20 border border-amber-700/50 rounded-xl p-3 text-center mt-4">
                     <div className="text-2xl mb-1">🥉</div>
-                    <div className={`text-3xl mb-1 ${leaderboards[activeBoard][2].id === user?.id ? 'ring-2 ring-neon-cyan rounded-full inline-block p-1' : ''}`}>
-                      {leaderboards[activeBoard][2].avatar}
+                    <div className={`inline-block mb-1 ${leaderboards[activeBoard][2].id === user?.id ? 'ring-2 ring-neon-cyan rounded-full p-1' : ''}`}>
+                      <Avatar user={leaderboards[activeBoard][2]} size="lg" />
                     </div>
                     <h3 className="font-medium text-amber-600 truncate text-sm">
                       {leaderboards[activeBoard][2].name}
@@ -258,7 +259,7 @@ function Leaderboards() {
                   <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-lg font-bold">
                     {index + 4}
                   </div>
-                  <div className="text-3xl">{player.avatar}</div>
+                  <Avatar user={player} size="lg" />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium truncate">
                       {player.name}
