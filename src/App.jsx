@@ -34,6 +34,7 @@ const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback'));
+const MagicLinkAuth = lazy(() => import('./pages/MagicLinkAuth'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 
@@ -206,6 +207,7 @@ function App() {
             <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/auth/magic" element={<MagicLinkAuth />} />
             <Route path="/landing" element={<Landing />} />
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
@@ -254,3 +256,4 @@ function App() {
 }
 
 export default App;
+
