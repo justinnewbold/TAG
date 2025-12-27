@@ -1,7 +1,7 @@
 import { validate } from '../utils/validation.js';
 import { pushService } from '../services/push.js';
-import { getDistance, calculateSpeed, isValidSpeed } from '../../shared/utils.js';
-import { ANTI_CHEAT, SOCKET_RATE_LIMITS } from '../../shared/constants.js';
+import { getDistance, calculateSpeed, isValidSpeed } from '../shared/utils.js';
+import { ANTI_CHEAT, SOCKET_RATE_LIMITS } from '../shared/constants.js';
 
 // Rate limiter for socket events
 class RateLimiter {
