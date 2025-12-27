@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Avatar from '../components/Avatar';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Users, MapPin, Timer, Target, Trophy, Award, History, Crown, Gamepad2, ChevronUp } from 'lucide-react';
 import { useStore, useSounds, ACHIEVEMENTS } from '../store';
@@ -40,9 +41,7 @@ function Home() {
                 <p className="text-sm font-medium">{user.name}</p>
                 <p className="text-xs text-white/40">{stats.gamesWon} wins</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center text-xl">
-                {user.avatar || '👤'}
-              </div>
+              <Avatar user={user} size="md" />
             </button>
           )}
         </div>
