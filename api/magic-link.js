@@ -34,10 +34,16 @@ export default async function handler(req, res) {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
     
     // Build the magic link URL
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : process.env.NEXT_PUBLIC_BASE_URL || 'https://tag.newbold.cloud';
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://tag.newbold.cloud';
     const magicLink = `${baseUrl}/auth/magic?token=${token}&email=${encodeURIComponent(email)}`;
+    
+    // Determine sender based on domain verification status
+    // Use Resend's testing domain until custom domain is verified
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'TAG! <onboarding@resend.dev>';
+    
+    console.log('Sending magic link to:', email);
+    console.log('From:', fromEmail);
+    console.log('Magic link:', magicLink);
     
     // Send email via Resend
     const response = await fetch('https://api.resend.com/emails', {
@@ -47,7 +53,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'TAG! <noreply@newbold.cloud>',
+        from: fromEmail,
         to: email,
         subject: '🏃 Your TAG! Magic Link - Sign In Instantly',
         html: generateEmailTemplate(magicLink, email),
@@ -60,29 +66,38 @@ export default async function handler(req, res) {
       console.error('Resend API error:', data);
       
       // Handle specific Resend errors
-      if (data.statusCode === 403 || data.message?.includes('domain')) {
-        return res.status(500).json({ 
-          error: 'Email domain not verified. Please contact support.',
-          details: 'The sending domain needs to be verified in Resend.'
+      if (data.statusCode === 403) {
+        // Domain not verified - provide helpful message
+        if (data.message?.includes('domain')) {
+          return res.status(500).json({ 
+            error: 'Email sending domain not verified',
+            details: 'Please verify your domain at resend.com/domains or use the test domain.',
+            helpUrl: 'https://resend.com/domains'
+          });
+        }
+      }
+      
+      if (data.statusCode === 422) {
+        // Validation error
+        return res.status(400).json({ 
+          error: 'Invalid email address',
+          details: data.message
         });
       }
       
       return res.status(500).json({ 
         error: 'Failed to send email',
-        details: data.message || 'Unknown error'
+        details: data.message || 'Unknown error',
+        statusCode: data.statusCode
       });
     }
     
-    // Store token in response for client-side storage (or use database in production)
-    // In a real app, you'd store this server-side
-    console.log('Magic link email sent successfully to:', email);
+    console.log('Magic link email sent successfully:', data.id);
     
     return res.status(200).json({ 
       success: true, 
       message: 'Magic link sent! Check your email.',
-      emailId: data.id,
-      // In production, don't expose the token
-      _token: process.env.NODE_ENV === 'development' ? token : undefined
+      emailId: data.id
     });
     
   } catch (error) {
