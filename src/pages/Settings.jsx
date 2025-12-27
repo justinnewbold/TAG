@@ -1,4 +1,5 @@
 import React, { useState, lazy, Suspense } from 'react';
+import Avatar, { hasUrlAvatar } from '../components/Avatar';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Volume2, Vibrate, MapPin, Moon, LogOut, Trash2, User, Info, ChevronRight, Shield, Download, Accessibility, Loader2, ArrowLeft, Check } from 'lucide-react';
 import { useStore } from '../store';
@@ -95,9 +96,9 @@ function Settings() {
             {/* Avatar - Tappable */}
             <button
               onClick={() => setShowAvatarSheet(true)}
-              className="touch-target-48 text-4xl p-3 bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 rounded-xl active:scale-95 transition-transform relative"
+              className="touch-target-48 relative active:scale-95 transition-transform"
             >
-              {user?.avatar || '👤'}
+              <Avatar user={user} size="xl" className="p-3 bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20" />
               <span className="absolute -bottom-1 -right-1 text-xs bg-neon-purple rounded-full w-5 h-5 flex items-center justify-center">✏️</span>
             </button>
             
