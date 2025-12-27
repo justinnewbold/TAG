@@ -44,6 +44,7 @@ import OnboardingTutorial from './components/OnboardingTutorial';
 import { GameErrorBoundary } from './components/ErrorBoundary';
 import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import ConnectionStatus from './components/ConnectionStatus';
+import AppRatingPrompt from './components/AppRatingPrompt';
 
 // Loading fallback for lazy loaded pages
 function PageLoader() {
@@ -192,6 +193,9 @@ function App() {
 
         {/* Achievement Toast */}
         <AchievementToast />
+
+        {/* App Rating Prompt */}
+        {user && <AppRatingPrompt />}
 
         {/* Main content */}
         <main className="relative pb-24">
