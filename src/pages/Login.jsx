@@ -80,8 +80,11 @@ export default function Login() {
       try {
         const { game } = await api.getCurrentGame();
         if (game) syncGameState(game);
-      } catch (e) {}
-      
+      } catch (e) {
+        // Ignore errors when checking for existing game - user can still continue
+        console.debug('No existing game found:', e.message);
+      }
+
       const returnTo = location.state?.from?.pathname || '/';
       navigate(returnTo, { replace: true });
     } catch (err) {
@@ -95,12 +98,15 @@ export default function Login() {
       const { user } = await api.getMe();
       setUser(user);
       socketService.connect();
-      
+
       try {
         const { game } = await api.getCurrentGame();
         if (game) syncGameState(game);
-      } catch (e) {}
-      
+      } catch (e) {
+        // Ignore errors when checking for existing game - user can still continue
+        console.debug('No existing game found:', e.message);
+      }
+
       const returnTo = location.state?.from?.pathname || '/';
       navigate(returnTo, { replace: true });
     } catch (err) {
