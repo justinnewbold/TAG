@@ -10,7 +10,7 @@ import { supabase, supabaseAuth } from '../services/supabase';
  * Auth Callback Handler
  * Handles:
  * - Magic link redirects (email sign-in links)
- * - Google OAuth returns
+ * - Google OAuth returns (with hash fragment tokens)
  * - Password reset completions
  * - Account linking confirmations
  */
@@ -20,193 +20,177 @@ export default function AuthCallback() {
   const [searchParams] = useSearchParams();
   const { setUser, syncGameState } = useStore();
   
-  const [status, setStatus] = useState('processing'); // 'processing', 'success', 'error'
+  const [status, setStatus] = useState('processing');
   const [message, setMessage] = useState('Verifying authentication...');
-  const [authType, setAuthType] = useState(null); // 'magic_link', 'google', 'password_reset', 'account_link'
+  const [authType, setAuthType] = useState(null);
 
   useEffect(() => {
-    handleAuthCallback();
+    // Small delay to allow Supabase to process the URL hash
+    const timer = setTimeout(() => {
+      handleAuthCallback();
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   const handleAuthCallback = async () => {
     try {
-      // Parse the hash fragment for Supabase auth
-      const hashParams = new URLSearchParams(location.hash.slice(1));
-      const queryParams = Object.fromEntries(searchParams.entries());
+      console.log('Auth callback starting...');
+      console.log('Location hash:', location.hash);
+      console.log('Search params:', Object.fromEntries(searchParams.entries()));
+
+      // First, check if Supabase already detected and processed the session
+      // This happens automatically when detectSessionInUrl is true
+      let session = null;
       
-      // Check for error in callback first
-      const error = hashParams.get('error') || queryParams.error;
-      const errorDescription = hashParams.get('error_description') || queryParams.error_description;
+      // Try to get the session - Supabase may have already processed the hash
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       
-      if (error) {
-        throw new Error(errorDescription || error);
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+      }
+      
+      if (sessionData?.session) {
+        console.log('Found existing session from Supabase');
+        session = sessionData.session;
       }
 
-      // Get tokens from hash (Supabase OAuth/magic link format)
-      const accessToken = hashParams.get('access_token');
-      const refreshToken = hashParams.get('refresh_token');
-      const type = hashParams.get('type') || queryParams.type;
-      const providerToken = hashParams.get('provider_token');
-
-      console.log('Auth callback received:', { 
-        hasAccessToken: !!accessToken, 
-        hasRefreshToken: !!refreshToken,
-        type,
-        hasProviderToken: !!providerToken
-      });
-
-      // Determine auth type
-      if (type === 'recovery') {
-        setAuthType('recovery');
-        setStatus('success');
-        setMessage('Redirecting to password reset...');
+      // If no session yet, try to manually process the hash
+      if (!session && location.hash) {
+        console.log('Manually processing hash fragment...');
+        const hashParams = new URLSearchParams(location.hash.slice(1));
         
-        // For password recovery, redirect to forgot password page
-        setTimeout(() => {
-          navigate(`/forgot-password?type=recovery&access_token=${accessToken}`);
-        }, 1000);
-        return;
-      }
+        // Check for error first
+        const error = hashParams.get('error');
+        const errorDescription = hashParams.get('error_description');
+        if (error) {
+          throw new Error(errorDescription || error);
+        }
 
-      // Set auth type based on callback params
-      if (providerToken || type === 'oauth') {
-        setAuthType('google');
-        setMessage('Google sign in successful!');
-      } else if (type === 'magiclink') {
-        setAuthType('magic_link');
-        setMessage('Magic link verified!');
-      } else if (type === 'signup' || type === 'email_confirmation') {
-        setAuthType('email');
-        setMessage('Email confirmed!');
-      } else if (queryParams.link === 'true') {
-        setAuthType('account_link');
-        setMessage('Account linked successfully!');
-      }
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const type = hashParams.get('type');
 
-      // Handle tokens - use Supabase to set the session
-      if (accessToken && refreshToken) {
-        setMessage('Setting up your session...');
-        
-        // Use Supabase to set the session from the tokens
-        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
+        console.log('Hash params:', { 
+          hasAccessToken: !!accessToken, 
+          hasRefreshToken: !!refreshToken, 
+          type 
         });
 
-        if (sessionError) {
-          console.error('Supabase session error:', sessionError);
-          throw new Error(sessionError.message || 'Failed to establish session');
+        // Handle password recovery redirect
+        if (type === 'recovery') {
+          setAuthType('recovery');
+          setStatus('success');
+          setMessage('Redirecting to password reset...');
+          setTimeout(() => {
+            navigate(`/forgot-password?type=recovery&access_token=${accessToken}`);
+          }, 1000);
+          return;
         }
 
-        if (!sessionData.session) {
-          throw new Error('Failed to create session');
-        }
-
-        console.log('Supabase session established:', sessionData.session.user?.email);
-        setMessage('Connecting to game server...');
-
-        // Now exchange Supabase session with our backend
-        try {
-          const response = await api.request('/auth/token', {
-            method: 'POST',
-            body: JSON.stringify({ 
-              access_token: sessionData.session.access_token,
-              refresh_token: sessionData.session.refresh_token,
-            }),
+        // Set session from tokens if available
+        if (accessToken && refreshToken) {
+          setMessage('Establishing session...');
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
           });
 
-          if (response.token) {
-            api.setToken(response.token);
-            if (response.refreshToken) {
-              api.setRefreshToken(response.refreshToken);
-            }
+          if (error) {
+            console.error('setSession error:', error);
+            throw new Error(error.message);
           }
-        } catch (backendError) {
-          console.error('Backend token exchange error:', backendError);
-          // Continue anyway - we have a valid Supabase session
-          // The app can still work with Supabase auth
-        }
 
-      } else if (queryParams.code) {
-        // Handle OAuth code flow (PKCE)
-        setMessage('Exchanging authorization code...');
-        
-        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(queryParams.code);
-        
-        if (exchangeError) {
-          throw new Error(exchangeError.message || 'Failed to exchange code for session');
-        }
-
-        if (!data.session) {
-          throw new Error('No session received from code exchange');
-        }
-
-        // Exchange with backend
-        try {
-          const response = await api.request('/auth/token', {
-            method: 'POST',
-            body: JSON.stringify({ 
-              access_token: data.session.access_token,
-              refresh_token: data.session.refresh_token,
-            }),
-          });
-
-          if (response.token) {
-            api.setToken(response.token);
-            if (response.refreshToken) {
-              api.setRefreshToken(response.refreshToken);
-            }
+          if (data?.session) {
+            session = data.session;
+            console.log('Session established from hash tokens');
           }
-        } catch (backendError) {
-          console.error('Backend token exchange error:', backendError);
-        }
-
-      } else {
-        // No tokens in URL, check if we already have a session
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session) {
-          throw new Error('No authentication tokens received. Please try signing in again.');
-        }
-        
-        // We have an existing session, use it
-        try {
-          const response = await api.request('/auth/token', {
-            method: 'POST',
-            body: JSON.stringify({ 
-              access_token: session.access_token,
-              refresh_token: session.refresh_token,
-            }),
-          });
-
-          if (response.token) {
-            api.setToken(response.token);
-            if (response.refreshToken) {
-              api.setRefreshToken(response.refreshToken);
-            }
-          }
-        } catch (backendError) {
-          console.error('Backend token exchange error:', backendError);
         }
       }
 
-      // Get user profile from our backend
+      // Check for OAuth code (PKCE flow)
+      const code = searchParams.get('code');
+      if (!session && code) {
+        console.log('Exchanging OAuth code...');
+        setMessage('Exchanging authorization code...');
+        
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        
+        if (error) {
+          console.error('Code exchange error:', error);
+          throw new Error(error.message);
+        }
+        
+        if (data?.session) {
+          session = data.session;
+          console.log('Session established from code exchange');
+        }
+      }
+
+      // Final check - if still no session, we have a problem
+      if (!session) {
+        // One more attempt to get session (Supabase might have processed it async)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const { data: retryData } = await supabase.auth.getSession();
+        
+        if (retryData?.session) {
+          session = retryData.session;
+          console.log('Session found on retry');
+        } else {
+          throw new Error('No authentication tokens received. Please try signing in again.');
+        }
+      }
+
+      // We have a valid session!
+      console.log('Session user:', session.user?.email);
+      setMessage('Connecting to game server...');
+
+      // Determine auth type for display
+      const provider = session.user?.app_metadata?.provider;
+      if (provider === 'google') {
+        setAuthType('google');
+      } else if (provider === 'email') {
+        setAuthType('magic_link');
+      } else {
+        setAuthType('email');
+      }
+
+      // Exchange Supabase session with our backend
+      try {
+        const response = await api.request('/auth/token', {
+          method: 'POST',
+          body: JSON.stringify({ 
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+          }),
+        });
+
+        if (response.token) {
+          api.setToken(response.token);
+          if (response.refreshToken) {
+            api.setRefreshToken(response.refreshToken);
+          }
+          console.log('Backend token exchange successful');
+        }
+      } catch (backendError) {
+        console.warn('Backend token exchange failed:', backendError.message);
+        // Continue anyway - we have a valid Supabase session
+      }
+
+      // Get user profile
       setMessage('Loading your profile...');
       try {
         const { user } = await api.getMe();
         setUser(user);
       } catch (profileError) {
-        // If backend fails, try to get user from Supabase
         console.warn('Backend profile fetch failed, using Supabase user');
-        const supabaseUser = await supabaseAuth.getUser();
-        if (supabaseUser) {
-          setUser({
-            id: supabaseUser.id,
-            email: supabaseUser.email,
-            username: supabaseUser.user_metadata?.username || supabaseUser.email?.split('@')[0],
-            avatar: supabaseUser.user_metadata?.avatar_url,
-          });
-        }
+        const user = session.user;
+        setUser({
+          id: user.id,
+          email: user.email,
+          username: user.user_metadata?.username || user.email?.split('@')[0] || 'Player',
+          avatar: user.user_metadata?.avatar_url,
+        });
       }
 
       // Connect socket
@@ -217,16 +201,15 @@ export default function AuthCallback() {
         const { game } = await api.getCurrentGame();
         if (game) syncGameState(game);
       } catch (e) {
-        // No active game, that's fine
+        // No active game
       }
 
       setStatus('success');
       setMessage(getSuccessMessage(authType));
 
-      // Redirect after short delay
+      // Redirect after delay
       setTimeout(() => {
-        // Check for intended destination
-        const redirectTo = queryParams.redirect || queryParams.state || '/';
+        const redirectTo = searchParams.get('redirect') || searchParams.get('state') || '/';
         try {
           const url = new URL(redirectTo, window.location.origin);
           navigate(url.pathname);
@@ -252,8 +235,6 @@ export default function AuthCallback() {
         return 'Account linked! Your progress is now secured.';
       case 'recovery':
         return 'Password reset link verified!';
-      case 'email':
-        return 'Email confirmed! Welcome to TAG!';
       default:
         return 'Sign in successful!';
     }
@@ -261,7 +242,7 @@ export default function AuthCallback() {
 
   const getIcon = () => {
     if (status === 'processing') {
-      return <Loader2 className="w-12 h-12 animate-spin text-accent-primary" />;
+      return <Loader2 className="w-12 h-12 animate-spin text-sky-500" />;
     }
     if (status === 'error') {
       return <XCircle className="w-12 h-12 text-red-500" />;
@@ -269,27 +250,27 @@ export default function AuthCallback() {
     
     switch (authType) {
       case 'magic_link':
-        return <Mail className="w-12 h-12 text-accent-primary" />;
+        return <Mail className="w-12 h-12 text-sky-500" />;
       case 'google':
-        return <Chrome className="w-12 h-12 text-green-500" />;
+        return <Chrome className="w-12 h-12 text-emerald-500" />;
       case 'recovery':
-        return <Lock className="w-12 h-12 text-accent-secondary" />;
+        return <Lock className="w-12 h-12 text-violet-500" />;
       default:
-        return <CheckCircle className="w-12 h-12 text-green-500" />;
+        return <CheckCircle className="w-12 h-12 text-emerald-500" />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-light-100 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
       <div className="w-full max-w-md">
-        <div className="card p-8">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
           {/* Icon */}
           <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 ${
             status === 'error' 
-              ? 'bg-red-100' 
+              ? 'bg-red-50' 
               : status === 'success' 
-              ? 'bg-green-100' 
-              : 'bg-accent-primary/10'
+              ? 'bg-emerald-50' 
+              : 'bg-sky-50'
           }`}>
             {getIcon()}
           </div>
@@ -303,15 +284,15 @@ export default function AuthCallback() {
 
           {/* Message */}
           <p className={`text-center mb-6 ${
-            status === 'error' ? 'text-red-600' : 'text-slate-600'
+            status === 'error' ? 'text-red-600' : 'text-slate-500'
           }`}>
             {message || 'Please wait...'}
           </p>
 
-          {/* Progress indicator for processing */}
+          {/* Progress indicator */}
           {status === 'processing' && (
-            <div className="w-full bg-slate-200 rounded-full h-1 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-accent-primary to-accent-secondary animate-progress" />
+            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-sky-500 to-violet-500 animate-progress" />
             </div>
           )}
 
@@ -320,13 +301,13 @@ export default function AuthCallback() {
             <div className="space-y-3">
               <button
                 onClick={() => navigate('/login')}
-                className="w-full py-4 bg-gradient-to-r from-accent-primary to-accent-secondary text-white rounded-xl font-semibold hover:opacity-90 transition"
+                className="w-full py-4 bg-gradient-to-r from-sky-500 to-violet-500 text-white rounded-xl font-semibold hover:opacity-90 transition"
               >
                 Try Again
               </button>
               <button
                 onClick={() => navigate('/')}
-                className="w-full py-3 text-slate-500 hover:text-slate-700 transition"
+                className="w-full py-3 text-slate-400 hover:text-slate-600 transition"
               >
                 Go Home
               </button>
@@ -335,7 +316,7 @@ export default function AuthCallback() {
 
           {/* Success indicator */}
           {status === 'success' && (
-            <div className="flex items-center justify-center gap-2 text-green-600">
+            <div className="flex items-center justify-center gap-2 text-emerald-600">
               <CheckCircle className="w-5 h-5" />
               <span className="text-sm">Redirecting...</span>
             </div>
@@ -353,6 +334,7 @@ export default function AuthCallback() {
                   <li>• Make sure you're using the latest link from your email</li>
                   <li>• Links expire after 1 hour</li>
                   <li>• Try requesting a new link</li>
+                  <li>• Clear your browser cache and try again</li>
                 </ul>
               </div>
             </div>
@@ -360,7 +342,6 @@ export default function AuthCallback() {
         )}
       </div>
 
-      {/* Add CSS for progress animation */}
       <style>{`
         @keyframes progress {
           0% { transform: translateX(-100%); width: 100%; }
