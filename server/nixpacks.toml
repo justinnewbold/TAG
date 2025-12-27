@@ -1,8 +1,11 @@
 [phases.setup]
-nixPkgs = ["python3", "gcc", "gnumake", "libc-dev"]
+nixPkgs = ["nodejs_20", "python3", "gcc", "gnumake", "pkg-config"]
 
 [phases.install]
-cmds = ["npm install"]
+cmds = ["npm install --ignore-scripts"]
+
+[phases.build]
+cmds = ["echo 'Build complete'"]
 
 [start]
-cmd = "npm start"
+cmd = "node index.js"
