@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Users, Shield, Crown, Plus, Search, ChevronRight, 
-  Settings, LogOut, UserPlus, Trophy, Star, 
+import {
+  Users, Shield, Crown, Plus, Search, ChevronRight,
+  Settings, LogOut, UserPlus, Trophy, Star,
   Edit2, Check, X, Copy, Share
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useStore } from '../store';
+import { useToast } from '../components/Toast';
 
 function Clans() {
   const { user } = useStore();
+  const toast = useToast();
   const [view, setView] = useState('browse'); // browse, my-clan, create
   const [clans, setClans] = useState([]);
   const [myClan, setMyClan] = useState(null);
@@ -66,9 +68,10 @@ function Clans() {
       setMyClan(data.clan);
       setShowCreateModal(false);
       setView('my-clan');
+      toast.success('Clan created successfully!');
     } catch (err) {
-      console.error('Failed to create clan:', err);
-      alert(err.message);
+      if (import.meta.env.DEV) console.error('Failed to create clan:', err);
+      toast.error(err.message || 'Failed to create clan');
     }
   };
 
@@ -76,9 +79,10 @@ function Clans() {
     try {
       await api.request(`/social/clans/${clanId}/join`, { method: 'POST' });
       fetchMyClan();
+      toast.success('Joined clan successfully!');
     } catch (err) {
-      console.error('Failed to join clan:', err);
-      alert(err.message);
+      if (import.meta.env.DEV) console.error('Failed to join clan:', err);
+      toast.error(err.message || 'Failed to join clan');
     }
   };
 
@@ -93,10 +97,14 @@ function Clans() {
     }
   };
 
-  const copyInviteCode = () => {
+  const copyInviteCode = async () => {
     if (myClan?.invite_code) {
-      navigator.clipboard.writeText(myClan.invite_code);
-      alert('Invite code copied!');
+      try {
+        await navigator.clipboard.writeText(myClan.invite_code);
+        toast.success('Invite code copied!');
+      } catch (err) {
+        toast.error('Failed to copy invite code');
+      }
     }
   };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Users, Gamepad2, AlertCircle, Camera, Hash, Loader2 } from 'lucide-react';
 import { useStore, useSounds } from '../store';
@@ -17,18 +17,7 @@ function JoinGame() {
   const hasAutoJoined = useRef(false);
   const inputRefs = useRef([]);
 
-  // Check for game code in URL params (deep link)
-  useEffect(() => {
-    const codeFromUrl = searchParams.get('code');
-    if (codeFromUrl && !hasAutoJoined.current) {
-      hasAutoJoined.current = true;
-      setGameCode(codeFromUrl.toUpperCase());
-      // Auto-join if code is provided
-      handleJoin(codeFromUrl.toUpperCase());
-    }
-  }, [searchParams]);
-
-  const handleJoin = async (code = gameCode) => {
+  const handleJoin = useCallback(async (code = gameCode) => {
     if (!code || code.length < 6) {
       setError('Please enter a valid game code');
       vibrate([100, 50, 100]);
@@ -53,15 +42,15 @@ function JoinGame() {
       vibrate([50, 30, 100]);
       navigate('/lobby');
     } catch (err) {
-      console.error('Join game error:', err);
+      if (import.meta.env.DEV) console.error('Join game error:', err);
 
       // Fallback to local-only mode if server is unavailable
-      const isNetworkError = 
-        err.message === 'Failed to fetch' || 
+      const isNetworkError =
+        err.message === 'Failed to fetch' ||
         err.message.includes('NetworkError') ||
         err.message.includes('Unable to connect') ||
         err.message.includes('fetch');
-        
+
       if (isNetworkError) {
         // Try local games
         const localGame = games.find(g => g.code === code.toUpperCase() && g.status === 'waiting');
@@ -82,7 +71,18 @@ function JoinGame() {
     } finally {
       setIsJoining(false);
     }
-  };
+  }, [gameCode, isJoining, vibrate, syncGameState, navigate, games, joinGame]);
+
+  // Check for game code in URL params (deep link)
+  useEffect(() => {
+    const codeFromUrl = searchParams.get('code');
+    if (codeFromUrl && !hasAutoJoined.current) {
+      hasAutoJoined.current = true;
+      setGameCode(codeFromUrl.toUpperCase());
+      // Auto-join if code is provided
+      handleJoin(codeFromUrl.toUpperCase());
+    }
+  }, [searchParams, handleJoin]);
   
   const handleCodeChange = (e) => {
     const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);

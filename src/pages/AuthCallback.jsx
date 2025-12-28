@@ -34,9 +34,11 @@ export default function AuthCallback() {
 
   const handleAuthCallback = async () => {
     try {
-      console.log('Auth callback starting...');
-      console.log('Location hash:', location.hash ? 'present' : 'empty');
-      console.log('Search params:', Object.fromEntries(searchParams.entries()));
+      if (import.meta.env.DEV) {
+        console.log('Auth callback starting...');
+        console.log('Location hash:', location.hash ? 'present' : 'empty');
+        console.log('Search params:', Object.fromEntries(searchParams.entries()));
+      }
 
       // First, check if Supabase already detected and processed the session
       let session = null;
@@ -44,20 +46,20 @@ export default function AuthCallback() {
       // Try to get the session - Supabase may have already processed the hash
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       
-      if (sessionError) {
+      if (sessionError && import.meta.env.DEV) {
         console.error('Session error:', sessionError);
       }
-      
+
       if (sessionData?.session) {
-        console.log('Found existing session from Supabase');
+        if (import.meta.env.DEV) console.log('Found existing session from Supabase');
         session = sessionData.session;
       }
 
       // If no session yet, try to manually process the hash
       if (!session && location.hash) {
-        console.log('Manually processing hash fragment...');
+        if (import.meta.env.DEV) console.log('Manually processing hash fragment...');
         const hashParams = new URLSearchParams(location.hash.slice(1));
-        
+
         // Check for error first
         const error = hashParams.get('error');
         const errorDescription = hashParams.get('error_description');
@@ -69,11 +71,13 @@ export default function AuthCallback() {
         const refreshToken = hashParams.get('refresh_token');
         const type = hashParams.get('type');
 
-        console.log('Hash params:', { 
-          hasAccessToken: !!accessToken, 
-          hasRefreshToken: !!refreshToken, 
-          type 
-        });
+        if (import.meta.env.DEV) {
+          console.log('Hash params:', {
+            hasAccessToken: !!accessToken,
+            hasRefreshToken: !!refreshToken,
+            type
+          });
+        }
 
         // Handle password recovery redirect
         if (type === 'recovery') {
@@ -95,13 +99,13 @@ export default function AuthCallback() {
           });
 
           if (error) {
-            console.error('setSession error:', error);
+            if (import.meta.env.DEV) console.error('setSession error:', error);
             throw new Error(error.message);
           }
 
           if (data?.session) {
             session = data.session;
-            console.log('Session established from hash tokens');
+            if (import.meta.env.DEV) console.log('Session established from hash tokens');
           }
         }
       }
@@ -109,19 +113,19 @@ export default function AuthCallback() {
       // Check for OAuth code (PKCE flow)
       const code = searchParams.get('code');
       if (!session && code) {
-        console.log('Exchanging OAuth code...');
+        if (import.meta.env.DEV) console.log('Exchanging OAuth code...');
         setMessage('Exchanging authorization code...');
-        
+
         const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-        
+
         if (error) {
-          console.error('Code exchange error:', error);
+          if (import.meta.env.DEV) console.error('Code exchange error:', error);
           throw new Error(error.message);
         }
-        
+
         if (data?.session) {
           session = data.session;
-          console.log('Session established from code exchange');
+          if (import.meta.env.DEV) console.log('Session established from code exchange');
         }
       }
 
@@ -130,17 +134,17 @@ export default function AuthCallback() {
         // One more attempt to get session (Supabase might have processed it async)
         await new Promise(resolve => setTimeout(resolve, 500));
         const { data: retryData } = await supabase.auth.getSession();
-        
+
         if (retryData?.session) {
           session = retryData.session;
-          console.log('Session found on retry');
+          if (import.meta.env.DEV) console.log('Session found on retry');
         } else {
           throw new Error('No authentication tokens received. Please try signing in again.');
         }
       }
 
       // We have a valid session!
-      console.log('Session user:', session.user?.email);
+      if (import.meta.env.DEV) console.log('Session user:', session.user?.email);
       setMessage('Connecting to game server...');
 
       // Determine auth type for display
@@ -178,10 +182,10 @@ export default function AuthCallback() {
           if (response.user) {
             setUser(response.user);
           }
-          console.log('Backend sync successful');
+          if (import.meta.env.DEV) console.log('Backend sync successful');
         }
       } catch (backendError) {
-        console.warn('Backend sync failed:', backendError.message);
+        if (import.meta.env.DEV) console.warn('Backend sync failed:', backendError.message);
         // Continue anyway - we have a valid Supabase session
       }
 
@@ -193,7 +197,7 @@ export default function AuthCallback() {
         user = response.user;
         setUser(user);
       } catch (profileError) {
-        console.warn('Backend profile fetch failed, using Supabase user');
+        if (import.meta.env.DEV) console.warn('Backend profile fetch failed, using Supabase user');
         const supaUser = session.user;
         user = {
           id: supaUser.id,
@@ -237,7 +241,7 @@ export default function AuthCallback() {
       }, 1500);
 
     } catch (err) {
-      console.error('Auth callback error:', err);
+      if (import.meta.env.DEV) console.error('Auth callback error:', err);
       setStatus('error');
       setMessage(err.message || 'Authentication failed. Please try again.');
     }

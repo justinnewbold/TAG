@@ -5,9 +5,11 @@ import { useStore } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import BottomSheet from '../components/BottomSheet';
+import { useToast } from '../components/Toast';
 
 function Friends() {
   const navigate = useNavigate();
+  const toast = useToast();
   const { user, currentGame } = useStore();
   
   const [friends, setFriends] = useState([]);
@@ -142,7 +144,7 @@ function Friends() {
       // Show brief feedback
       const friend = friends.find(f => f.id === friendId);
       if (friend) {
-        alert(`Invite sent to ${friend.name}!`);
+        toast.success(`Invite sent to ${friend.name}!`);
       }
     } else {
       navigate('/create');

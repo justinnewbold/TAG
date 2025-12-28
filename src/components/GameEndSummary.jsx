@@ -5,9 +5,11 @@ import { useStore, useSounds } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import confetti from 'canvas-confetti';
+import { useToast } from './Toast';
 
 function GameEndSummary({ game, onClose }) {
   const navigate = useNavigate();
+  const toast = useToast();
   const { user, syncGameState } = useStore();
   const { playSound, vibrate } = useSounds();
   const [rematchStatus, setRematchStatus] = useState('idle'); // idle, creating, waiting, ready
@@ -78,7 +80,7 @@ function GameEndSummary({ game, onClose }) {
     const text = `I just ${isWinner ? 'won' : 'played'} TAG! 🏃‍♂️\n` +
       `Tags: ${userTags} | Duration: ${formatDuration(gameDuration)}\n` +
       `Play with me: ${appUrl}`;
-    
+
     if (navigator.share) {
       try {
         await navigator.share({ text });
@@ -86,8 +88,12 @@ function GameEndSummary({ game, onClose }) {
         // User cancelled
       }
     } else {
-      navigator.clipboard.writeText(text);
-      alert('Copied to clipboard!');
+      try {
+        await navigator.clipboard.writeText(text);
+        toast.success('Copied to clipboard!');
+      } catch (err) {
+        toast.error('Failed to copy');
+      }
     }
   };
 
@@ -131,8 +137,8 @@ function GameEndSummary({ game, onClose }) {
         onClose?.();
         navigate('/lobby');
       } catch (err) {
-        console.error('Failed to join rematch:', err);
-        alert(err.message);
+        if (import.meta.env.DEV) console.error('Failed to join rematch:', err);
+        toast.error(err.message || 'Failed to join rematch');
       }
       return;
     }
@@ -176,9 +182,9 @@ function GameEndSummary({ game, onClose }) {
       onClose?.();
       navigate('/lobby');
     } catch (err) {
-      console.error('Failed to create rematch:', err);
+      if (import.meta.env.DEV) console.error('Failed to create rematch:', err);
       setRematchStatus('idle');
-      alert(err.message);
+      toast.error(err.message || 'Failed to create rematch');
     }
   };
   
