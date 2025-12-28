@@ -17,6 +17,7 @@ import { usersRouter } from './routes/users.js';
 import healthRouter from './routes/health.js';
 import { GameManager } from './game/GameManager.js';
 import { setupSocketHandlers } from './socket/handlers.js';
+import { locationTracker } from './socket/utils.js';
 import { logger } from './utils/logger.js';
 import { errorMiddleware, notFoundMiddleware } from './utils/errors.js';
 import { requestLoggerWithSkip } from './utils/requestLogger.js';
@@ -244,6 +245,27 @@ setInterval(async () => {
     logger.error('Game cleanup error', { error: error.message, stack: error.stack });
   }
 }, 60 * 60 * 1000);
+
+// Cleanup socket rate limits every 5 minutes (remove stale entries)
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [userId, limits] of socketRateLimits.entries()) {
+    // Remove entries older than 5 minutes
+    if (now - limits.resetAt > 5 * 60 * 1000) {
+      socketRateLimits.delete(userId);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    logger.debug('Cleaned stale socket rate limits', { count: cleaned });
+  }
+}, 5 * 60 * 1000);
+
+// Cleanup location tracker history every 10 minutes
+setInterval(() => {
+  locationTracker.cleanupOldEntries();
+}, 10 * 60 * 1000);
 
 // Run cleanup on startup (after a short delay to let everything initialize)
 setTimeout(async () => {

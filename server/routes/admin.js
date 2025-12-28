@@ -2,6 +2,7 @@
 import express from 'express';
 import { socialDb } from '../db/social.js';
 import { antiCheat } from '../services/antiCheat.js';
+import { rateLimiter, locationTracker } from '../socket/utils.js';
 
 const router = express.Router();
 
@@ -156,13 +157,17 @@ router.patch('/tournaments/:id/status', requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;
     const validStatuses = ['upcoming', 'active', 'completed', 'cancelled'];
-    
+
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
 
-    // TODO: Implement tournament status update in socialDb
-    res.json({ success: true, message: 'Tournament status updated' });
+    const tournament = await socialDb.updateTournamentStatus(req.params.id, status);
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    res.json({ success: true, tournament });
   } catch (error) {
     console.error('Update tournament error:', error);
     res.status(500).json({ error: 'Failed to update tournament' });
@@ -189,12 +194,33 @@ router.get('/health', requireAdmin, async (req, res) => {
 // Trigger cleanup operations
 router.post('/cleanup', requireAdmin, async (req, res) => {
   try {
-    // Clean up various caches and old data
+    const gameManager = req.app.get('gameManager');
+    const results = {
+      antiCheat: false,
+      rateLimiter: false,
+      locationTracker: false,
+      games: false,
+    };
+
+    // Clean up anti-cheat data
     antiCheat.cleanup();
-    
-    // TODO: Add more cleanup operations
-    
-    res.json({ success: true, message: 'Cleanup completed' });
+    results.antiCheat = true;
+
+    // Clean up rate limiter entries
+    rateLimiter.cleanup();
+    results.rateLimiter = true;
+
+    // Clean up location tracker history
+    locationTracker.cleanupOldEntries();
+    results.locationTracker = true;
+
+    // Clean up old games from database
+    if (gameManager?.cleanupOldGames) {
+      await gameManager.cleanupOldGames();
+      results.games = true;
+    }
+
+    res.json({ success: true, message: 'Cleanup completed', results });
   } catch (error) {
     console.error('Cleanup error:', error);
     res.status(500).json({ error: 'Cleanup failed' });

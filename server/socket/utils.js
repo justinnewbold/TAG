@@ -98,6 +98,33 @@ export class LocationTracker {
     // Flag if 5+ violations in last 5 minutes
     return violations.count >= 5 && (Date.now() - violations.lastViolation < 300000);
   }
+
+  // Cleanup old entries to prevent memory leaks
+  cleanupOldEntries(maxAgeMs = 10 * 60 * 1000) {
+    const now = Date.now();
+    let cleanedHistory = 0;
+    let cleanedViolations = 0;
+
+    // Clean history entries older than maxAge
+    for (const [playerId, data] of this.history.entries()) {
+      if (now - data.timestamp > maxAgeMs) {
+        this.history.delete(playerId);
+        cleanedHistory++;
+      }
+    }
+
+    // Clean violations older than 10 minutes
+    for (const [playerId, data] of this.violations.entries()) {
+      if (now - data.lastViolation > maxAgeMs) {
+        this.violations.delete(playerId);
+        cleanedViolations++;
+      }
+    }
+
+    if (cleanedHistory > 0 || cleanedViolations > 0) {
+      console.log(`[LocationTracker] Cleaned ${cleanedHistory} history entries, ${cleanedViolations} violation records`);
+    }
+  }
 }
 
 // Global instances
