@@ -21,6 +21,7 @@ async function initAuthTables() {
         ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_id TEXT;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS supabase_id TEXT;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'anonymous';
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
       EXCEPTION WHEN others THEN NULL;
       END $$;
 
@@ -88,7 +89,7 @@ async function initAuthTables() {
     `);
 
     // Add columns if they don't exist (SQLite doesn't have IF NOT EXISTS for columns)
-    const columns = ['email', 'email_verified', 'phone', 'phone_verified', 'password_hash', 'google_id', 'apple_id', 'supabase_id', 'auth_provider'];
+    const columns = ['email', 'email_verified', 'phone', 'phone_verified', 'password_hash', 'google_id', 'apple_id', 'supabase_id', 'auth_provider', 'avatar_url'];
     const tableInfo = db.prepare('PRAGMA table_info(users)').all();
     const existingColumns = tableInfo.map(c => c.name);
 
@@ -154,56 +155,57 @@ export const authDb = {
         db.prepare(`UPDATE verification_codes SET used = 1 WHERE id = ?`).run(row.id);
       }
     }
-    return row || null;
+    return row;
   },
 
   // Refresh tokens
-  async createRefreshToken(userId, tokenHash, deviceInfo, ipAddress, expiresInDays = 30) {
+  async createRefreshToken(userId, tokenHash, deviceInfo, ipAddress) {
     const id = uuidv4();
     const now = Date.now();
-    const expiresAt = now + (expiresInDays * 24 * 60 * 60 * 1000);
+    const expiresAt = now + (30 * 24 * 60 * 60 * 1000); // 30 days
 
     if (usePostgres) {
       await db.query(`
-        INSERT INTO refresh_tokens (id, user_id, token_hash, device_info, ip_address, expires_at, created_at, last_used_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+        INSERT INTO refresh_tokens (id, user_id, token_hash, device_info, ip_address, expires_at, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
       `, [id, userId, tokenHash, deviceInfo, ipAddress, expiresAt, now]);
     } else {
       db.prepare(`
-        INSERT INTO refresh_tokens (id, user_id, token_hash, device_info, ip_address, expires_at, created_at, last_used_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, userId, tokenHash, deviceInfo, ipAddress, expiresAt, now, now);
+        INSERT INTO refresh_tokens (id, user_id, token_hash, device_info, ip_address, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, userId, tokenHash, deviceInfo, ipAddress, expiresAt, now);
     }
 
     return { id, expiresAt };
   },
 
-  async validateRefreshToken(userId, tokenHash) {
-    let row;
+  async getRefreshToken(tokenHash) {
     if (usePostgres) {
       const result = await db.query(`
-        SELECT * FROM refresh_tokens WHERE user_id = $1 AND token_hash = $2 AND expires_at > $3
-      `, [userId, tokenHash, Date.now()]);
-      row = result.rows[0];
-      if (row) {
-        await db.query(`UPDATE refresh_tokens SET last_used_at = $1 WHERE id = $2`, [Date.now(), row.id]);
-      }
+        SELECT * FROM refresh_tokens WHERE token_hash = $1 AND expires_at > $2
+      `, [tokenHash, Date.now()]);
+      return result.rows[0];
     } else {
-      row = db.prepare(`
-        SELECT * FROM refresh_tokens WHERE user_id = ? AND token_hash = ? AND expires_at > ?
-      `).get(userId, tokenHash, Date.now());
-      if (row) {
-        db.prepare(`UPDATE refresh_tokens SET last_used_at = ? WHERE id = ?`).run(Date.now(), row.id);
-      }
+      return db.prepare(`
+        SELECT * FROM refresh_tokens WHERE token_hash = ? AND expires_at > ?
+      `).get(tokenHash, Date.now());
     }
-    return row || null;
   },
 
-  async revokeRefreshToken(tokenId) {
+  async updateRefreshTokenUsage(tokenId) {
+    const now = Date.now();
     if (usePostgres) {
-      await db.query(`DELETE FROM refresh_tokens WHERE id = $1`, [tokenId]);
+      await db.query(`UPDATE refresh_tokens SET last_used_at = $1 WHERE id = $2`, [now, tokenId]);
     } else {
-      db.prepare(`DELETE FROM refresh_tokens WHERE id = ?`).run(tokenId);
+      db.prepare(`UPDATE refresh_tokens SET last_used_at = ? WHERE id = ?`).run(now, tokenId);
+    }
+  },
+
+  async revokeRefreshToken(tokenHash) {
+    if (usePostgres) {
+      await db.query(`DELETE FROM refresh_tokens WHERE token_hash = $1`, [tokenHash]);
+    } else {
+      db.prepare(`DELETE FROM refresh_tokens WHERE token_hash = ?`).run(tokenHash);
     }
   },
 
@@ -215,127 +217,158 @@ export const authDb = {
     }
   },
 
-  // Cleanup
-  async cleanupExpired() {
-    const now = Date.now();
+  // User auth operations
+  async emailExists(email) {
     if (usePostgres) {
-      await db.query(`DELETE FROM verification_codes WHERE expires_at < $1`, [now]);
-      await db.query(`DELETE FROM refresh_tokens WHERE expires_at < $1`, [now]);
+      const result = await db.query(`SELECT id FROM users WHERE LOWER(email) = LOWER($1)`, [email]);
+      return result.rows.length > 0;
     } else {
-      db.prepare(`DELETE FROM verification_codes WHERE expires_at < ?`).run(now);
-      db.prepare(`DELETE FROM refresh_tokens WHERE expires_at < ?`).run(now);
+      const row = db.prepare(`SELECT id FROM users WHERE LOWER(email) = LOWER(?)`).get(email);
+      return !!row;
     }
   },
 
-  // Extended user queries
+  async phoneExists(phone) {
+    if (usePostgres) {
+      const result = await db.query(`SELECT id FROM users WHERE phone = $1`, [phone]);
+      return result.rows.length > 0;
+    } else {
+      const row = db.prepare(`SELECT id FROM users WHERE phone = ?`).get(phone);
+      return !!row;
+    }
+  },
+
   async getUserByEmail(email) {
     if (usePostgres) {
       const result = await db.query(`SELECT * FROM users WHERE LOWER(email) = LOWER($1)`, [email]);
-      return result.rows[0] || null;
+      return result.rows[0];
     } else {
-      return db.prepare(`SELECT * FROM users WHERE LOWER(email) = LOWER(?)`).get(email) || null;
+      return db.prepare(`SELECT * FROM users WHERE LOWER(email) = LOWER(?)`).get(email);
     }
   },
 
   async getUserByPhone(phone) {
     if (usePostgres) {
       const result = await db.query(`SELECT * FROM users WHERE phone = $1`, [phone]);
-      return result.rows[0] || null;
+      return result.rows[0];
     } else {
-      return db.prepare(`SELECT * FROM users WHERE phone = ?`).get(phone) || null;
+      return db.prepare(`SELECT * FROM users WHERE phone = ?`).get(phone);
     }
   },
 
   async getUserByGoogleId(googleId) {
     if (usePostgres) {
       const result = await db.query(`SELECT * FROM users WHERE google_id = $1`, [googleId]);
-      return result.rows[0] || null;
+      return result.rows[0];
     } else {
-      return db.prepare(`SELECT * FROM users WHERE google_id = ?`).get(googleId) || null;
+      return db.prepare(`SELECT * FROM users WHERE google_id = ?`).get(googleId);
     }
   },
 
   async getUserByAppleId(appleId) {
     if (usePostgres) {
       const result = await db.query(`SELECT * FROM users WHERE apple_id = $1`, [appleId]);
-      return result.rows[0] || null;
+      return result.rows[0];
     } else {
-      return db.prepare(`SELECT * FROM users WHERE apple_id = ?`).get(appleId) || null;
+      return db.prepare(`SELECT * FROM users WHERE apple_id = ?`).get(appleId);
     }
   },
 
   async getUserBySupabaseId(supabaseId) {
     if (usePostgres) {
       const result = await db.query(`SELECT * FROM users WHERE supabase_id = $1`, [supabaseId]);
-      return result.rows[0] || null;
+      return result.rows[0];
     } else {
-      return db.prepare(`SELECT * FROM users WHERE supabase_id = ?`).get(supabaseId) || null;
+      return db.prepare(`SELECT * FROM users WHERE supabase_id = ?`).get(supabaseId);
     }
   },
 
-  async emailExists(email) {
-    if (usePostgres) {
-      const result = await db.query(`SELECT 1 FROM users WHERE LOWER(email) = LOWER($1)`, [email]);
-      return result.rows.length > 0;
-    } else {
-      return !!db.prepare(`SELECT 1 FROM users WHERE LOWER(email) = LOWER(?)`).get(email);
-    }
-  },
-
-  async phoneExists(phone) {
-    if (usePostgres) {
-      const result = await db.query(`SELECT 1 FROM users WHERE phone = $1`, [phone]);
-      return result.rows.length > 0;
-    } else {
-      return !!db.prepare(`SELECT 1 FROM users WHERE phone = ?`).get(phone);
-    }
-  },
-
-  // Update user auth fields
   async updateUserAuth(userId, updates) {
+    const now = Date.now();
     const fields = [];
     const values = [];
-    let idx = 1;
+    let paramIndex = 1;
 
-    if (updates.email !== undefined) { fields.push(usePostgres ? `email = $${idx++}` : 'email = ?'); values.push(updates.email); }
-    if (updates.emailVerified !== undefined) { fields.push(usePostgres ? `email_verified = $${idx++}` : 'email_verified = ?'); values.push(usePostgres ? updates.emailVerified : (updates.emailVerified ? 1 : 0)); }
-    if (updates.phone !== undefined) { fields.push(usePostgres ? `phone = $${idx++}` : 'phone = ?'); values.push(updates.phone); }
-    if (updates.phoneVerified !== undefined) { fields.push(usePostgres ? `phone_verified = $${idx++}` : 'phone_verified = ?'); values.push(usePostgres ? updates.phoneVerified : (updates.phoneVerified ? 1 : 0)); }
-    if (updates.passwordHash !== undefined) { fields.push(usePostgres ? `password_hash = $${idx++}` : 'password_hash = ?'); values.push(updates.passwordHash); }
-    if (updates.googleId !== undefined) { fields.push(usePostgres ? `google_id = $${idx++}` : 'google_id = ?'); values.push(updates.googleId); }
-    if (updates.appleId !== undefined) { fields.push(usePostgres ? `apple_id = $${idx++}` : 'apple_id = ?'); values.push(updates.appleId); }
-    if (updates.supabaseId !== undefined) { fields.push(usePostgres ? `supabase_id = $${idx++}` : 'supabase_id = ?'); values.push(updates.supabaseId); }
-    if (updates.authProvider !== undefined) { fields.push(usePostgres ? `auth_provider = $${idx++}` : 'auth_provider = ?'); values.push(updates.authProvider); }
+    // Build dynamic update query
+    if (updates.email !== undefined) {
+      fields.push(usePostgres ? `email = $${paramIndex++}` : 'email = ?');
+      values.push(updates.email);
+    }
+    if (updates.emailVerified !== undefined) {
+      fields.push(usePostgres ? `email_verified = $${paramIndex++}` : 'email_verified = ?');
+      values.push(usePostgres ? updates.emailVerified : (updates.emailVerified ? 1 : 0));
+    }
+    if (updates.phone !== undefined) {
+      fields.push(usePostgres ? `phone = $${paramIndex++}` : 'phone = ?');
+      values.push(updates.phone);
+    }
+    if (updates.phoneVerified !== undefined) {
+      fields.push(usePostgres ? `phone_verified = $${paramIndex++}` : 'phone_verified = ?');
+      values.push(usePostgres ? updates.phoneVerified : (updates.phoneVerified ? 1 : 0));
+    }
+    if (updates.passwordHash !== undefined) {
+      fields.push(usePostgres ? `password_hash = $${paramIndex++}` : 'password_hash = ?');
+      values.push(updates.passwordHash);
+    }
+    if (updates.googleId !== undefined) {
+      fields.push(usePostgres ? `google_id = $${paramIndex++}` : 'google_id = ?');
+      values.push(updates.googleId);
+    }
+    if (updates.appleId !== undefined) {
+      fields.push(usePostgres ? `apple_id = $${paramIndex++}` : 'apple_id = ?');
+      values.push(updates.appleId);
+    }
+    if (updates.supabaseId !== undefined) {
+      fields.push(usePostgres ? `supabase_id = $${paramIndex++}` : 'supabase_id = ?');
+      values.push(updates.supabaseId);
+    }
+    if (updates.authProvider !== undefined) {
+      fields.push(usePostgres ? `auth_provider = $${paramIndex++}` : 'auth_provider = ?');
+      values.push(updates.authProvider);
+    }
+    if (updates.avatarUrl !== undefined) {
+      fields.push(usePostgres ? `avatar_url = $${paramIndex++}` : 'avatar_url = ?');
+      values.push(updates.avatarUrl);
+    }
+    if (updates.name !== undefined) {
+      fields.push(usePostgres ? `name = $${paramIndex++}` : 'name = ?');
+      values.push(updates.name);
+    }
+    if (updates.avatar !== undefined) {
+      fields.push(usePostgres ? `avatar = $${paramIndex++}` : 'avatar = ?');
+      values.push(updates.avatar);
+    }
 
-    // No actual updates provided
-    if (fields.length === 0) return userDb.getById(userId);
-
-    fields.push(usePostgres ? `updated_at = $${idx++}` : 'updated_at = ?');
-    values.push(Date.now());
+    fields.push(usePostgres ? `updated_at = $${paramIndex++}` : 'updated_at = ?');
+    values.push(now);
     values.push(userId);
 
+    if (fields.length === 1) return; // Only updated_at
+
+    const query = `UPDATE users SET ${fields.join(', ')} WHERE id = ${usePostgres ? `$${paramIndex}` : '?'}`;
+
     if (usePostgres) {
-      await db.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${idx}`, values);
+      await db.query(query, values);
     } else {
-      db.prepare(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+      db.prepare(query).run(...values);
     }
 
     return userDb.getById(userId);
   },
 
-  // Create user with auth fields
   async createUserWithAuth(userData) {
     const id = userData.id || uuidv4();
     const now = Date.now();
 
     if (usePostgres) {
       await db.query(`
-        INSERT INTO users (id, name, avatar, email, email_verified, phone, phone_verified, password_hash, google_id, apple_id, supabase_id, auth_provider, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
+        INSERT INTO users (id, name, avatar, avatar_url, email, email_verified, phone, phone_verified, password_hash, google_id, apple_id, supabase_id, auth_provider, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)
       `, [
         id,
         userData.name,
         userData.avatar || '😀',
+        userData.avatarUrl || null,
         userData.email || null,
         userData.emailVerified || false,
         userData.phone || null,
@@ -350,12 +383,13 @@ export const authDb = {
       await db.query(`INSERT INTO user_stats (user_id) VALUES ($1)`, [id]);
     } else {
       db.prepare(`
-        INSERT INTO users (id, name, avatar, email, email_verified, phone, phone_verified, password_hash, google_id, apple_id, supabase_id, auth_provider, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (id, name, avatar, avatar_url, email, email_verified, phone, phone_verified, password_hash, google_id, apple_id, supabase_id, auth_provider, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         userData.name,
         userData.avatar || '😀',
+        userData.avatarUrl || null,
         userData.email || null,
         userData.emailVerified ? 1 : 0,
         userData.phone || null,
@@ -375,12 +409,7 @@ export const authDb = {
   },
 };
 
-// Generate random verification code
-export function generateVerificationCode(length = 6) {
-  const digits = '0123456789';
-  let code = '';
-  for (let i = 0; i < length; i++) {
-    code += digits[Math.floor(Math.random() * digits.length)];
-  }
-  return code;
+// Generate 6-digit verification code
+export function generateVerificationCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }

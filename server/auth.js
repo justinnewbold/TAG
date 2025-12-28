@@ -43,6 +43,7 @@ const sanitizeUser = (user) => ({
   id: user.id,
   name: user.name,
   avatar: user.avatar,
+  avatarUrl: user.avatarUrl || user.avatar_url,
   email: user.email,
   emailVerified: user.emailVerified || user.email_verified,
   phone: user.phone,
@@ -854,7 +855,7 @@ router.get('/providers', (req, res) => {
 
 router.post('/supabase', async (req, res) => {
   try {
-    const { supabaseId, email, phone, name, avatar, provider } = req.body;
+    const { supabaseId, email, phone, name, avatar, avatarUrl, provider } = req.body;
 
     if (!supabaseId) {
       return res.status(400).json({ error: 'Supabase ID required' });
@@ -888,6 +889,7 @@ router.post('/supabase', async (req, res) => {
           id,
           name: name || 'Player',
           avatar: avatar || '😀',
+          avatarUrl: avatarUrl || null,
           email: email?.toLowerCase(),
           emailVerified: !!email,
           phone,
@@ -895,6 +897,9 @@ router.post('/supabase', async (req, res) => {
           supabaseId,
           authProvider: provider || 'supabase',
         });
+      } else if (avatarUrl && !user.avatar_url) {
+        // Update existing user with avatarUrl if they don't have one
+        await authDb.updateUserAuth(user.id, { avatarUrl });
       }
     }
 
@@ -968,4 +973,5 @@ export function addAchievement(userId, achievementId) {
 }
 
 export { router as authRouter };
+
 
