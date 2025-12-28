@@ -74,8 +74,8 @@ export default function ConnectionStatus() {
         return {
           icon: WifiOff,
           color: 'text-gray-400',
-          bgColor: 'bg-dark-700',
-          borderColor: 'border-dark-600',
+          bgColor: 'bg-gray-500/10',
+          borderColor: 'border-gray-500/30',
           label: 'Offline',
           showReconnect: true,
         };
@@ -120,20 +120,21 @@ export default function ConnectionStatus() {
           </div>
           <button
             onClick={() => setShowDetails(false)}
-            className="text-gray-500 hover:text-white text-sm"
+            className="text-sm"
+            style={{ color: 'var(--text-muted)' }}
           >
             Close
           </button>
         </div>
 
         {connectionError && (
-          <p className="text-sm text-gray-400 mb-3">{connectionError}</p>
+          <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>{connectionError}</p>
         )}
 
         <div className="flex items-center gap-4 text-sm">
           {config.showPing && ping !== null && (
             <div className="flex items-center gap-1">
-              <span className="text-gray-500">Ping:</span>
+              <span style={{ color: 'var(--text-muted)' }}>Ping:</span>
               <span className={getPingColor()}>{ping}ms</span>
             </div>
           )}
@@ -142,7 +143,8 @@ export default function ConnectionStatus() {
             <button
               onClick={handleReconnect}
               disabled={isReconnecting}
-              className="flex items-center gap-1 px-3 py-1.5 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white rounded-lg text-sm transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 disabled:opacity-50 rounded-lg text-sm transition-colors"
+              style={{ backgroundColor: 'var(--accent-primary)', color: 'var(--text-inverse)' }}
             >
               <RefreshCw className={`w-4 h-4 ${isReconnecting ? 'animate-spin' : ''}`} />
               Reconnect

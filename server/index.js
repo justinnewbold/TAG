@@ -17,7 +17,10 @@ import { usersRouter } from './routes/users.js';
 import healthRouter from './routes/health.js';
 import { GameManager } from './game/GameManager.js';
 import { setupSocketHandlers } from './socket/handlers.js';
+import { locationTracker } from './socket/utils.js';
 import { logger } from './utils/logger.js';
+import { errorMiddleware, notFoundMiddleware } from './utils/errors.js';
+import { requestLoggerWithSkip } from './utils/requestLogger.js';
 import { sentry } from './services/sentry.js';
 import { replayDb } from './db/replays.js';
 import { socialDb } from './db/social.js';
@@ -143,6 +146,9 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10kb' })); // Limit body size
 
+// Request logging (skip health checks)
+app.use(requestLoggerWithSkip(['/health', '/api/health']));
+
 // Apply general rate limiting
 app.use(generalLimiter);
 
@@ -220,22 +226,14 @@ io.on('connection', (socket) => {
   });
 });
 
+// Handle 404 for unmatched routes
+app.use(notFoundMiddleware);
+
 // Sentry error handler (captures errors before responding)
 app.use(sentry.errorHandler());
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  logger.error('Request error', {
-    ...logger.withRequest(req),
-    error: err.message,
-    stack: err.stack,
-  });
-  // Don't leak error details in production
-  const message = process.env.NODE_ENV === 'production'
-    ? 'Internal server error'
-    : err.message;
-  res.status(err.status || 500).json({ error: message });
-});
+// Centralized error handling middleware
+app.use(errorMiddleware);
 
 // Periodic cleanup of old games (every hour)
 setInterval(async () => {
@@ -247,6 +245,27 @@ setInterval(async () => {
     logger.error('Game cleanup error', { error: error.message, stack: error.stack });
   }
 }, 60 * 60 * 1000);
+
+// Cleanup socket rate limits every 5 minutes (remove stale entries)
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [userId, limits] of socketRateLimits.entries()) {
+    // Remove entries older than 5 minutes
+    if (now - limits.resetAt > 5 * 60 * 1000) {
+      socketRateLimits.delete(userId);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    logger.debug('Cleaned stale socket rate limits', { count: cleaned });
+  }
+}, 5 * 60 * 1000);
+
+// Cleanup location tracker history every 10 minutes
+setInterval(() => {
+  locationTracker.cleanupOldEntries();
+}, 10 * 60 * 1000);
 
 // Run cleanup on startup (after a short delay to let everything initialize)
 setTimeout(async () => {

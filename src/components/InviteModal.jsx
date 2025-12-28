@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Copy, Share2, Mail, MessageSquare, Check, Send } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useStore, GAME_MODES } from '../store';
@@ -9,6 +9,18 @@ function InviteModal({ gameCode, onClose }) {
   const [inviteMethod, setInviteMethod] = useState('link');
   const [contactValue, setContactValue] = useState('');
   const [sent, setSent] = useState(false);
+
+  // Refs for timeout cleanup
+  const copyTimeoutRef = useRef(null);
+  const sentTimeoutRef = useRef(null);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      if (sentTimeoutRef.current) clearTimeout(sentTimeoutRef.current);
+    };
+  }, []);
   
   const gameUrl = `${window.location.origin}/join?code=${gameCode}`;
   const gameMode = currentGame?.gameMode || 'classic';
@@ -34,7 +46,8 @@ function InviteModal({ gameCode, onClose }) {
         document.body.removeChild(textArea);
       }
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       if (import.meta.env.DEV) console.error('Copy failed:', err);
     }
@@ -78,7 +91,8 @@ function InviteModal({ gameCode, onClose }) {
     
     setSent(true);
     setContactValue('');
-    setTimeout(() => setSent(false), 3000);
+    if (sentTimeoutRef.current) clearTimeout(sentTimeoutRef.current);
+    sentTimeoutRef.current = setTimeout(() => setSent(false), 3000);
   };
   
   return (

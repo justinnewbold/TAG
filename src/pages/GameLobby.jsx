@@ -8,9 +8,11 @@ import { socketService } from '../services/socket';
 import InviteModal from '../components/InviteModal';
 import BottomSheet from '../components/BottomSheet';
 import { SkeletonLobbyPlayer } from '../components/Skeleton';
+import { useToast } from '../components/Toast';
 
 function GameLobby() {
   const navigate = useNavigate();
+  const toast = useToast();
   const { currentGame, user, startGame, leaveGame, syncGameState } = useStore();
   const { playSound, vibrate } = useSounds();
   const [copied, setCopied] = useState(false);
@@ -28,6 +30,7 @@ function GameLobby() {
   // Refs for cleanup
   const countdownIntervalRef = useRef(null);
   const gameStartedRef = useRef(false);
+  const copyTimeoutRef = useRef(null);
 
   const isHost = currentGame?.host === user?.id;
   const playerCount = currentGame?.players?.length || 0;
@@ -39,11 +42,14 @@ function GameLobby() {
   const minPlayers = currentGame?.settings?.allowSoloPlay ? 1 : (currentGame?.settings?.minPlayers || defaultMinPlayers);
   const canStart = playerCount >= minPlayers;
 
-  // Clean up countdown interval on unmount
+  // Clean up intervals and timeouts on unmount
   useEffect(() => {
     return () => {
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
+      }
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
       }
     };
   }, []);
@@ -62,7 +68,7 @@ function GameLobby() {
         // We were kicked
         leaveGame();
         navigate('/');
-        alert(`You were removed from the game by the host`);
+        toast.warning('You were removed from the game by the host');
       }
     };
 
@@ -70,7 +76,7 @@ function GameLobby() {
       if (playerId === user?.id) {
         leaveGame();
         navigate('/');
-        alert(`You were banned from this game`);
+        toast.error('You were banned from this game');
       }
     };
 
@@ -85,7 +91,7 @@ function GameLobby() {
     const handlePlayerRejected = ({ playerId }) => {
       if (playerId === user?.id) {
         navigate('/');
-        alert(`Your request to join was declined`);
+        toast.warning('Your request to join was declined');
       }
     };
 
@@ -121,7 +127,8 @@ function GameLobby() {
       }
       setCopied(true);
       vibrate([50]);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       if (import.meta.env.DEV) console.error('Copy failed:', err);
     }

@@ -107,19 +107,23 @@ function BottomSheet({
   return (
     <>
       {/* Backdrop */}
-      <div 
-        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity"
+      <div
+        className="fixed inset-0 z-40 backdrop-blur-sm transition-opacity"
         onClick={onClose}
-        style={{ opacity: Math.min(1, sheetHeight / 300) }}
+        style={{
+          backgroundColor: 'var(--overlay-color)',
+          opacity: Math.min(1, sheetHeight / 300)
+        }}
       />
 
       {/* Sheet */}
       <div
         ref={sheetRef}
-        className={`fixed bottom-0 left-0 right-0 z-50 bg-dark-800 rounded-t-3xl shadow-2xl transition-transform ${
+        className={`fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl shadow-2xl transition-transform ${
           isDragging ? '' : 'transition-all duration-300'
         } ${className}`}
-        style={{ 
+        style={{
+          backgroundColor: 'var(--bg-card)',
           height: `${sheetHeight}px`,
           maxHeight: '95vh',
           transform: isOpen ? 'translateY(0)' : 'translateY(100%)'
@@ -127,25 +131,29 @@ function BottomSheet({
       >
         {/* Drag Handle */}
         {showHandle && (
-          <div 
+          <div
             className="flex justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing touch-none"
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
             onDoubleClick={handleDoubleTap}
           >
-            <div className="w-12 h-1.5 bg-white/30 rounded-full" />
+            <div className="w-12 h-1.5 rounded-full" style={{ backgroundColor: 'var(--border-color)' }} />
           </div>
         )}
 
         {/* Header */}
         {(title || showCloseButton) && (
-          <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
-            <h2 className="text-lg font-bold">{title}</h2>
+          <div
+            className="flex items-center justify-between px-5 py-3"
+            style={{ borderBottom: '1px solid var(--border-color)' }}
+          >
+            <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
             {showCloseButton && (
               <button
                 onClick={onClose}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all"
+                className="w-10 h-10 flex items-center justify-center rounded-full active:scale-95 transition-all"
+                style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -159,7 +167,7 @@ function BottomSheet({
         </div>
 
         {/* Safe area for bottom navigation */}
-        <div className="h-6 bg-dark-800" />
+        <div className="h-6" style={{ backgroundColor: 'var(--bg-card)' }} />
       </div>
     </>
   );

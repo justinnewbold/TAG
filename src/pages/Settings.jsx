@@ -1,7 +1,7 @@
 import React, { useState, lazy, Suspense } from 'react';
 import Avatar, { hasUrlAvatar } from '../components/Avatar';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Volume2, Vibrate, MapPin, Moon, LogOut, Trash2, User, Info, ChevronRight, Shield, Download, Accessibility, Loader2, ArrowLeft, Check, Play } from 'lucide-react';
+import { Bell, Volume2, Vibrate, MapPin, Moon, Sun, LogOut, Trash2, User, Info, ChevronRight, Shield, Download, Accessibility, Loader2, ArrowLeft, Check, Play } from 'lucide-react';
 import { useStore } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
@@ -111,17 +111,24 @@ function Settings() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Compact Header */}
-      <div className="sticky top-0 z-40 bg-dark-900/95 backdrop-blur-sm border-b border-white/10 px-4 py-3">
+      <div
+        className="sticky top-0 z-40 backdrop-blur-sm px-4 py-3"
+        style={{
+          backgroundColor: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border-color)'
+        }}
+      >
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => navigate(-1)} 
-            className="touch-target-48 flex items-center justify-center hover:bg-white/10 rounded-xl transition-colors"
+          <button
+            onClick={() => navigate(-1)}
+            className="touch-target-48 flex items-center justify-center rounded-xl transition-colors"
+            style={{ color: 'var(--text-primary)' }}
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
           <div className="flex-1">
-            <h1 className="text-xl font-display font-bold">Settings</h1>
-            <p className="text-xs text-white/50">Customize your experience</p>
+            <h1 className="text-xl font-display font-bold" style={{ color: 'var(--text-primary)' }}>Settings</h1>
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Customize your experience</p>
           </div>
         </div>
       </div>
@@ -136,10 +143,13 @@ function Settings() {
               onClick={() => setShowAvatarSheet(true)}
               className="touch-target-48 relative active:scale-95 transition-transform"
             >
-              <Avatar user={user} size="xl" className="p-3 bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20" />
-              <span className="absolute -bottom-1 -right-1 text-xs bg-neon-purple rounded-full w-5 h-5 flex items-center justify-center">✏️</span>
+              <Avatar user={user} size="xl" className="p-3" style={{ background: 'linear-gradient(135deg, var(--glow-primary), var(--glow-secondary))' }} />
+              <span
+                className="absolute -bottom-1 -right-1 text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                style={{ backgroundColor: 'var(--accent-secondary)' }}
+              >✏️</span>
             </button>
-            
+
             <div className="flex-1 min-w-0">
               {editingProfile ? (
                 <div className="flex gap-2">
@@ -153,7 +163,8 @@ function Settings() {
                   />
                   <button
                     onClick={handleSaveProfile}
-                    className="touch-target-48 w-12 h-12 bg-neon-cyan rounded-xl flex items-center justify-center"
+                    className="touch-target-48 w-12 h-12 rounded-xl flex items-center justify-center"
+                    style={{ backgroundColor: 'var(--accent-primary)', color: 'var(--text-inverse)' }}
                   >
                     <Check className="w-6 h-6" />
                   </button>
@@ -161,20 +172,34 @@ function Settings() {
               ) : (
                 <button
                   onClick={() => setEditingProfile(true)}
-                  className="text-left w-full active:bg-white/5 rounded-lg p-1 -m-1"
+                  className="text-left w-full rounded-lg p-1 -m-1"
                 >
-                  <h2 className="font-bold text-lg truncate">{user?.name || 'Guest'}</h2>
-                  <p className="text-sm text-neon-cyan">Tap to edit name</p>
+                  <h2 className="font-bold text-lg truncate" style={{ color: 'var(--text-primary)' }}>{user?.name || 'Guest'}</h2>
+                  <p className="text-sm" style={{ color: 'var(--accent-primary)' }}>Tap to edit name</p>
                 </button>
               )}
             </div>
           </div>
         </div>
         
+        {/* Appearance */}
+        <div className="card overflow-hidden">
+          <h3 className="text-xs font-semibold uppercase tracking-wider px-4 pt-4 pb-2" style={{ color: 'var(--text-muted)' }}>Appearance</h3>
+          <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
+            <SettingToggle
+              icon={settings.darkMode ? Moon : Sun}
+              label="Dark Mode"
+              description={settings.darkMode ? "Dark theme active" : "Light theme active"}
+              value={settings.darkMode}
+              onChange={() => toggleSetting('darkMode')}
+            />
+          </div>
+        </div>
+
         {/* Quick Toggles - Large swipe-friendly switches */}
         <div className="card overflow-hidden">
-          <h3 className="text-xs font-semibold text-white/40 uppercase tracking-wider px-4 pt-4 pb-2">Quick Settings</h3>
-          <div className="divide-y divide-white/5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider px-4 pt-4 pb-2" style={{ color: 'var(--text-muted)' }}>Quick Settings</h3>
+          <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
             <SettingToggle
               icon={Bell}
               label="Notifications"
@@ -204,18 +229,18 @@ function Settings() {
           <div className="card overflow-hidden">
             <button
               onClick={() => setShowSoundTest(!showSoundTest)}
-              className="w-full flex items-center gap-4 p-4 active:bg-white/5 transition-colors"
+              className="w-full flex items-center gap-4 p-4 transition-colors"
             >
               <div className="touch-target-48 flex items-center justify-center">
-                <Play className="w-6 h-6 text-neon-purple" />
+                <Play className="w-6 h-6" style={{ color: 'var(--accent-secondary)' }} />
               </div>
               <div className="flex-1 text-left">
-                <p className="font-medium">Test Sound Effects</p>
-                <p className="text-xs text-white/50">Preview game sounds and haptics</p>
+                <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Test Sound Effects</p>
+                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Preview game sounds and haptics</p>
               </div>
-              <ChevronRight className={`w-6 h-6 text-white/40 transition-transform ${showSoundTest ? 'rotate-90' : ''}`} />
+              <ChevronRight className={`w-6 h-6 transition-transform ${showSoundTest ? 'rotate-90' : ''}`} style={{ color: 'var(--text-muted)' }} />
             </button>
-            
+
             {showSoundTest && (
               <div className="px-4 pb-4">
                 <div className="grid grid-cols-5 gap-2">
@@ -224,18 +249,19 @@ function Settings() {
                       key={id}
                       onClick={() => testSoundEffect(id)}
                       disabled={testingSound === id}
-                      className={`flex flex-col items-center gap-1 p-2 rounded-xl text-xs font-medium transition-all ${
-                        testingSound === id
-                          ? 'bg-neon-cyan/20 text-neon-cyan scale-95'
-                          : 'bg-white/5 text-white/70 hover:bg-white/10 active:scale-95'
-                      }`}
+                      className="flex flex-col items-center gap-1 p-2 rounded-xl text-xs font-medium transition-all active:scale-95"
+                      style={{
+                        backgroundColor: testingSound === id ? 'var(--glow-primary)' : 'var(--bg-tertiary)',
+                        color: testingSound === id ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                        transform: testingSound === id ? 'scale(0.95)' : 'scale(1)'
+                      }}
                     >
                       <span className="text-lg">{icon}</span>
                       <span className="truncate w-full text-center">{label}</span>
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-white/30 mt-3 text-center">
+                <p className="text-xs mt-3 text-center" style={{ color: 'var(--text-muted)' }}>
                   Tap to preview each sound effect
                 </p>
               </div>
@@ -245,8 +271,8 @@ function Settings() {
         
         {/* GPS & Privacy */}
         <div className="card overflow-hidden">
-          <h3 className="text-xs font-semibold text-white/40 uppercase tracking-wider px-4 pt-4 pb-2">Location & Privacy</h3>
-          <div className="divide-y divide-white/5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider px-4 pt-4 pb-2" style={{ color: 'var(--text-muted)' }}>Location & Privacy</h3>
+          <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
             <SettingToggle
               icon={MapPin}
               label="High Accuracy GPS"
@@ -263,72 +289,77 @@ function Settings() {
             />
           </div>
         </div>
-      
+
         {/* Accessibility Settings Button - Large touch target */}
         <button
           onClick={() => setShowAccessibility(true)}
           className="w-full card p-4 flex items-center gap-4 active:scale-[0.98] transition-transform"
         >
           <div className="touch-target-48 flex items-center justify-center">
-            <Accessibility className="w-6 h-6 text-neon-purple" />
+            <Accessibility className="w-6 h-6" style={{ color: 'var(--accent-secondary)' }} />
           </div>
           <div className="flex-1 text-left">
-            <p className="font-medium">Accessibility</p>
-            <p className="text-xs text-white/50">Colorblind modes, audio cues, touch targets</p>
+            <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Accessibility</p>
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Colorblind modes, audio cues, touch targets</p>
           </div>
-          <ChevronRight className="w-6 h-6 text-white/40" />
+          <ChevronRight className="w-6 h-6" style={{ color: 'var(--text-muted)' }} />
         </button>
-      
+
         {/* Install PWA */}
         {deferredPrompt && (
           <button
             onClick={handleInstall}
-            className="w-full card p-4 flex items-center gap-4 bg-gradient-to-r from-neon-cyan/10 to-neon-purple/10 border-neon-cyan/30 active:scale-[0.98] transition-transform"
+            className="w-full card p-4 flex items-center gap-4 active:scale-[0.98] transition-transform"
+            style={{
+              background: 'linear-gradient(135deg, var(--glow-primary), var(--glow-secondary))',
+              borderColor: 'var(--accent-primary)'
+            }}
           >
             <div className="touch-target-48 flex items-center justify-center">
-              <Download className="w-6 h-6 text-neon-cyan" />
+              <Download className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
             </div>
             <div className="flex-1 text-left">
-              <p className="font-medium">Install App</p>
-              <p className="text-xs text-white/50">Add TAG! to your home screen</p>
+              <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Install App</p>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Add TAG! to your home screen</p>
             </div>
-            <ChevronRight className="w-6 h-6 text-white/40" />
+            <ChevronRight className="w-6 h-6" style={{ color: 'var(--text-muted)' }} />
           </button>
         )}
       
         {/* Danger Zone */}
         <div className="space-y-3 pt-4">
-          <h3 className="text-xs font-semibold text-red-400/60 uppercase tracking-wider px-1">Danger Zone</h3>
-          
+          <h3 className="text-xs font-semibold uppercase tracking-wider px-1" style={{ color: 'var(--accent-danger)', opacity: 0.7 }}>Danger Zone</h3>
+
           <button
             onClick={() => setShowClearConfirm(true)}
             className="w-full card p-4 flex items-center gap-4 active:scale-[0.98] transition-transform"
           >
             <div className="touch-target-48 flex items-center justify-center">
-              <Trash2 className="w-6 h-6 text-amber-400" />
+              <Trash2 className="w-6 h-6" style={{ color: 'var(--accent-tertiary)' }} />
             </div>
             <div className="flex-1 text-left">
-              <p className="font-medium">Clear Game History</p>
-              <p className="text-xs text-white/50">Remove all past games</p>
+              <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Clear Game History</p>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Remove all past games</p>
             </div>
           </button>
-        
+
           <button
             onClick={() => setShowLogoutConfirm(true)}
-            className="w-full card p-4 flex items-center gap-4 border-red-500/30 active:scale-[0.98] transition-transform"
+            className="w-full card p-4 flex items-center gap-4 active:scale-[0.98] transition-transform"
+            style={{ borderColor: 'var(--accent-danger)', opacity: 0.3 }}
           >
             <div className="touch-target-48 flex items-center justify-center">
-              <LogOut className="w-6 h-6 text-red-400" />
+              <LogOut className="w-6 h-6" style={{ color: 'var(--accent-danger)' }} />
             </div>
             <div className="flex-1 text-left">
-              <p className="font-medium text-red-400">Log Out</p>
-              <p className="text-xs text-white/50">Sign out of your account</p>
+              <p className="font-medium" style={{ color: 'var(--accent-danger)' }}>Log Out</p>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Sign out of your account</p>
             </div>
           </button>
         </div>
-      
+
         {/* App Info */}
-        <div className="mt-6 text-center text-white/30 text-xs pb-4">
+        <div className="mt-6 text-center text-xs pb-4" style={{ color: 'var(--text-muted)' }}>
           <p>TAG! GPS Game v2.1.0</p>
           <p className="mt-1">Made with ❤️</p>
         </div>
@@ -345,11 +376,12 @@ function Settings() {
             <button
               key={avatar}
               onClick={() => handleAvatarChange(avatar)}
-              className={`touch-target-48 text-4xl p-4 rounded-xl transition-all active:scale-90 ${
-                user?.avatar === avatar
-                  ? 'bg-neon-cyan/20 ring-2 ring-neon-cyan scale-105'
-                  : 'bg-white/5'
-              }`}
+              className="touch-target-48 text-4xl p-4 rounded-xl transition-all active:scale-90"
+              style={{
+                backgroundColor: user?.avatar === avatar ? 'var(--glow-primary)' : 'var(--bg-tertiary)',
+                boxShadow: user?.avatar === avatar ? '0 0 0 2px var(--accent-primary)' : 'none',
+                transform: user?.avatar === avatar ? 'scale(1.05)' : 'scale(1)'
+              }}
             >
               {avatar}
             </button>
@@ -406,24 +438,33 @@ function SettingToggle({ icon: Icon, label, description, value, onChange }) {
   return (
     <button
       onClick={onChange}
-      className="w-full flex items-center gap-4 p-4 active:bg-white/5 transition-colors"
+      className="w-full flex items-center gap-4 p-4 transition-colors"
+      style={{ backgroundColor: 'transparent' }}
+      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
+      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
     >
       <div className="touch-target-48 flex items-center justify-center">
-        <Icon className={`w-6 h-6 ${value ? 'text-neon-cyan' : 'text-white/40'}`} />
+        <Icon
+          className="w-6 h-6"
+          style={{ color: value ? 'var(--accent-primary)' : 'var(--text-muted)' }}
+        />
       </div>
       <div className="flex-1 text-left">
-        <p className="font-medium">{label}</p>
-        <p className="text-xs text-white/50">{description}</p>
+        <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{label}</p>
+        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{description}</p>
       </div>
       {/* Large toggle switch */}
       <div
-        className={`w-14 h-8 rounded-full transition-all relative ${
-          value ? 'bg-neon-cyan' : 'bg-white/20'
-        }`}
+        className="w-14 h-8 rounded-full transition-all relative"
+        style={{ backgroundColor: value ? 'var(--accent-primary)' : 'var(--border-color)' }}
       >
-        <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-lg transition-transform ${
-          value ? 'left-7' : 'left-1'
-        }`} />
+        <div
+          className="absolute top-1 w-6 h-6 rounded-full shadow-lg transition-transform"
+          style={{
+            backgroundColor: 'var(--bg-primary)',
+            left: value ? '1.75rem' : '0.25rem'
+          }}
+        />
       </div>
     </button>
   );
@@ -431,19 +472,22 @@ function SettingToggle({ icon: Icon, label, description, value, onChange }) {
 
 function ConfirmModal({ title, message, confirmText, confirmClass, onConfirm, onCancel }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 backdrop-blur-sm flex items-end justify-center p-4"
+      style={{ backgroundColor: 'var(--overlay-color)' }}
+    >
       <div className="card-glow p-6 w-full max-w-md animate-slide-up rounded-t-3xl pb-safe">
-        <h2 className="text-xl font-bold mb-2 text-center">{title}</h2>
-        <p className="text-white/60 mb-6 text-center">{message}</p>
+        <h2 className="text-xl font-bold mb-2 text-center" style={{ color: 'var(--text-primary)' }}>{title}</h2>
+        <p className="mb-6 text-center" style={{ color: 'var(--text-secondary)' }}>{message}</p>
         <div className="flex flex-col gap-3">
-          <button 
-            onClick={onConfirm} 
+          <button
+            onClick={onConfirm}
             className={`touch-target-48 btn-primary w-full h-14 text-lg font-bold ${confirmClass}`}
           >
             {confirmText}
           </button>
-          <button 
-            onClick={onCancel} 
+          <button
+            onClick={onCancel}
             className="touch-target-48 btn-secondary w-full h-14 text-lg"
           >
             Cancel

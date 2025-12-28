@@ -1,20 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 /**
  * Avatar Component - Handles both emoji and URL-based avatars
  * Supports Google OAuth profile pictures and emoji avatars
  */
-export default function Avatar({ 
-  user, 
+export default function Avatar({
+  user,
   size = 'md', // sm, md, lg, xl
   className = '',
   showBorder = false,
-  onClick = null 
+  onClick = null,
+  style = {}
 }) {
   // Determine avatar type - URL (from OAuth like Google) or emoji
   const avatarUrl = user?.avatarUrl || user?.avatar_url || user?.picture;
   const isUrlAvatar = avatarUrl && (avatarUrl.startsWith('http') || avatarUrl.startsWith('//'));
-  const emojiAvatar = !isUrlAvatar ? (user?.avatar || '👤') : null;
+  const emojiAvatar = user?.avatar || '👤';
+
+  // Track if image failed to load
+  const [imageFailed, setImageFailed] = useState(false);
 
   // Size classes
   const sizeClasses = {
@@ -26,6 +30,7 @@ export default function Avatar({
   };
 
   const Component = onClick ? 'button' : 'div';
+  const showEmoji = !isUrlAvatar || imageFailed;
 
   return (
     <Component
@@ -35,22 +40,18 @@ export default function Avatar({
         rounded-full flex items-center justify-center overflow-hidden
         ${showBorder ? 'ring-2 ring-white/20' : ''}
         ${onClick ? 'cursor-pointer active:scale-95 transition-transform' : ''}
-        ${isUrlAvatar ? '' : 'bg-gradient-to-br from-neon-cyan to-neon-purple'}
+        ${showEmoji ? 'bg-gradient-to-br from-neon-cyan to-neon-purple' : ''}
         ${className}
       `}
+      style={style}
     >
-      {isUrlAvatar ? (
-        <img 
-          src={avatarUrl} 
-          alt={user?.name || 'User'} 
+      {isUrlAvatar && !imageFailed ? (
+        <img
+          src={avatarUrl}
+          alt={user?.name || 'User'}
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
-          onError={(e) => {
-            // Fallback to emoji if image fails to load
-            e.target.style.display = 'none';
-            e.target.parentElement.innerHTML = user?.avatar || '👤';
-            e.target.parentElement.classList.add('bg-gradient-to-br', 'from-neon-cyan', 'to-neon-purple');
-          }}
+          onError={() => setImageFailed(true)}
         />
       ) : (
         <span>{emojiAvatar}</span>

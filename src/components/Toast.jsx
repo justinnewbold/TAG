@@ -103,15 +103,16 @@ function ToastItem({ toast, onDismiss }) {
         
         <div className="flex-1 min-w-0">
           {toast.title && (
-            <p className="font-medium text-white text-sm">{toast.title}</p>
+            <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{toast.title}</p>
           )}
-          <p className={`text-gray-300 text-sm ${toast.title ? 'mt-0.5' : ''}`}>
+          <p className={`text-sm ${toast.title ? 'mt-0.5' : ''}`} style={{ color: 'var(--text-secondary)' }}>
             {toast.message}
           </p>
           {toast.action && (
             <button
               onClick={toast.action.onClick}
-              className="mt-2 text-sm font-medium text-primary-400 hover:text-primary-300"
+              className="mt-2 text-sm font-medium"
+              style={{ color: 'var(--accent-primary)' }}
             >
               {toast.action.label}
             </button>
@@ -120,7 +121,8 @@ function ToastItem({ toast, onDismiss }) {
 
         <button
           onClick={handleDismiss}
-          className="flex-shrink-0 text-gray-500 hover:text-white transition-colors"
+          className="flex-shrink-0 transition-colors"
+          style={{ color: 'var(--text-muted)' }}
         >
           <X className="w-4 h-4" />
         </button>
@@ -128,7 +130,7 @@ function ToastItem({ toast, onDismiss }) {
 
       {/* Progress bar */}
       {toast.duration !== 0 && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-dark-700">
+        <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: 'var(--border-color)' }}>
           <div
             className={`h-full ${config.progressColor}`}
             style={{

@@ -1,5 +1,6 @@
 import webpush from 'web-push';
 import { logger } from '../utils/logger.js';
+import { socialDb } from '../db/social.js';
 
 // VAPID keys should be generated once and stored in environment variables
 // Generate with: npx web-push generate-vapid-keys
@@ -7,8 +8,8 @@ const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@tag.game';
 
-// In-memory subscription store (should be moved to database for production)
-const subscriptions = new Map(); // userId -> subscription
+// In-memory cache for quick lookups (backed by database)
+const subscriptionCache = new Map(); // userId -> subscription
 
 // Initialize web-push if VAPID keys are configured
 let pushEnabled = false;
@@ -32,26 +33,70 @@ export const pushService = {
     return VAPID_PUBLIC_KEY;
   },
 
-  // Save subscription for a user
-  subscribe(userId, subscription) {
+  // Save subscription for a user (persisted to database)
+  async subscribe(userId, subscription) {
     if (!pushEnabled) return false;
 
-    subscriptions.set(userId, subscription);
-    logger.info('Push subscription added', { userId });
-    return true;
+    try {
+      // Save to database for persistence
+      await socialDb.savePushSubscription(userId, subscription);
+      // Also cache in memory for quick access
+      subscriptionCache.set(userId, subscription);
+      logger.info('Push subscription added', { userId });
+      return true;
+    } catch (error) {
+      logger.error('Failed to save push subscription', { userId, error: error.message });
+      return false;
+    }
   },
 
   // Remove subscription for a user
-  unsubscribe(userId) {
-    subscriptions.delete(userId);
+  async unsubscribe(userId, endpoint = null) {
+    subscriptionCache.delete(userId);
+    if (endpoint) {
+      try {
+        await socialDb.removePushSubscription(endpoint);
+      } catch (error) {
+        logger.error('Failed to remove push subscription', { userId, error: error.message });
+      }
+    }
     logger.info('Push subscription removed', { userId });
+  },
+
+  // Get subscription for a user (from cache or database)
+  async getSubscription(userId) {
+    // Check cache first
+    if (subscriptionCache.has(userId)) {
+      return subscriptionCache.get(userId);
+    }
+
+    // Load from database
+    try {
+      const subs = await socialDb.getPushSubscriptions(userId);
+      if (subs && subs.length > 0) {
+        // Reconstruct subscription object
+        const sub = subs[0];
+        const subscription = {
+          endpoint: sub.endpoint,
+          keys: {
+            p256dh: sub.p256dh,
+            auth: sub.auth,
+          },
+        };
+        subscriptionCache.set(userId, subscription);
+        return subscription;
+      }
+    } catch (error) {
+      logger.error('Failed to load push subscription', { userId, error: error.message });
+    }
+    return null;
   },
 
   // Send notification to a specific user
   async sendToUser(userId, notification) {
     if (!pushEnabled) return false;
 
-    const subscription = subscriptions.get(userId);
+    const subscription = await this.getSubscription(userId);
     if (!subscription) {
       return false;
     }
@@ -70,7 +115,7 @@ export const pushService = {
 
       // Remove invalid subscriptions
       if (error.statusCode === 410) {
-        subscriptions.delete(userId);
+        await this.unsubscribe(userId, subscription.endpoint);
       }
       return false;
     }

@@ -727,7 +727,7 @@ class SocialDb {
   async registerForTournament(tournamentId, userId, clanId = null) {
     const db = getDb();
     const id = crypto.randomUUID();
-    
+
     if (isPostgres()) {
       await db.query(
         'INSERT INTO tournament_participants (id, tournament_id, user_id, clan_id) VALUES ($1, $2, $3, $4)',
@@ -738,8 +738,23 @@ class SocialDb {
         'INSERT INTO tournament_participants (id, tournament_id, user_id, clan_id) VALUES (?, ?, ?, ?)'
       ).run(id, tournamentId, userId, clanId);
     }
-    
+
     return id;
+  }
+
+  async updateTournamentStatus(tournamentId, status) {
+    const db = getDb();
+
+    if (isPostgres()) {
+      const result = await db.query(
+        'UPDATE tournaments SET status = $1 WHERE id = $2 RETURNING *',
+        [status, tournamentId]
+      );
+      return result.rows[0];
+    } else {
+      db.prepare('UPDATE tournaments SET status = ? WHERE id = ?').run(status, tournamentId);
+      return db.prepare('SELECT * FROM tournaments WHERE id = ?').get(tournamentId);
+    }
   }
 
   // ============ CHAT METHODS ============

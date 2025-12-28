@@ -28,18 +28,18 @@ function Home() {
       <div className="p-4 pt-safe">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-display font-bold">
-            <span className="text-neon-cyan">TAG</span>
-            <span className="text-neon-purple">!</span>
+            <span style={{ color: 'var(--accent-primary)' }}>TAG</span>
+            <span style={{ color: 'var(--accent-secondary)' }}>!</span>
           </h1>
-          
+
           {user && (
-            <button 
+            <button
               onClick={() => handlePress(() => navigate('/settings'))}
-              className="flex items-center gap-2 p-2 rounded-xl hover:bg-white/5 active:scale-95 transition-all"
+              className="flex items-center gap-2 p-2 rounded-xl active:scale-95 transition-all"
             >
               <div className="text-right">
-                <p className="text-sm font-medium">{user.name}</p>
-                <p className="text-xs text-white/40">{stats.gamesWon} wins</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{user.name}</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{stats.gamesWon} wins</p>
               </div>
               <Avatar user={user} size="md" />
             </button>
@@ -53,15 +53,16 @@ function Home() {
         {currentGame && (
           <button
             onClick={() => handlePress(() => navigate(currentGame.status === 'active' ? '/game' : '/lobby'))}
-            className="w-full card-glow p-5 mb-4 bg-gradient-to-r from-neon-cyan/10 to-neon-purple/10 text-left active:scale-[0.98] transition-transform"
+            className="w-full card-glow p-5 mb-4 text-left active:scale-[0.98] transition-transform"
+            style={{ background: 'linear-gradient(135deg, var(--glow-primary), var(--glow-secondary))' }}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-neon-cyan font-medium mb-1">
+                <p className="text-sm font-medium mb-1" style={{ color: 'var(--accent-primary)' }}>
                   {currentGame.status === 'active' ? '🎮 Game in Progress' : '⏳ Waiting in Lobby'}
                 </p>
-                <p className="text-lg font-bold">{currentGame.settings?.gameName || `Game ${currentGame.code}`}</p>
-                <p className="text-sm text-white/50">
+                <p className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{currentGame.settings?.gameName || `Game ${currentGame.code}`}</p>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                   {currentGame.players?.length || 0} player{currentGame.players?.length !== 1 ? 's' : ''}
                 </p>
               </div>
@@ -71,23 +72,23 @@ function Home() {
             </div>
           </button>
         )}
-        
+
         {/* Quick Stats - Tappable for details */}
         <div className="grid grid-cols-4 gap-2 mb-4">
           {[
-            { icon: Trophy, value: stats.gamesWon, label: 'Wins', color: 'text-neon-cyan', path: '/stats' },
-            { icon: Target, value: stats.totalTags, label: 'Tags', color: 'text-neon-purple', path: '/stats' },
-            { icon: History, value: completedGames, label: 'Games', color: 'text-neon-orange', path: '/history' },
-            { icon: Award, value: `${unlockedAchievements}`, label: 'Badges', color: 'text-amber-400', path: '/achievements' },
+            { icon: Trophy, value: stats.gamesWon, label: 'Wins', color: 'var(--accent-primary)', path: '/stats' },
+            { icon: Target, value: stats.totalTags, label: 'Tags', color: 'var(--accent-secondary)', path: '/stats' },
+            { icon: History, value: completedGames, label: 'Games', color: 'var(--accent-tertiary)', path: '/history' },
+            { icon: Award, value: `${unlockedAchievements}`, label: 'Badges', color: '#fbbf24', path: '/achievements' },
           ].map(({ icon: Icon, value, label, color, path }) => (
             <button
               key={label}
               onClick={() => handlePress(() => navigate(path))}
               className="card p-3 text-center active:scale-95 transition-transform min-h-[76px]"
             >
-              <Icon className={`w-5 h-5 mx-auto ${color} mb-1`} />
-              <p className="text-lg font-bold">{value}</p>
-              <p className="text-[10px] text-white/40">{label}</p>
+              <Icon className="w-5 h-5 mx-auto mb-1" style={{ color }} />
+              <p className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{value}</p>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{label}</p>
             </button>
           ))}
         </div>
@@ -98,43 +99,44 @@ function Home() {
             onClick={() => handlePress(() => navigate('/leaderboards'))}
             className="card p-4 text-left active:scale-95 transition-transform min-h-[80px]"
           >
-            <Crown className="w-6 h-6 text-amber-400 mb-2" />
-            <p className="font-medium">Leaderboards</p>
-            <p className="text-xs text-white/40">See top players</p>
+            <Crown className="w-6 h-6 mb-2" style={{ color: '#fbbf24' }} />
+            <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Leaderboards</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>See top players</p>
           </button>
-          
+
           <button
             onClick={() => handlePress(() => navigate('/friends'))}
             className="card p-4 text-left active:scale-95 transition-transform min-h-[80px]"
           >
-            <Users className="w-6 h-6 text-neon-orange mb-2" />
-            <p className="font-medium">Friends</p>
-            <p className="text-xs text-white/40">Invite & manage</p>
+            <Users className="w-6 h-6 mb-2" style={{ color: 'var(--accent-tertiary)' }} />
+            <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Friends</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Invite & manage</p>
           </button>
         </div>
-        
+
         {/* How it Works - Collapsible */}
-        <button 
+        <button
           onClick={() => setShowQuickInfo(!showQuickInfo)}
-          className="w-full flex items-center justify-between py-3 text-white/40"
+          className="w-full flex items-center justify-between py-3"
+          style={{ color: 'var(--text-muted)' }}
         >
           <span className="text-sm font-semibold uppercase tracking-wider">How it works</span>
           <ChevronUp className={`w-4 h-4 transition-transform ${showQuickInfo ? 'rotate-180' : ''}`} />
         </button>
-        
+
         {showQuickInfo && (
           <div className="space-y-2 animate-slide-up">
             {[
-              { icon: MapPin, title: 'GPS Tracking', desc: 'Real-time location updates', color: 'text-neon-cyan' },
-              { icon: Timer, title: 'Custom Intervals', desc: 'Set GPS update frequency', color: 'text-neon-purple' },
-              { icon: Target, title: 'Tag Radius', desc: 'Get close to tag others', color: 'text-neon-orange' },
-              { icon: Trophy, title: 'Win & Earn', desc: 'Collect achievements', color: 'text-amber-400' },
+              { icon: MapPin, title: 'GPS Tracking', desc: 'Real-time location updates', color: 'var(--accent-primary)' },
+              { icon: Timer, title: 'Custom Intervals', desc: 'Set GPS update frequency', color: 'var(--accent-secondary)' },
+              { icon: Target, title: 'Tag Radius', desc: 'Get close to tag others', color: 'var(--accent-tertiary)' },
+              { icon: Trophy, title: 'Win & Earn', desc: 'Collect achievements', color: '#fbbf24' },
             ].map(({ icon: Icon, title, desc, color }) => (
               <div key={title} className="flex items-center gap-4 p-3 card">
-                <Icon className={`w-5 h-5 ${color}`} />
+                <Icon className="w-5 h-5" style={{ color }} />
                 <div>
-                  <p className="font-medium text-sm">{title}</p>
-                  <p className="text-xs text-white/40">{desc}</p>
+                  <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{title}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{desc}</p>
                 </div>
               </div>
             ))}
@@ -144,7 +146,12 @@ function Home() {
       
       {/* Bottom Section - Primary Actions (Thumb Zone) */}
       {!currentGame && (
-        <div className="fixed bottom-20 left-0 right-0 p-4 bg-gradient-to-t from-dark-900 via-dark-900/95 to-transparent pt-12">
+        <div
+          className="fixed bottom-20 left-0 right-0 p-4 pt-12"
+          style={{
+            background: `linear-gradient(to top, var(--bg-secondary), var(--bg-secondary), transparent)`
+          }}
+        >
           <div className="flex gap-3">
             <button
               onClick={() => handlePress(() => navigate('/join'))}
@@ -153,7 +160,7 @@ function Home() {
               <Users className="w-5 h-5" />
               <span className="font-bold">Join</span>
             </button>
-            
+
             <button
               onClick={() => handlePress(() => navigate('/create'))}
               className="flex-[2] btn-action"

@@ -1,5 +1,5 @@
 import validator from 'validator';
-import { GAME_LIMITS } from '../shared/constants.js';
+import { GAME_LIMITS } from '../../shared/constants.js';
 
 // Sanitize and validate user input
 export const sanitize = {

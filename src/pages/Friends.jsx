@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, UserPlus, Search, Users, Send, X, Trash2, Gamepad2, ChevronRight, Copy, Check, Clock, RefreshCw, Loader2, UserCheck, UserX } from 'lucide-react';
 import { useStore } from '../store';
 import { api } from '../services/api';
+import { socketService } from '../services/socket';
 import BottomSheet from '../components/BottomSheet';
+import { useToast } from '../components/Toast';
 
 function Friends() {
   const navigate = useNavigate();
+  const toast = useToast();
   const { user, currentGame } = useStore();
   
   const [friends, setFriends] = useState([]);
@@ -132,9 +135,17 @@ function Friends() {
   };
   
   const handleInviteToGame = (friendId) => {
-    // If in a game, send invite. Otherwise go to create game
-    if (currentGame) {
-      // TODO: Implement game invite via socket
+    // If in a game, send invite via socket. Otherwise go to create game
+    if (currentGame && currentGame.code) {
+      socketService.emit('game:invite', {
+        friendId,
+        gameCode: currentGame.code,
+      });
+      // Show brief feedback
+      const friend = friends.find(f => f.id === friendId);
+      if (friend) {
+        toast.success(`Invite sent to ${friend.name}!`);
+      }
     } else {
       navigate('/create');
     }

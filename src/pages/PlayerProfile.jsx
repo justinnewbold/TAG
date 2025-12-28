@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   User, Trophy, Target, Clock, Medal, Zap, Shield,
   Calendar, TrendingUp, Star, ChevronRight, MapPin,
   Edit2, Camera, Share, Settings
@@ -7,12 +7,14 @@ import {
 import { api } from '../services/api';
 import { useStore } from '../store';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useToast } from '../components/Toast';
 
 const AVATAR_OPTIONS = ['😀', '😎', '🥷', '👻', '🦊', '🐱', '🦁', '🐯', '🦖', '🤖', '👽', '🎮', '🏃', '⚡', '🔥', '💀'];
 
 function PlayerProfile() {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const { user: currentUser } = useStore();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -54,22 +56,31 @@ function PlayerProfile() {
       });
       setProfile({ ...profile, ...editData });
       setIsEditing(false);
+      toast.success('Profile saved!');
     } catch (err) {
-      console.error('Failed to save profile:', err);
-      alert(err.message);
+      if (import.meta.env.DEV) console.error('Failed to save profile:', err);
+      toast.error(err.message || 'Failed to save profile');
     }
   };
 
-  const shareProfile = () => {
+  const shareProfile = async () => {
     const url = `${window.location.origin}/profile/${profile.id}`;
     if (navigator.share) {
-      navigator.share({
-        title: `${profile.name}'s TAG Profile`,
-        url: url
-      });
+      try {
+        await navigator.share({
+          title: `${profile.name}'s TAG Profile`,
+          url: url
+        });
+      } catch (err) {
+        // User cancelled share
+      }
     } else {
-      navigator.clipboard.writeText(url);
-      alert('Profile link copied!');
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Profile link copied!');
+      } catch (err) {
+        toast.error('Failed to copy link');
+      }
     }
   };
 
