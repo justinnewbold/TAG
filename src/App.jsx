@@ -77,6 +77,15 @@ function App() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
+  // Apply dark mode class to document
+  useEffect(() => {
+    if (settings.darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [settings.darkMode]);
+
   // Try to re-authenticate with existing token on app load
   useEffect(() => {
     const initAuth = async () => {

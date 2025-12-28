@@ -3,25 +3,41 @@
 @tailwind utilities;
 
 :root {
-  /* Light theme accent colors - vibrant but softer */
+  /* Accent colors - same for both themes */
   --accent-primary: #0ea5e9;    /* Sky blue */
   --accent-secondary: #8b5cf6;  /* Violet */
   --accent-tertiary: #f97316;   /* Orange */
   --accent-success: #10b981;    /* Emerald */
   --accent-danger: #ef4444;     /* Red */
-  
-  /* Light backgrounds */
+
+  /* Light theme backgrounds (default) */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --bg-elevated: #ffffff;
+  --bg-card: #ffffff;
+  --border-color: #e2e8f0;
+  --border-subtle: #f1f5f9;
+
+  /* Light theme text */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-inverse: #ffffff;
+
+  /* Light theme specific */
+  --shadow-color: rgba(0, 0, 0, 0.1);
+  --overlay-color: rgba(0, 0, 0, 0.5);
+  --glow-primary: rgba(14, 165, 233, 0.1);
+  --glow-secondary: rgba(139, 92, 246, 0.1);
+
+  /* Legacy mappings for light theme */
   --light-50: #ffffff;
   --light-100: #f8fafc;
   --light-200: #f1f5f9;
   --light-300: #e2e8f0;
   --light-400: #cbd5e1;
-  
-  /* Text colors */
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
-  
+
   /* Touch target minimum sizes */
   --touch-target-min: 48px;
   --touch-target-comfortable: 56px;
@@ -30,6 +46,37 @@
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
   --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+/* Dark Theme */
+.dark {
+  /* Dark theme backgrounds */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-elevated: #1e293b;
+  --bg-card: #1e293b;
+  --border-color: #334155;
+  --border-subtle: #1e293b;
+
+  /* Dark theme text */
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-inverse: #0f172a;
+
+  /* Dark theme specific */
+  --shadow-color: rgba(0, 0, 0, 0.4);
+  --overlay-color: rgba(0, 0, 0, 0.8);
+  --glow-primary: rgba(14, 165, 233, 0.2);
+  --glow-secondary: rgba(139, 92, 246, 0.2);
+
+  /* Legacy mappings for dark theme */
+  --light-50: #1e293b;
+  --light-100: #0f172a;
+  --light-200: #1e293b;
+  --light-300: #334155;
+  --light-400: #475569;
 }
 
 * {
@@ -48,7 +95,7 @@ html {
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: var(--light-100);
+  background-color: var(--bg-secondary);
   color: var(--text-primary);
   min-height: 100vh;
   min-height: 100dvh; /* Dynamic viewport height for mobile */
@@ -56,19 +103,20 @@ body {
   -moz-osx-font-smoothing: grayscale;
   /* Prevent pull-to-refresh on mobile */
   overscroll-behavior-y: contain;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Scrollbar - Light Theme */
+/* Scrollbar - Theme aware */
 ::-webkit-scrollbar {
   width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--light-200);
+  background: var(--bg-tertiary);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--light-400);
+  background: var(--border-color);
   border-radius: 3px;
 }
 
@@ -76,20 +124,20 @@ body {
   background: var(--accent-primary);
 }
 
-/* Leaflet overrides - Light Theme */
+/* Leaflet overrides - Theme aware */
 .leaflet-container {
-  background: var(--light-200) !important;
+  background: var(--bg-tertiary) !important;
 }
 
 .leaflet-popup-content-wrapper {
-  background: var(--light-50) !important;
+  background: var(--bg-card) !important;
   color: var(--text-primary) !important;
   border-radius: 12px !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 4px 20px var(--shadow-color) !important;
 }
 
 .leaflet-popup-tip {
-  background: var(--light-50) !important;
+  background: var(--bg-card) !important;
 }
 
 .leaflet-popup-close-button {
@@ -101,110 +149,113 @@ body {
   .font-display {
     font-family: 'Orbitron', sans-serif;
   }
-  
+
   .card {
-    @apply rounded-2xl border;
-    background: var(--light-50);
-    border-color: var(--light-300);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    @apply rounded-2xl border transition-colors;
+    background: var(--bg-card);
+    border-color: var(--border-color);
+    box-shadow: 0 1px 3px var(--shadow-color);
   }
-  
+
   .card-glow {
-    @apply rounded-2xl border;
-    background: var(--light-50);
-    border-color: var(--light-300);
-    box-shadow: 0 4px 20px rgba(14, 165, 233, 0.1);
+    @apply rounded-2xl border transition-colors;
+    background: var(--bg-card);
+    border-color: var(--border-color);
+    box-shadow: 0 4px 20px var(--glow-primary);
   }
-  
+
   /* Mobile-first buttons with proper touch targets */
   .btn-primary {
-    @apply px-6 py-4 rounded-2xl font-semibold transition-all text-white;
+    @apply px-6 py-4 rounded-2xl font-semibold transition-all;
     background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    color: var(--text-inverse);
     min-height: var(--touch-target-comfortable);
   }
-  
+
   .btn-primary:hover {
     opacity: 0.9;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+    box-shadow: 0 4px 12px var(--glow-primary);
   }
-  
+
   .btn-primary:active {
     transform: scale(0.97);
   }
-  
+
   .btn-secondary {
     @apply px-6 py-4 rounded-2xl font-semibold transition-all;
-    background: var(--light-200);
+    background: var(--bg-tertiary);
     color: var(--text-primary);
-    border: 1px solid var(--light-300);
+    border: 1px solid var(--border-color);
     min-height: var(--touch-target-comfortable);
   }
-  
+
   .btn-secondary:hover {
-    background: var(--light-300);
+    background: var(--border-color);
   }
-  
+
   .btn-secondary:active {
     transform: scale(0.97);
   }
-  
+
   /* Large action button for primary game actions */
   .btn-action {
-    @apply w-full py-5 rounded-2xl font-bold text-lg text-white;
+    @apply w-full py-5 rounded-2xl font-bold text-lg;
     background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    color: var(--text-inverse);
     min-height: 64px;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
   }
-  
+
   .btn-action:active {
     transform: scale(0.97);
   }
-  
+
   /* Icon button with proper touch target */
   .btn-icon {
     @apply flex items-center justify-center rounded-full transition-all;
-    background: var(--light-200);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
     min-width: var(--touch-target-min);
     min-height: var(--touch-target-min);
   }
-  
+
   .btn-icon:hover {
-    background: var(--light-300);
+    background: var(--border-color);
   }
-  
+
   .btn-icon:active {
     transform: scale(0.95);
   }
-  
+
   .btn-icon-lg {
     @apply btn-icon;
     min-width: var(--touch-target-comfortable);
     min-height: var(--touch-target-comfortable);
   }
-  
+
   .input-field {
     @apply w-full px-4 py-4 rounded-xl transition-all;
-    background: var(--light-50);
-    border: 1px solid var(--light-300);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
     color: var(--text-primary);
     font-size: 1rem; /* 16px prevents zoom on iOS */
     min-height: var(--touch-target-comfortable);
   }
-  
+
   .input-field::placeholder {
     color: var(--text-muted);
   }
-  
+
   .input-field:focus {
     outline: none;
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+    box-shadow: 0 0 0 3px var(--glow-primary);
   }
-  
+
   .label {
     @apply block text-sm mb-2;
     color: var(--text-secondary);
@@ -225,16 +276,16 @@ body {
   /* Touch-friendly list items */
   .list-item-touch {
     @apply flex items-center gap-4 p-4 rounded-xl transition-colors;
-    background: var(--light-50);
+    background: var(--bg-card);
     min-height: var(--touch-target-comfortable);
   }
-  
+
   .list-item-touch:hover {
-    background: var(--light-200);
+    background: var(--bg-tertiary);
   }
-  
+
   .list-item-touch:active {
-    background: var(--light-300);
+    background: var(--border-color);
   }
   
   /* Accent color utilities */
@@ -287,17 +338,17 @@ body {
     background-color: var(--accent-tertiary);
   }
   
-  /* Dark backgrounds mapped to light theme */
+  /* Dark backgrounds - theme aware */
   .bg-dark-900 {
-    background-color: var(--light-100);
+    background-color: var(--bg-secondary);
   }
-  
+
   .bg-dark-800 {
-    background-color: var(--light-50);
+    background-color: var(--bg-card);
   }
-  
+
   .bg-dark-700 {
-    background-color: var(--light-200);
+    background-color: var(--bg-tertiary);
   }
   
   .border-neon-cyan {
@@ -394,11 +445,11 @@ body {
   }
 }
 
-/* PWA install prompt styling - Light */
+/* PWA install prompt styling - theme aware */
 .pwa-install-prompt {
   @apply fixed bottom-20 left-4 right-4 p-4 rounded-2xl;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(139, 92, 246, 0.1));
-  border: 1px solid rgba(14, 165, 233, 0.3);
+  background: linear-gradient(135deg, var(--glow-primary), var(--glow-secondary));
+  border: 1px solid var(--accent-primary);
   backdrop-filter: blur(12px);
   animation: slide-up 0.3s ease-out;
   z-index: 50;
@@ -407,7 +458,7 @@ body {
 /* Loading states */
 .skeleton {
   @apply animate-pulse rounded;
-  background: var(--light-300);
+  background: var(--border-color);
 }
 
 /* Focus visible for accessibility */
@@ -438,7 +489,7 @@ input:focus-visible {
   content: '';
   width: 2rem;
   height: 2px;
-  background: var(--light-400);
+  background: var(--border-color);
   border-radius: 9999px;
 }
 
@@ -455,7 +506,7 @@ input:focus-visible {
 /* Pull to refresh indicator */
 .pull-indicator {
   @apply fixed top-0 left-0 right-0 flex items-center justify-center py-3;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--bg-primary);
   backdrop-filter: blur(8px);
   transition: transform 0.2s;
   z-index: 100;
@@ -469,7 +520,7 @@ input:focus-visible {
 /* Bottom sheet backdrop */
 .sheet-backdrop {
   @apply fixed inset-0 transition-opacity duration-300;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--overlay-color);
   backdrop-filter: blur(4px);
 }
 
@@ -481,7 +532,7 @@ input:focus-visible {
 
 .gesture-ripple {
   @apply absolute rounded-full pointer-events-none;
-  background: rgba(14, 165, 233, 0.3);
+  background: var(--glow-primary);
   animation: ripple 0.6s ease-out forwards;
 }
 
@@ -509,9 +560,9 @@ input:focus-visible {
   color: var(--text-primary);
 }
 
-/* Text color utilities for light theme */
+/* Text color utilities - theme aware */
 .text-white {
-  color: white;
+  color: var(--text-inverse);
 }
 
 .text-white\/50 {
@@ -530,38 +581,46 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
-/* Background utilities mapped for light theme */
+.text-white\/40 {
+  color: var(--text-muted);
+}
+
+/* Background utilities - theme aware */
 .bg-white\/5 {
-  background: var(--light-200);
+  background: var(--bg-tertiary);
 }
 
 .bg-white\/10 {
-  background: var(--light-200);
+  background: var(--bg-tertiary);
 }
 
 .bg-white\/20 {
-  background: var(--light-300);
+  background: var(--border-color);
 }
 
 .bg-black\/50 {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--overlay-color);
 }
 
 .bg-black\/60 {
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay-color);
 }
 
-/* Border utilities mapped for light theme */
+.bg-black\/80 {
+  background: var(--overlay-color);
+}
+
+/* Border utilities - theme aware */
 .border-white\/5 {
-  border-color: var(--light-300);
+  border-color: var(--border-subtle);
 }
 
 .border-white\/10 {
-  border-color: var(--light-300);
+  border-color: var(--border-color);
 }
 
 .border-white\/20 {
-  border-color: var(--light-400);
+  border-color: var(--border-color);
 }
 
 /* Gradient text effect - Light theme */
@@ -569,14 +628,30 @@ input:focus-visible {
   background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
 }
 
-/* Glass effect for light theme */
+/* Glass effect - theme aware */
 .backdrop-blur-sm {
   backdrop-filter: blur(8px);
-  background: rgba(255, 255, 255, 0.8);
 }
 
 .backdrop-blur-lg {
   backdrop-filter: blur(16px);
+}
+
+/* Dark theme glass */
+.dark .backdrop-blur-sm {
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.dark .backdrop-blur-lg {
+  background: rgba(15, 23, 42, 0.9);
+}
+
+/* Light theme glass */
+:root:not(.dark) .backdrop-blur-sm {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+:root:not(.dark) .backdrop-blur-lg {
   background: rgba(255, 255, 255, 0.9);
 }
 
