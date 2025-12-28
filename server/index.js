@@ -18,6 +18,7 @@ import healthRouter from './routes/health.js';
 import { GameManager } from './game/GameManager.js';
 import { setupSocketHandlers } from './socket/handlers.js';
 import { logger } from './utils/logger.js';
+import { errorMiddleware, notFoundMiddleware } from './utils/errors.js';
 import { sentry } from './services/sentry.js';
 import { replayDb } from './db/replays.js';
 import { socialDb } from './db/social.js';
@@ -220,22 +221,14 @@ io.on('connection', (socket) => {
   });
 });
 
+// Handle 404 for unmatched routes
+app.use(notFoundMiddleware);
+
 // Sentry error handler (captures errors before responding)
 app.use(sentry.errorHandler());
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  logger.error('Request error', {
-    ...logger.withRequest(req),
-    error: err.message,
-    stack: err.stack,
-  });
-  // Don't leak error details in production
-  const message = process.env.NODE_ENV === 'production'
-    ? 'Internal server error'
-    : err.message;
-  res.status(err.status || 500).json({ error: message });
-});
+// Centralized error handling middleware
+app.use(errorMiddleware);
 
 // Periodic cleanup of old games (every hour)
 setInterval(async () => {

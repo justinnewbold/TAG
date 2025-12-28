@@ -1,45 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { gameDb, userDb } from '../db/index.js';
-import { getDistance, generateGameCode } from '../shared/utils.js';
+import { getDistance, generateGameCode, isInNoTagTime, isInNoTagZone, canTagNow } from '../shared/utils.js';
 import { GAME_MODES, GAME_LIMITS } from '../shared/constants.js';
 
 // Re-export for backward compatibility
 export { GAME_MODES };
-
-// Check if current time is in a no-tag period
-const isInNoTagTime = (noTagTimes) => {
-  if (!noTagTimes || noTagTimes.length === 0) return false;
-
-  const now = new Date();
-  const currentDay = now.getDay();
-  const currentTime = now.getHours() * 60 + now.getMinutes();
-
-  return noTagTimes.some(rule => {
-    if (!rule.days.includes(currentDay)) return false;
-
-    const [startHour, startMin] = rule.startTime.split(':').map(Number);
-    const [endHour, endMin] = rule.endTime.split(':').map(Number);
-    const startMins = startHour * 60 + startMin;
-    const endMins = endHour * 60 + endMin;
-
-    // Handle overnight times
-    if (endMins < startMins) {
-      return currentTime >= startMins || currentTime <= endMins;
-    }
-
-    return currentTime >= startMins && currentTime <= endMins;
-  });
-};
-
-// Check if location is in a no-tag zone
-const isInNoTagZone = (location, noTagZones) => {
-  if (!location || !noTagZones || noTagZones.length === 0) return false;
-
-  return noTagZones.some(zone => {
-    const distance = getDistance(location.lat, location.lng, zone.lat, zone.lng);
-    return distance <= zone.radius;
-  });
-};
 
 export class GameManager {
   constructor() {

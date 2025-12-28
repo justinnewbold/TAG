@@ -438,6 +438,47 @@ export function setupSocketHandlers(io, socket, gameManager) {
     socket.emit('pong', { timestamp: Date.now() });
   });
 
+  // Send game invite to a friend
+  socket.on('game:invite', async ({ friendId, gameCode }) => {
+    if (!rateLimiter.check(user.id, 'game:invite', 10)) {
+      socket.emit('error:rateLimit', { event: 'game:invite', message: 'Too many invites sent' });
+      return;
+    }
+
+    if (!friendId || !gameCode) {
+      socket.emit('invite:error', { message: 'Friend ID and game code required' });
+      return;
+    }
+
+    const game = await gameManager.getPlayerGame(user.id);
+    if (!game || game.code !== gameCode) {
+      socket.emit('invite:error', { message: 'You must be in the game to send invites' });
+      return;
+    }
+
+    // Find the friend's socket and send them the invite
+    const friendSockets = await io.fetchSockets();
+    const friendSocket = friendSockets.find(s => s.user?.id === friendId);
+
+    if (friendSocket) {
+      friendSocket.emit('game:invited', {
+        from: {
+          id: user.id,
+          name: user.name,
+          avatar: user.avatar,
+        },
+        gameCode,
+        gameName: game.settings?.name || 'TAG Game',
+        playerCount: game.players.length,
+        timestamp: Date.now(),
+      });
+      socket.emit('invite:sent', { friendId, gameCode });
+    } else {
+      // Friend is offline - could send push notification here
+      socket.emit('invite:sent', { friendId, gameCode, offline: true });
+    }
+  });
+
   // Handle disconnect
   socket.on('disconnect', async (reason) => {
     console.log(`User disconnected: ${user.name} (${reason})`);
