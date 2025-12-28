@@ -5,17 +5,17 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Install dumb-init and build tools for native modules (better-sqlite3)
+RUN apk add --no-cache dumb-init python3 make g++
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-# Copy and install server dependencies
+# Copy and install server dependencies (including optional deps)
 COPY server/package*.json ./server/
 WORKDIR /app/server
-RUN npm install --omit=dev
+RUN npm install --include=optional
 
 # Copy server source files
 WORKDIR /app
