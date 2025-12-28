@@ -1,35 +1,7 @@
-# Multi-stage build for TAG! GPS Game
+# Server-only build for TAG! GPS Game API
+# Frontend is deployed separately on Vercel
 
-# Stage 1: Build frontend
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /app
-
-# Copy frontend package files
-COPY package*.json ./
-
-# Install frontend dependencies
-RUN npm ci
-
-# Copy frontend source
-COPY . .
-
-# Build frontend
-RUN npm run build
-
-# Stage 2: Build server
-FROM node:20-alpine AS server-builder
-
-WORKDIR /app/server
-
-# Copy server package files
-COPY server/package*.json ./
-
-# Install server dependencies (production only)
-RUN npm install --omit=dev
-
-# Stage 3: Production image
-FROM node:20-alpine AS production
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -40,11 +12,13 @@ RUN apk add --no-cache dumb-init
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-# Copy built frontend
-COPY --from=frontend-builder /app/dist ./dist
+# Copy and install server dependencies
+COPY server/package*.json ./server/
+WORKDIR /app/server
+RUN npm install --omit=dev
 
-# Copy server files
-COPY --from=server-builder /app/server/node_modules ./server/node_modules
+# Copy server source files
+WORKDIR /app
 COPY server/*.js ./server/
 COPY server/db ./server/db
 COPY server/game ./server/game
@@ -55,7 +29,7 @@ COPY server/utils ./server/utils
 COPY server/managers ./server/managers
 COPY server/shared ./server/shared
 
-# Copy shared utilities (used by both client and server)
+# Copy shared utilities (used by server)
 COPY shared ./shared
 
 # Create data directory for SQLite
