@@ -154,7 +154,11 @@ router.post('/register/email', async (req, res) => {
     });
   } catch (error) {
     console.error('Email registration error:', error);
-    res.status(500).json({ error: 'Registration failed' });
+    res.status(500).json({
+      error: 'Registration failed',
+      details: error.message,
+      code: error.code || 'UNKNOWN'
+    });
   }
 });
 

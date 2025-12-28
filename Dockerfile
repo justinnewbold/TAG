@@ -55,7 +55,7 @@ COPY server/utils ./server/utils
 COPY server/managers ./server/managers
 COPY server/shared ./server/shared
 
-# Copy shared utilities (used by both client and server - for frontend build)
+# Copy shared utilities (used by both client and server)
 COPY shared ./shared
 
 # Create data directory for SQLite

@@ -153,14 +153,19 @@ export default function AuthCallback() {
         setAuthType('email');
       }
 
-      // Exchange Supabase session with our backend
+      // Sync Supabase session with our backend
       let backendToken = null;
       try {
-        const response = await api.request('/auth/token', {
+        const supaUser = session.user;
+        const response = await api.request('/auth/supabase', {
           method: 'POST',
-          body: JSON.stringify({ 
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
+          body: JSON.stringify({
+            supabaseId: supaUser.id,
+            email: supaUser.email,
+            phone: supaUser.phone,
+            name: supaUser.user_metadata?.full_name || supaUser.user_metadata?.name || supaUser.email?.split('@')[0] || 'Player',
+            avatar: supaUser.user_metadata?.avatar || '😀',
+            provider: supaUser.app_metadata?.provider || 'google',
           }),
         });
 
@@ -170,10 +175,13 @@ export default function AuthCallback() {
           if (response.refreshToken) {
             api.setRefreshToken(response.refreshToken);
           }
-          console.log('Backend token exchange successful');
+          if (response.user) {
+            setUser(response.user);
+          }
+          console.log('Backend sync successful');
         }
       } catch (backendError) {
-        console.warn('Backend token exchange failed:', backendError.message);
+        console.warn('Backend sync failed:', backendError.message);
         // Continue anyway - we have a valid Supabase session
       }
 
