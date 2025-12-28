@@ -647,4 +647,8 @@ if (usePostgres) {
   console.log('Using SQLite database');
 }
 
-export { db, userDb, gameDb };
+// Helper functions for social.js and replays.js
+const getDb = () => db;
+const isPostgres = () => !!process.env.DATABASE_URL;
+
+export { db, userDb, gameDb, getDb, isPostgres };
