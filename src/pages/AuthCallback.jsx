@@ -157,6 +157,12 @@ export default function AuthCallback() {
       let backendToken = null;
       try {
         const supaUser = session.user;
+        // Get avatar URL from Google OAuth metadata
+        const googleAvatarUrl = supaUser.user_metadata?.avatar_url || 
+                                supaUser.user_metadata?.picture || 
+                                supaUser.identities?.find(i => i.provider === 'google')?.identity_data?.avatar_url ||
+                                null;
+        
         const response = await api.request('/auth/supabase', {
           method: 'POST',
           body: JSON.stringify({
@@ -165,6 +171,7 @@ export default function AuthCallback() {
             phone: supaUser.phone,
             name: supaUser.user_metadata?.full_name || supaUser.user_metadata?.name || supaUser.email?.split('@')[0] || 'Player',
             avatar: supaUser.user_metadata?.avatar || '😀',
+            avatarUrl: googleAvatarUrl,
             provider: supaUser.app_metadata?.provider || 'google',
           }),
         });
@@ -199,7 +206,7 @@ export default function AuthCallback() {
           id: supaUser.id,
           email: supaUser.email,
           name: supaUser.user_metadata?.full_name || supaUser.user_metadata?.name || supaUser.email?.split('@')[0] || 'Player',
-          avatarUrl: supaUser.user_metadata?.avatar_url || supaUser.user_metadata?.picture || null,
+          avatarUrl: supaUser.user_metadata?.avatar_url || supaUser.user_metadata?.picture || supaUser.identities?.find(i => i.provider === 'google')?.identity_data?.avatar_url || null,
           avatar: supaUser.user_metadata?.avatar || '👤',
         };
       }
@@ -373,3 +380,4 @@ export default function AuthCallback() {
     </div>
   );
 }
+
