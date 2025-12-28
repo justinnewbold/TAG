@@ -87,7 +87,12 @@ router.post('/register', async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ error: 'Registration failed' });
+    // Include error details for debugging
+    res.status(500).json({
+      error: 'Registration failed',
+      details: error.message,
+      code: error.code || 'UNKNOWN'
+    });
   }
 });
 
@@ -149,7 +154,11 @@ router.post('/register/email', async (req, res) => {
     });
   } catch (error) {
     console.error('Email registration error:', error);
-    res.status(500).json({ error: 'Registration failed' });
+    res.status(500).json({
+      error: 'Registration failed',
+      details: error.message,
+      code: error.code || 'UNKNOWN'
+    });
   }
 });
 

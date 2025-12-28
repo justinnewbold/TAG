@@ -53,6 +53,7 @@ COPY server/services ./server/services
 COPY server/socket ./server/socket
 COPY server/utils ./server/utils
 COPY server/managers ./server/managers
+COPY server/shared ./server/shared
 
 # Copy shared utilities (used by both client and server)
 COPY shared ./shared

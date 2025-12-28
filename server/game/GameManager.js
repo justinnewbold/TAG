@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { gameDb, userDb } from '../db/index.js';
-import { getDistance, generateGameCode } from '../../shared/utils.js';
-import { GAME_MODES, GAME_LIMITS } from '../../shared/constants.js';
+import { getDistance, generateGameCode } from '../shared/utils.js';
+import { GAME_MODES, GAME_LIMITS } from '../shared/constants.js';
 
 // Re-export for backward compatibility
 export { GAME_MODES };

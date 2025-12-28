@@ -3,7 +3,7 @@
  * Spawns power-ups on the map that players can collect
  */
 
-import { POWERUP_TYPES } from '../../shared/constants.js';
+import { POWERUP_TYPES } from '../shared/constants.js';
 
 // Generate unique ID
 const generateId = () => Math.random().toString(36).substring(2, 15);
