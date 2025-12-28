@@ -27,9 +27,8 @@ COPY server/services ./server/services
 COPY server/socket ./server/socket
 COPY server/utils ./server/utils
 COPY server/managers ./server/managers
-COPY server/shared ./server/shared
 
-# Copy shared utilities (used by server)
+# Copy shared utilities (used by both server and client)
 COPY shared ./shared
 
 # Create data directory for SQLite

@@ -19,6 +19,7 @@ import { GameManager } from './game/GameManager.js';
 import { setupSocketHandlers } from './socket/handlers.js';
 import { logger } from './utils/logger.js';
 import { errorMiddleware, notFoundMiddleware } from './utils/errors.js';
+import { requestLoggerWithSkip } from './utils/requestLogger.js';
 import { sentry } from './services/sentry.js';
 import { replayDb } from './db/replays.js';
 import { socialDb } from './db/social.js';
@@ -143,6 +144,9 @@ app.use(cors({
   exposedHeaders: ['Content-Length', 'X-Request-Id'],
 }));
 app.use(express.json({ limit: '10kb' })); // Limit body size
+
+// Request logging (skip health checks)
+app.use(requestLoggerWithSkip(['/health', '/api/health']));
 
 // Apply general rate limiting
 app.use(generalLimiter);
