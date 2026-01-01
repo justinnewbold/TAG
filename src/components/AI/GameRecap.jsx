@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Trophy, Share2, X, Sparkles, Clock, Target, Users, Flame } from 'lucide-react';
-import { aiService } from '../services/ai';
+import { aiService } from '../../services/ai';
 
 export default function GameRecap({ gameData, onClose }) {
   const [recap, setRecap] = useState('');
