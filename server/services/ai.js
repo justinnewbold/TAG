@@ -490,6 +490,8 @@ Give actionable advice. No intro, just the tip.`;
   return tips.slice(0, 3); // Return top 3 tips
 }
 
+export { askAssistant };
+
 export default {
   generateGameRecap,
   generateTrashTalk,
@@ -497,4 +499,188 @@ export default {
   generateCommentary,
   calculateSkillRating,
   generateStrategyTips,
+  askAssistant,
 };
+
+
+/**
+ * AI Assistant for answering game-related questions
+ */
+export async function askAssistant(question) {
+  // Game knowledge base for fallback
+  const knowledgeBase = {
+    'how to play': `TAG! is a real-world GPS tag game! 🎮
+
+**Basic Rules:**
+1. One player starts as "IT"
+2. IT tries to tag other players by getting within range
+3. When you're tagged, you become IT
+4. Last player standing (or most time not IT) wins!
+
+**Tips:**
+- Keep moving! Standing still makes you easy prey
+- Use obstacles and terrain to your advantage
+- Watch the map for IT's position
+- Grab power-ups for special abilities`,
+
+    'game modes': `TAG! has 7 exciting game modes! 🎯
+
+**1. Classic Tag** - Traditional tag, last one standing wins
+**2. Freeze Tag** - Tagged players freeze until unfrozen by teammates
+**3. Infection** - IT tags spread like a virus, survivors win
+**4. Team Tag** - Two teams compete, tag opponents
+**5. Manhunt** - One hunter vs many runners
+**6. Hot Potato** - Pass the "IT" before time runs out
+**7. Hide & Seek** - IT counts, then hunts hidden players`,
+
+    'power-ups': `Power-ups give you special abilities! ✨
+
+**Speed Boost** 🏃 - Run 50% faster for 10 seconds
+**Invisibility** 👻 - Disappear from the map briefly
+**Shield** 🛡️ - Block one tag attempt
+**Radar** 📡 - See all players for 15 seconds
+**Freeze** ❄️ - Slow down nearby players
+**Teleport** ⚡ - Jump to a random location
+**Decoy** 🎭 - Create a fake blip on the map`,
+
+    'tagging': `How to tag someone: 🎯
+
+1. Get within the **tag radius** (usually 15-50m)
+2. The **TAG button** appears when in range
+3. Tap the button to tag them!
+4. They become IT, you're free!
+
+**Pro Tips:**
+- Approach from behind or sides
+- Use Speed Boost to close distance
+- Corner players near boundaries
+- Coordinate with teammates in Team mode`,
+
+    'skill rating': `The Skill Rating system ranks players! 📊
+
+**Tiers (lowest to highest):**
+🥉 Bronze (0-1099)
+🥈 Silver (1100-1299)
+🥇 Gold (1300-1499)
+💎 Diamond (1500-1799)
+🏆 Legend (1800+)
+
+**How to improve:**
+- Win more games
+- Tag efficiently as IT
+- Survive longer as runner
+- Play more matches!`,
+
+    'runner tips': `Tips for being a great runner! 🏃‍♂️
+
+1. **Keep Moving** - Never stand still
+2. **Zigzag** - Unpredictable paths are harder to follow
+3. **Use Terrain** - Buildings, trees, obstacles help
+4. **Watch the Map** - Know where IT is
+5. **Save Power-ups** - Use them in emergencies
+6. **Stay Near Edges** - More escape routes
+7. **Fake Out** - Change direction suddenly`,
+
+    'it tips': `Tips for being IT! 🎯
+
+1. **Predict Movement** - Cut off escape routes
+2. **Don't Chase Directly** - Angle your approach
+3. **Target Weak Players** - Look for tired/slow ones
+4. **Use Speed Boost** - Close gaps quickly
+5. **Corner Them** - Push toward boundaries
+6. **Patience** - Wait for mistakes
+7. **Coordinate** - In team modes, communicate!`,
+  };
+
+  // Find best matching answer
+  const questionLower = question.toLowerCase();
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const [key, answer] of Object.entries(knowledgeBase)) {
+    const keywords = key.split(' ');
+    let score = 0;
+    for (const keyword of keywords) {
+      if (questionLower.includes(keyword)) {
+        score++;
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = answer;
+    }
+  }
+
+  // Check for specific keywords
+  if (questionLower.includes('play') || questionLower.includes('rules') || questionLower.includes('start')) {
+    bestMatch = knowledgeBase['how to play'];
+  }
+  if (questionLower.includes('mode') || questionLower.includes('type')) {
+    bestMatch = knowledgeBase['game modes'];
+  }
+  if (questionLower.includes('power') || questionLower.includes('ability') || questionLower.includes('boost')) {
+    bestMatch = knowledgeBase['power-ups'];
+  }
+  if (questionLower.includes('tag') && (questionLower.includes('how') || questionLower.includes('someone'))) {
+    bestMatch = knowledgeBase['tagging'];
+  }
+  if (questionLower.includes('rating') || questionLower.includes('rank') || questionLower.includes('skill') || questionLower.includes('tier')) {
+    bestMatch = knowledgeBase['skill rating'];
+  }
+  if (questionLower.includes('runner') || questionLower.includes('escape') || questionLower.includes('run away')) {
+    bestMatch = knowledgeBase['runner tips'];
+  }
+  if (questionLower.includes('it') && questionLower.includes('tip') || questionLower.includes('catch') || questionLower.includes('chase')) {
+    bestMatch = knowledgeBase['it tips'];
+  }
+
+  // If we have AI available, use it
+  if (hasAI) {
+    try {
+      const model = getModel(true);
+      const systemPrompt = `You are TAG!'s friendly AI assistant - an expert on this real-world GPS tag game. 
+
+Game Knowledge:
+- TAG! is a mobile GPS game where players physically run and tag each other
+- One player is "IT" and must tag others by getting within GPS range
+- 7 game modes: Classic, Freeze Tag, Infection, Team Tag, Manhunt, Hot Potato, Hide & Seek
+- Power-ups include: Speed Boost, Invisibility, Shield, Radar, Freeze, Teleport, Decoy
+- Skill rating tiers: Bronze, Silver, Gold, Diamond, Legend
+- Features: friends system, leaderboards, achievements, daily rewards
+
+Rules:
+- Be helpful, friendly, and enthusiastic
+- Use emojis to be engaging 🎮
+- Keep answers concise but informative
+- If asked something unrelated to TAG!, politely redirect to game topics
+- Be encouraging to new players
+
+Answer this player's question:`;
+
+      const result = await model.generateContent(`${systemPrompt}\n\nQuestion: ${question}`);
+      const response = await result.response;
+      return response.text();
+    } catch (error) {
+      console.error('AI Assistant error:', error);
+      // Fall through to use knowledge base
+    }
+  }
+
+  // Use knowledge base fallback
+  if (bestMatch) {
+    return bestMatch;
+  }
+
+  // Generic response
+  return `Great question! 🤔 
+
+I'm your TAG! assistant, here to help with anything about the game:
+
+• **How to play** - Basic rules and gameplay
+• **Game modes** - All 7 modes explained  
+• **Power-ups** - Special abilities
+• **Tips & strategies** - Become a pro
+• **Skill ratings** - Ranking system
+
+What would you like to know more about? 🎮`;
+}
