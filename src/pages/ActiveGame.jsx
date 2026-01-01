@@ -16,6 +16,10 @@ const PowerupInventory = lazy(() => import('../components/PowerupInventory'));
 const SpectatorMode = lazy(() => import('../components/SpectatorMode'));
 const QuickActionMenu = lazy(() => import('../components/QuickActionMenu'));
 
+// AI Components
+const SmartQuickChat = lazy(() => import('../components/AI/SmartQuickChat'));
+const AICommentator = lazy(() => import('../components/AI/AICommentator'));
+
 // Custom marker icons
 const createIcon = (color, isIt = false, emoji = '📍') => {
   return L.divIcon({
@@ -66,6 +70,8 @@ function ActiveGame() {
   const [isTagging, setIsTagging] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [noTagStatus, setNoTagStatus] = useState({ inZone: false, inTime: false });
+  const [commentaryEvent, setCommentaryEvent] = useState(null);
+  const [showSmartChat, setShowSmartChat] = useState(false);
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
   const [showChat, setShowChat] = useState(false);
   const [showPowerups, setShowPowerups] = useState(false);
@@ -970,6 +976,42 @@ function ActiveGame() {
       )}
       
       {/* Game End Summary */}
+      
+      {/* AI Commentator - shows game events */}
+      <Suspense fallback={null}>
+        <AICommentator event={commentaryEvent} />
+      </Suspense>
+
+      {/* Smart Quick Chat Toggle Button */}
+      {!showSmartChat && (
+        <button
+          onClick={() => setShowSmartChat(true)}
+          className="fixed bottom-40 left-4 z-30 p-3 bg-gradient-to-r from-neon-purple to-neon-cyan rounded-full shadow-lg"
+          title="AI Quick Chat"
+        >
+          <MessageCircle className="w-5 h-5 text-white" />
+        </button>
+      )}
+
+      {/* Smart Quick Chat Panel */}
+      {showSmartChat && (
+        <Suspense fallback={null}>
+          <SmartQuickChat
+            isIt={currentGame?.players?.find(p => p.id === user?.id)?.isIt}
+            gameState={
+              tagAnimation ? 'just_tagged' : 
+              noTagStatus.inTime ? 'just_escaped' :
+              currentGame?.players?.find(p => p.id === user?.id)?.isIt ? 'chasing' : 'running'
+            }
+            onClose={() => setShowSmartChat(false)}
+            onSend={(msg) => {
+              socketService.sendChatMessage(currentGame.id, msg);
+              setShowSmartChat(false);
+            }}
+          />
+        </Suspense>
+      )}
+
       {showEndSummary && endedGame && (
         <GameEndSummary game={endedGame} onClose={() => { setShowEndSummary(false); navigate('/'); }} />
       )}
@@ -985,3 +1027,4 @@ function ActiveGame() {
 }
 
 export default ActiveGame;
+
