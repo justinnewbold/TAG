@@ -5,6 +5,7 @@ import { useStore, useSounds } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import confetti from 'canvas-confetti';
+import { GameRecap } from './AI';
 
 function GameEndSummary({ game, onClose }) {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ function GameEndSummary({ game, onClose }) {
   const [rematchStatus, setRematchStatus] = useState('idle'); // idle, creating, waiting, ready
   const [rematchVotes, setRematchVotes] = useState([]);
   const [rematchGame, setRematchGame] = useState(null);
+  const [showAIRecap, setShowAIRecap] = useState(true);
   
   const isWinner = game?.winnerId === user?.id;
   const winner = game?.players?.find(p => p.id === game?.winnerId);
@@ -209,6 +211,25 @@ function GameEndSummary({ game, onClose }) {
           </p>
         </div>
         
+
+        {/* AI Game Recap */}
+        {showAIRecap && (
+          <div className="p-4 border-t border-white/10">
+            <GameRecap 
+              gameData={{
+                duration: gameDuration * 1000,
+                gameMode: game?.mode || 'classic',
+                players: game?.players || [],
+                tags: game?.tags || [],
+                winner: winner,
+                mvp: sortedPlayers[0],
+                closeCalls: game?.closeCalls || 0,
+              }}
+              onClose={() => setShowAIRecap(false)}
+            />
+          </div>
+        )}
+        
         {/* Your Stats */}
         <div className="p-6 border-t border-white/10">
           <h3 className="text-sm text-white/40 uppercase tracking-wider mb-4">Your Performance</h3>
@@ -338,3 +359,4 @@ function GameEndSummary({ game, onClose }) {
 }
 
 export default GameEndSummary;
+
