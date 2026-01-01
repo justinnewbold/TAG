@@ -48,6 +48,7 @@ import { GameErrorBoundary } from './components/ErrorBoundary';
 import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import ConnectionStatus from './components/ConnectionStatus';
 import AppRatingPrompt from './components/AppRatingPrompt';
+import { AIFloatingButton } from './components/AI';
 
 // Loading fallback for lazy loaded pages
 function PageLoader() {
@@ -245,6 +246,9 @@ function App() {
       {/* Navigation - only show when logged in */}
       {user && <Navigation />}
       
+      {/* AI Assistant - available on all screens */}
+      {user && <AIFloatingButton />}
+      
       {/* Onboarding Tutorial */}
       {showOnboarding && (
         <OnboardingTutorial
@@ -260,4 +264,5 @@ function App() {
 }
 
 export default App;
+
 
