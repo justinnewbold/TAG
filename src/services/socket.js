@@ -9,33 +9,28 @@ class SocketService {
     this.socket = null;
     this.listeners = new Map();
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5; // Reduced from 10
+    this.maxReconnectAttempts = 5;
     this.connectionCallbacks = new Set();
-    this.isConnecting = false; // Prevent multiple simultaneous connections
+    this.isConnecting = false;
     this.lastConnectAttempt = 0;
-    this.minConnectInterval = 2000; // Minimum 2 seconds between connect attempts
+    this.minConnectInterval = 2000;
   }
 
-  // Add callback for connection status changes
   onConnectionChange(callback) {
     this.connectionCallbacks.add(callback);
     return () => this.connectionCallbacks.delete(callback);
   }
 
-  // Notify all callbacks of connection status change
   notifyConnectionChange(status, error = null) {
-    // Update store directly
     try {
       useStore.getState().setConnectionStatus(status, error);
     } catch (e) {
       // Store might not be ready yet
     }
-    // Notify callbacks
     this.connectionCallbacks.forEach(cb => cb(status, error));
   }
 
   connect() {
-    // Prevent rapid connection attempts
     const now = Date.now();
     if (now - this.lastConnectAttempt < this.minConnectInterval) {
       if (import.meta.env.DEV) console.log('Socket: Rate limiting connection attempts');
@@ -43,13 +38,11 @@ class SocketService {
     }
     this.lastConnectAttempt = now;
 
-    // If already connecting, don't create another connection
     if (this.isConnecting) {
       if (import.meta.env.DEV) console.log('Socket: Already connecting, skipping');
       return this.socket;
     }
 
-    // If already connected, just return the socket
     if (this.socket?.connected) {
       if (import.meta.env.DEV) console.log('Socket: Already connected');
       return this.socket;
@@ -62,7 +55,6 @@ class SocketService {
       return null;
     }
 
-    // Clean up existing socket if any
     if (this.socket) {
       if (import.meta.env.DEV) console.log('Socket: Cleaning up existing socket');
       this.socket.removeAllListeners();
@@ -79,11 +71,11 @@ class SocketService {
       auth: { token },
       reconnection: true,
       reconnectionAttempts: this.maxReconnectAttempts,
-      reconnectionDelay: 2000, // Start at 2 seconds
-      reconnectionDelayMax: 30000, // Max 30 seconds between attempts
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 30000,
       timeout: 20000,
-      transports: ['websocket', 'polling'], // Prefer WebSocket
-      forceNew: true, // Ensure fresh connection
+      transports: ['websocket', 'polling'],
+      forceNew: true,
     });
 
     this.socket.on('connect', () => {
@@ -99,7 +91,6 @@ class SocketService {
       this.isConnecting = false;
       this.notifyConnectionChange('disconnected', reason);
       
-      // If server disconnected us, don't auto-reconnect immediately
       if (reason === 'io server disconnect') {
         if (import.meta.env.DEV) console.log('Socket: Server initiated disconnect, not reconnecting');
       }
@@ -128,7 +119,6 @@ class SocketService {
       this.isConnecting = false;
       this.reconnectAttempts++;
       
-      // Stop trying if we've hit the limit
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
         if (import.meta.env.DEV) console.log('Socket: Max reconnect attempts reached, stopping');
         this.socket?.disconnect();
@@ -136,6 +126,83 @@ class SocketService {
       } else {
         this.notifyConnectionChange('error', error.message);
       }
+    });
+
+    // ============================================
+    // CRITICAL: Game event handlers
+    // These update the store when other players move
+    // ============================================
+    
+    // Handle other players' location updates
+    this.socket.on('player:location', (data) => {
+      if (import.meta.env.DEV) console.log('Socket: Received player location', data.playerId);
+      try {
+        useStore.getState().handlePlayerLocation(data);
+      } catch (e) {
+        console.error('Error handling player location:', e);
+      }
+    });
+
+    // Handle game state sync
+    this.socket.on('game:sync', (gameData) => {
+      if (import.meta.env.DEV) console.log('Socket: Received game sync');
+      try {
+        useStore.getState().syncGameState(gameData);
+      } catch (e) {
+        console.error('Error syncing game state:', e);
+      }
+    });
+
+    // Handle tag events
+    this.socket.on('game:tagged', (data) => {
+      if (import.meta.env.DEV) console.log('Socket: Tag event', data);
+      try {
+        useStore.getState().handlePlayerTagged(data);
+      } catch (e) {
+        console.error('Error handling tag event:', e);
+      }
+    });
+
+    // Handle player joined
+    this.socket.on('player:joined', (data) => {
+      if (import.meta.env.DEV) console.log('Socket: Player joined', data);
+      try {
+        useStore.getState().handlePlayerJoined(data);
+      } catch (e) {
+        console.error('Error handling player joined:', e);
+      }
+    });
+
+    // Handle player left
+    this.socket.on('player:left', (data) => {
+      if (import.meta.env.DEV) console.log('Socket: Player left', data);
+      try {
+        useStore.getState().handlePlayerLeft(data);
+      } catch (e) {
+        console.error('Error handling player left:', e);
+      }
+    });
+
+    // Handle game started
+    this.socket.on('game:started', (data) => {
+      if (import.meta.env.DEV) console.log('Socket: Game started', data);
+      try {
+        useStore.getState().handleGameStarted(data);
+      } catch (e) {
+        console.error('Error handling game started:', e);
+      }
+    });
+
+    // Handle nearby players notification (for IT)
+    this.socket.on('nearby:players', (data) => {
+      if (import.meta.env.DEV) console.log('Socket: Nearby players', data);
+      // This is handled in ActiveGame.jsx via listeners
+    });
+
+    // Handle IT nearby warning (for runners)
+    this.socket.on('it:nearby', (data) => {
+      if (import.meta.env.DEV) console.log('Socket: IT nearby', data);
+      // This is handled in ActiveGame.jsx via listeners
     });
 
     // Handle anti-cheat warnings
@@ -175,21 +242,18 @@ class SocketService {
   }
 
   on(event, callback) {
-    // Don't auto-connect just to add a listener
     if (!this.socket) {
       if (import.meta.env.DEV) console.warn('Socket: No socket, cannot add listener for:', event);
       return;
     }
 
-    // Prevent duplicate listeners
     const existingListeners = this.listeners.get(event) || [];
     if (existingListeners.includes(callback)) {
-      return; // Already registered
+      return;
     }
 
     this.socket.on(event, callback);
 
-    // Track listeners for cleanup
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
@@ -200,7 +264,6 @@ class SocketService {
     if (this.socket) {
       this.socket.off(event, callback);
 
-      // Remove from tracked listeners
       const eventListeners = this.listeners.get(event);
       if (eventListeners) {
         const index = eventListeners.indexOf(callback);
@@ -211,7 +274,6 @@ class SocketService {
     }
   }
 
-  // Remove all listeners for an event
   removeAllListeners(event) {
     if (this.socket) {
       this.socket.removeAllListeners(event);
@@ -250,7 +312,6 @@ class SocketService {
       const start = Date.now();
       let resolved = false;
 
-      // Timeout after 5 seconds
       const timeoutId = setTimeout(() => {
         if (!resolved) {
           resolved = true;
