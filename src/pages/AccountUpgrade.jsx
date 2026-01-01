@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabaseAuth } from '../services/supabase';
 import { useStore } from '../store';
 import { useToast } from '../components/Toast';
 import { api } from '../services/api';
@@ -18,7 +18,7 @@ export default function AccountUpgrade() {
   const handleGoogleUpgrade = async () => {
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabaseAuth.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback?upgrade=true`,
@@ -50,7 +50,7 @@ export default function AccountUpgrade() {
     setIsLoading(true);
     try {
       // Update the anonymous user with email/password
-      const { data, error } = await supabase.auth.updateUser({
+      const { data, error } = await supabaseAuth.auth.updateUser({
         email: email,
         password: password,
       });
