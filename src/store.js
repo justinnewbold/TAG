@@ -881,6 +881,54 @@ export const useStore = create(
         };
       }),
 
+      handlePlayerBooted: ({ playerId, playerName, reason, message }) => set((state) => {
+        if (!state.currentGame) return state;
+
+        // Check if the booted player is the current user
+        const isCurrentUser = state.user?.id === playerId;
+
+        // Remove player from game
+        const updatedPlayers = state.currentGame.players.filter(p => p.id !== playerId);
+        
+        const updatedGame = {
+          ...state.currentGame,
+          players: updatedPlayers,
+        };
+
+        // If it was the current user who got booted, clear the game
+        if (isCurrentUser) {
+          return {
+            currentGame: null,
+            games: state.games.filter(g => g.id !== updatedGame.id),
+          };
+        }
+
+        return {
+          currentGame: updatedGame,
+          games: state.games.map(g => g.id === updatedGame.id ? updatedGame : g),
+        };
+      }),
+
+      handleNewIt: ({ newItId, newItName, reason }) => set((state) => {
+        if (!state.currentGame) return state;
+
+        const updatedGame = {
+          ...state.currentGame,
+          itPlayerId: newItId,
+          players: state.currentGame.players.map(p => ({
+            ...p,
+            isIt: p.id === newItId,
+            becameItAt: p.id === newItId ? Date.now() : null,
+          })),
+        };
+
+        return {
+          currentGame: updatedGame,
+          games: state.games.map(g => g.id === updatedGame.id ? updatedGame : g),
+        };
+      }),
+
+
       clearLastGameSummary: () => set({ lastGameSummary: null }),
 
       // Chat messaging actions
