@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Trophy, TrendingUp, Star, Shield, Award, Zap } from 'lucide-react';
-import { aiService } from '../services/ai';
+import { aiService } from '../../services/ai';
 
 const TIER_CONFIG = {
   legend: {
