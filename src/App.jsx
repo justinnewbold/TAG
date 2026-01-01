@@ -34,6 +34,7 @@ const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const AccountUpgrade = lazy(() => import('./pages/AccountUpgrade'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 const MagicLinkAuth = lazy(() => import('./pages/MagicLinkAuth'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
@@ -208,6 +209,7 @@ function App() {
             <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/upgrade" element={<AccountUpgrade />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/auth/magic" element={<MagicLinkAuth />} />
             <Route path="/landing" element={<Landing />} />
