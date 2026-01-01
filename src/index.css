@@ -3,24 +3,18 @@
 @tailwind utilities;
 
 :root {
-  /* Light theme accent colors - vibrant but softer */
-  --accent-primary: #0ea5e9;    /* Sky blue */
-  --accent-secondary: #8b5cf6;  /* Violet */
-  --accent-tertiary: #f97316;   /* Orange */
-  --accent-success: #10b981;    /* Emerald */
-  --accent-danger: #ef4444;     /* Red */
+  /* Dark theme neon accent colors */
+  --neon-cyan: #00f5ff;
+  --neon-purple: #a855f7;
+  --neon-pink: #ec4899;
+  --neon-orange: #f97316;
+  --neon-green: #10b981;
   
-  /* Light backgrounds */
-  --light-50: #ffffff;
-  --light-100: #f8fafc;
-  --light-200: #f1f5f9;
-  --light-300: #e2e8f0;
-  --light-400: #cbd5e1;
-  
-  /* Text colors */
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  /* Dark backgrounds */
+  --dark-900: #0a0a0f;
+  --dark-800: #12121a;
+  --dark-700: #1a1a25;
+  --dark-600: #252530;
   
   /* Touch target minimum sizes */
   --touch-target-min: 48px;
@@ -36,64 +30,62 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  /* Prevent text selection on interactive elements */
   -webkit-tap-highlight-color: transparent;
 }
 
 html {
   scroll-behavior: smooth;
-  /* Prevent overscroll bounce on iOS */
   overscroll-behavior: none;
 }
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: var(--light-100);
-  color: var(--text-primary);
+  background-color: var(--dark-900);
+  color: #ffffff;
   min-height: 100vh;
-  min-height: 100dvh; /* Dynamic viewport height for mobile */
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Prevent pull-to-refresh on mobile */
   overscroll-behavior-y: contain;
 }
 
-/* Scrollbar - Light Theme */
+/* Scrollbar - Dark Theme */
 ::-webkit-scrollbar {
   width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--light-200);
+  background: var(--dark-800);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--light-400);
+  background: var(--dark-600);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-primary);
+  background: var(--neon-cyan);
 }
 
-/* Leaflet overrides - Light Theme */
+/* Leaflet overrides - Dark Theme */
 .leaflet-container {
-  background: var(--light-200) !important;
+  background: var(--dark-900) !important;
 }
 
 .leaflet-popup-content-wrapper {
-  background: var(--light-50) !important;
-  color: var(--text-primary) !important;
+  background: var(--dark-800) !important;
+  color: #ffffff !important;
   border-radius: 12px !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 0 20px rgba(0, 245, 255, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 .leaflet-popup-tip {
-  background: var(--light-50) !important;
+  background: var(--dark-800) !important;
 }
 
 .leaflet-popup-close-button {
-  color: var(--text-secondary) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
 }
 
 /* Custom Classes */
@@ -104,29 +96,27 @@ body {
   
   .card {
     @apply rounded-2xl border;
-    background: var(--light-50);
-    border-color: var(--light-300);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    background: var(--dark-800);
+    border-color: rgba(255, 255, 255, 0.1);
   }
   
   .card-glow {
     @apply rounded-2xl border;
-    background: var(--light-50);
-    border-color: var(--light-300);
-    box-shadow: 0 4px 20px rgba(14, 165, 233, 0.1);
+    background: var(--dark-800);
+    border-color: rgba(0, 245, 255, 0.3);
+    box-shadow: 0 0 20px rgba(0, 245, 255, 0.1);
   }
   
-  /* Mobile-first buttons with proper touch targets */
   .btn-primary {
     @apply px-6 py-4 rounded-2xl font-semibold transition-all text-white;
-    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
     min-height: var(--touch-target-comfortable);
   }
   
   .btn-primary:hover {
     opacity: 0.9;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+    box-shadow: 0 0 30px rgba(0, 245, 255, 0.4);
   }
   
   .btn-primary:active {
@@ -134,25 +124,24 @@ body {
   }
   
   .btn-secondary {
-    @apply px-6 py-4 rounded-2xl font-semibold transition-all;
-    background: var(--light-200);
-    color: var(--text-primary);
-    border: 1px solid var(--light-300);
+    @apply px-6 py-4 rounded-2xl font-semibold transition-all text-white;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     min-height: var(--touch-target-comfortable);
   }
   
   .btn-secondary:hover {
-    background: var(--light-300);
+    background: rgba(255, 255, 255, 0.15);
+    border-color: var(--neon-cyan);
   }
   
   .btn-secondary:active {
     transform: scale(0.97);
   }
   
-  /* Large action button for primary game actions */
   .btn-action {
     @apply w-full py-5 rounded-2xl font-bold text-lg text-white;
-    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
     min-height: 64px;
     display: flex;
     align-items: center;
@@ -164,152 +153,67 @@ body {
     transform: scale(0.97);
   }
   
-  /* Icon button with proper touch target */
   .btn-icon {
     @apply flex items-center justify-center rounded-full transition-all;
-    background: var(--light-200);
+    background: rgba(255, 255, 255, 0.1);
     min-width: var(--touch-target-min);
     min-height: var(--touch-target-min);
   }
   
   .btn-icon:hover {
-    background: var(--light-300);
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 15px rgba(0, 245, 255, 0.3);
   }
   
   .btn-icon:active {
     transform: scale(0.95);
   }
   
-  .btn-icon-lg {
-    @apply btn-icon;
-    min-width: var(--touch-target-comfortable);
-    min-height: var(--touch-target-comfortable);
-  }
-  
   .input-field {
-    @apply w-full px-4 py-4 rounded-xl transition-all;
-    background: var(--light-50);
-    border: 1px solid var(--light-300);
-    color: var(--text-primary);
-    font-size: 1rem; /* 16px prevents zoom on iOS */
+    @apply w-full px-4 py-4 rounded-xl transition-all text-white;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 1rem;
     min-height: var(--touch-target-comfortable);
   }
   
   .input-field::placeholder {
-    color: var(--text-muted);
+    color: rgba(255, 255, 255, 0.4);
   }
   
   .input-field:focus {
     outline: none;
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 20px rgba(0, 245, 255, 0.2);
   }
   
   .label {
     @apply block text-sm mb-2;
-    color: var(--text-secondary);
+    color: rgba(255, 255, 255, 0.6);
   }
   
-  /* Thumb zone utilities - bottom 40% of screen */
   .thumb-zone {
     @apply fixed bottom-0 left-0 right-0;
     max-height: 40vh;
     padding-bottom: var(--safe-area-bottom);
   }
   
-  /* High contrast text for outdoor visibility */
   .text-high-contrast {
-    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+    text-shadow: 0 0 10px rgba(0, 245, 255, 0.5);
   }
   
-  /* Touch-friendly list items */
   .list-item-touch {
     @apply flex items-center gap-4 p-4 rounded-xl transition-colors;
-    background: var(--light-50);
+    background: rgba(255, 255, 255, 0.05);
     min-height: var(--touch-target-comfortable);
   }
   
   .list-item-touch:hover {
-    background: var(--light-200);
+    background: rgba(255, 255, 255, 0.1);
   }
   
   .list-item-touch:active {
-    background: var(--light-300);
-  }
-  
-  /* Accent color utilities */
-  .text-accent-primary {
-    color: var(--accent-primary);
-  }
-  
-  .text-accent-secondary {
-    color: var(--accent-secondary);
-  }
-  
-  .text-accent-tertiary {
-    color: var(--accent-tertiary);
-  }
-  
-  .bg-accent-primary {
-    background-color: var(--accent-primary);
-  }
-  
-  .bg-accent-secondary {
-    background-color: var(--accent-secondary);
-  }
-  
-  .bg-accent-tertiary {
-    background-color: var(--accent-tertiary);
-  }
-  
-  /* Legacy neon classes mapped to light theme */
-  .text-neon-cyan {
-    color: var(--accent-primary);
-  }
-  
-  .text-neon-purple {
-    color: var(--accent-secondary);
-  }
-  
-  .text-neon-orange {
-    color: var(--accent-tertiary);
-  }
-  
-  .bg-neon-cyan {
-    background-color: var(--accent-primary);
-  }
-  
-  .bg-neon-purple {
-    background-color: var(--accent-secondary);
-  }
-  
-  .bg-neon-orange {
-    background-color: var(--accent-tertiary);
-  }
-  
-  /* Dark backgrounds mapped to light theme */
-  .bg-dark-900 {
-    background-color: var(--light-100);
-  }
-  
-  .bg-dark-800 {
-    background-color: var(--light-50);
-  }
-  
-  .bg-dark-700 {
-    background-color: var(--light-200);
-  }
-  
-  .border-neon-cyan {
-    border-color: var(--accent-primary);
-  }
-  
-  .border-neon-purple {
-    border-color: var(--accent-secondary);
-  }
-  
-  .border-neon-orange {
-    border-color: var(--accent-tertiary);
+    background: rgba(255, 255, 255, 0.15);
   }
 }
 
@@ -343,10 +247,10 @@ body {
 
 @keyframes pulse-glow {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(14, 165, 233, 0.2);
+    box-shadow: 0 0 20px rgba(0, 245, 255, 0.3);
   }
   50% {
-    box-shadow: 0 0 30px rgba(14, 165, 233, 0.4), 0 0 50px rgba(139, 92, 246, 0.2);
+    box-shadow: 0 0 40px rgba(0, 245, 255, 0.6), 0 0 60px rgba(168, 85, 247, 0.3);
   }
 }
 
@@ -365,6 +269,11 @@ body {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 .animate-slide-up {
@@ -387,6 +296,10 @@ body {
   animation: bounce-in 0.5s ease-out;
 }
 
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
 /* Safe area padding for mobile */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .pb-safe {
@@ -394,11 +307,11 @@ body {
   }
 }
 
-/* PWA install prompt styling - Light */
+/* PWA install prompt styling - Dark */
 .pwa-install-prompt {
   @apply fixed bottom-20 left-4 right-4 p-4 rounded-2xl;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(139, 92, 246, 0.1));
-  border: 1px solid rgba(14, 165, 233, 0.3);
+  background: linear-gradient(135deg, rgba(0, 245, 255, 0.1), rgba(168, 85, 247, 0.1));
+  border: 1px solid rgba(0, 245, 255, 0.3);
   backdrop-filter: blur(12px);
   animation: slide-up 0.3s ease-out;
   z-index: 50;
@@ -407,7 +320,7 @@ body {
 /* Loading states */
 .skeleton {
   @apply animate-pulse rounded;
-  background: var(--light-300);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* Focus visible for accessibility */
@@ -415,7 +328,7 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.3);
+  box-shadow: 0 0 0 3px rgba(0, 245, 255, 0.4);
 }
 
 /* Custom marker animation */
@@ -427,10 +340,10 @@ input:focus-visible {
   transform: scale(1.1);
 }
 
-/* Mobile-first swipe indicator */
+/* Swipe indicator */
 .swipe-indicator {
   @apply flex items-center justify-center gap-2 py-3 text-sm;
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .swipe-indicator::before,
@@ -438,11 +351,10 @@ input:focus-visible {
   content: '';
   width: 2rem;
   height: 2px;
-  background: var(--light-400);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 9999px;
 }
 
-/* Swipe hint animation */
 @keyframes swipe-hint {
   0%, 100% { transform: translateX(0); opacity: 0.5; }
   50% { transform: translateX(10px); opacity: 1; }
@@ -455,41 +367,29 @@ input:focus-visible {
 /* Pull to refresh indicator */
 .pull-indicator {
   @apply fixed top-0 left-0 right-0 flex items-center justify-center py-3;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(10, 10, 15, 0.95);
   backdrop-filter: blur(8px);
   transition: transform 0.2s;
   z-index: 100;
 }
 
-/* Radial gradient for quick menu */
-.bg-gradient-radial {
-  background: radial-gradient(circle, var(--tw-gradient-from), var(--tw-gradient-to));
-}
-
 /* Bottom sheet backdrop */
 .sheet-backdrop {
   @apply fixed inset-0 transition-opacity duration-300;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);
 }
 
 /* Gesture feedback ripple */
 @keyframes ripple {
-  0% { transform: scale(0); opacity: 0.3; }
+  0% { transform: scale(0); opacity: 0.4; }
   100% { transform: scale(4); opacity: 0; }
 }
 
 .gesture-ripple {
   @apply absolute rounded-full pointer-events-none;
-  background: rgba(14, 165, 233, 0.3);
+  background: rgba(0, 245, 255, 0.4);
   animation: ripple 0.6s ease-out forwards;
-}
-
-/* Large tap target indicator (for debugging) */
-.show-tap-targets *[class*="btn"],
-.show-tap-targets button,
-.show-tap-targets a {
-  outline: 2px dashed rgba(14, 165, 233, 0.3) !important;
 }
 
 /* Safe areas */
@@ -497,88 +397,6 @@ input:focus-visible {
 .pb-safe { padding-bottom: var(--safe-area-bottom); }
 .pl-safe { padding-left: var(--safe-area-left); }
 .pr-safe { padding-right: var(--safe-area-right); }
-
-/* Outdoor visibility mode - High contrast light */
-.outdoor-mode {
-  --light-50: #ffffff;
-  --light-100: #f8fafc;
-  --text-primary: #000000;
-}
-
-.outdoor-mode .text-secondary {
-  color: var(--text-primary);
-}
-
-/* Text color utilities for light theme */
-.text-white {
-  color: white;
-}
-
-.text-white\/50 {
-  color: var(--text-secondary);
-}
-
-.text-white\/60 {
-  color: var(--text-secondary);
-}
-
-.text-white\/70 {
-  color: var(--text-primary);
-}
-
-.text-white\/30 {
-  color: var(--text-muted);
-}
-
-/* Background utilities mapped for light theme */
-.bg-white\/5 {
-  background: var(--light-200);
-}
-
-.bg-white\/10 {
-  background: var(--light-200);
-}
-
-.bg-white\/20 {
-  background: var(--light-300);
-}
-
-.bg-black\/50 {
-  background: rgba(0, 0, 0, 0.3);
-}
-
-.bg-black\/60 {
-  background: rgba(0, 0, 0, 0.4);
-}
-
-/* Border utilities mapped for light theme */
-.border-white\/5 {
-  border-color: var(--light-300);
-}
-
-.border-white\/10 {
-  border-color: var(--light-300);
-}
-
-.border-white\/20 {
-  border-color: var(--light-400);
-}
-
-/* Gradient text effect - Light theme */
-.bg-gradient-to-r.from-neon-cyan.to-neon-purple {
-  background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
-}
-
-/* Glass effect for light theme */
-.backdrop-blur-sm {
-  backdrop-filter: blur(8px);
-  background: rgba(255, 255, 255, 0.8);
-}
-
-.backdrop-blur-lg {
-  backdrop-filter: blur(16px);
-  background: rgba(255, 255, 255, 0.9);
-}
 
 /* Reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
@@ -623,10 +441,10 @@ input:focus-visible {
 
 @keyframes pulse-slow {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(0, 246, 255, 0.4);
+    box-shadow: 0 0 0 0 rgba(0, 245, 255, 0.5);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(0, 246, 255, 0);
+    box-shadow: 0 0 0 12px rgba(0, 245, 255, 0);
   }
 }
 
@@ -644,20 +462,4 @@ input:focus-visible {
 
 .animate-pulse-slow {
   animation: pulse-slow 2s ease-in-out infinite;
-}
-
-/* Slide up animation */
-@keyframes slide-up {
-  from {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.animate-slide-up {
-  animation: slide-up 0.3s ease-out forwards;
 }
