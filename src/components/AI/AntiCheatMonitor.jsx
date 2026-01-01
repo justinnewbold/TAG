@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Shield, AlertTriangle, Ban, CheckCircle } from 'lucide-react';
-import { aiService } from '../services/ai';
+import { aiService } from '../../services/ai';
 
 export default function AntiCheatMonitor({ locationHistory, onViolation }) {
   const [status, setStatus] = useState('clean'); // 'clean', 'warning', 'violation'
