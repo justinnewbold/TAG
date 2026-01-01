@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { authRouter, authenticateToken, authenticateSocket } from './auth.js';
 import { gameRouter } from './routes/games.js';
+import aiRoutes from './routes/ai.js';
 import { pushRouter } from './routes/push.js';
 import { socialRouter } from './routes/social.js';
 import { replayRouter } from './routes/replays.js';
@@ -169,6 +170,7 @@ app.use('/api/admin', authenticateToken, adminRouter);
 app.use('/api/weather', authenticateToken, weatherRouter);
 app.use('/api/powerups', authenticateToken, powerupRouter);
 app.use('/api/users', authenticateToken, usersRouter);
+app.use('/api/ai', authenticateToken, aiRoutes);
 
 // Initialize additional database tables
 (async () => {
