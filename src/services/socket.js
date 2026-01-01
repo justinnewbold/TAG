@@ -218,6 +218,46 @@ class SocketService {
       console.warn('[Rate Limit]', data.message);
     });
 
+
+    // Handle player booted for inactivity
+    this.socket.on('player:booted', (data) => {
+      if (import.meta.env.DEV) console.log('Socket: Player booted', data);
+      try {
+        useStore.getState().handlePlayerBooted(data);
+      } catch (e) {
+        console.error('Error handling player booted:', e);
+      }
+    });
+
+    // Handle player went offline
+    this.socket.on('player:offline', (data) => {
+      if (import.meta.env.DEV) console.log('Socket: Player offline', data);
+      try {
+        useStore.getState().handlePlayerOffline(data);
+      } catch (e) {
+        console.error('Error handling player offline:', e);
+      }
+    });
+
+    // Handle player came back online
+    this.socket.on('player:online', (data) => {
+      if (import.meta.env.DEV) console.log('Socket: Player online', data);
+      try {
+        useStore.getState().handlePlayerOnline(data);
+      } catch (e) {
+        console.error('Error handling player online:', e);
+      }
+    });
+
+    // Handle IT reassignment (due to inactivity or other reasons)
+    this.socket.on('game:newIt', (data) => {
+      if (import.meta.env.DEV) console.log('Socket: New IT', data);
+      try {
+        useStore.getState().handleNewIt(data);
+      } catch (e) {
+        console.error('Error handling new IT:', e);
+      }
+    });
     return this.socket;
   }
 

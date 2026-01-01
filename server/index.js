@@ -248,6 +248,20 @@ setInterval(async () => {
   }
 }, 60 * 60 * 1000);
 
+// Periodic check for inactive players (every 2 minutes)
+setInterval(async () => {
+  try {
+    const bootedPlayers = await gameManager.bootInactivePlayers(io);
+    if (bootedPlayers.length > 0) {
+      logger.info(`Booted ${bootedPlayers.length} inactive players`, { 
+        players: bootedPlayers.map(p => ({ name: p.name, game: p.gameName, isAnonymous: p.isAnonymous }))
+      });
+    }
+  } catch (error) {
+    logger.error('Inactive player boot error', { error: error.message });
+  }
+}, 2 * 60 * 1000);
+
 // Run cleanup on startup (after a short delay to let everything initialize)
 setTimeout(async () => {
   try {

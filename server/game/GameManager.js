@@ -1255,4 +1255,109 @@ export class GameManager {
       game.spectators = game.spectators.filter(s => s.id !== spectatorId);
     }
   }
+
+  // Boot inactive players from active games
+  // Anonymous players get shorter timeout (5 min vs 10 min for registered)
+  async bootInactivePlayers(io) {
+    const now = Date.now();
+    const ANONYMOUS_TIMEOUT = 5 * 60 * 1000;  // 5 minutes for anonymous
+    const REGISTERED_TIMEOUT = 10 * 60 * 1000; // 10 minutes for registered
+    const bootedPlayers = [];
+
+    for (const [gameId, game] of this.activeGames) {
+      if (game.status !== 'active' && game.status !== 'hiding') continue;
+
+      const playersToRemove = [];
+
+      for (const player of game.players) {
+        if (!player.lastUpdate) continue; // Never sent location, might just be loading
+        
+        const timeSinceUpdate = now - player.lastUpdate;
+        const isAnonymous = player.isAnonymous || player.id?.startsWith('anon_');
+        const timeout = isAnonymous ? ANONYMOUS_TIMEOUT : REGISTERED_TIMEOUT;
+
+        if (timeSinceUpdate > timeout) {
+          playersToRemove.push({
+            id: player.id,
+            name: player.name,
+            isAnonymous,
+            inactiveFor: Math.round(timeSinceUpdate / 1000 / 60) // minutes
+          });
+        }
+      }
+
+      // Remove inactive players
+      for (const playerInfo of playersToRemove) {
+        // Remove from game
+        game.players = game.players.filter(p => p.id !== playerInfo.id);
+        
+        // If this was IT, reassign
+        if (game.itPlayerId === playerInfo.id && game.players.length > 0) {
+          const newIt = game.players[Math.floor(Math.random() * game.players.length)];
+          game.itPlayerId = newIt.id;
+          newIt.isIt = true;
+          newIt.becameItAt = now;
+        }
+
+        bootedPlayers.push({
+          gameId,
+          gameName: game.settings?.gameName,
+          ...playerInfo
+        });
+
+        // Notify remaining players
+        if (io) {
+          io.to(`game:${gameId}`).emit('player:booted', {
+            playerId: playerInfo.id,
+            playerName: playerInfo.name,
+            reason: 'inactivity',
+            message: `${playerInfo.name} was removed for being inactive (${playerInfo.inactiveFor} min)`
+          });
+
+          // If IT was reassigned, notify
+          if (game.itPlayerId !== playerInfo.id) {
+            const newItPlayer = game.players.find(p => p.id === game.itPlayerId);
+            if (newItPlayer) {
+              io.to(`game:${gameId}`).emit('game:newIt', {
+                newItId: game.itPlayerId,
+                newItName: newItPlayer.name,
+                reason: 'Previous IT was inactive'
+              });
+            }
+          }
+        }
+
+        console.log(`[InactiveBot] Booted ${playerInfo.name} from "${game.settings?.gameName}" (inactive ${playerInfo.inactiveFor}min, anonymous: ${playerInfo.isAnonymous})`);
+      }
+
+      // If no players left, end the game
+      if (game.players.length === 0) {
+        game.status = 'ended';
+        game.endedAt = now;
+        game.endReason = 'all_players_inactive';
+        
+        if (io) {
+          io.to(`game:${gameId}`).emit('game:ended', {
+            reason: 'All players were inactive',
+            endedAt: now
+          });
+        }
+        
+        console.log(`[InactiveBot] Game "${game.settings?.gameName}" ended - all players inactive`);
+      }
+    }
+
+    return bootedPlayers;
+  }
+
+  // Mark player as active (call this on any player activity)
+  markPlayerActive(gameId, playerId) {
+    const game = this.activeGames.get(gameId);
+    if (game) {
+      const player = game.players.find(p => p.id === playerId);
+      if (player) {
+        player.lastUpdate = Date.now();
+      }
+    }
+  }
 }
