@@ -194,7 +194,44 @@ class AIService {
     const options = comments[event.type] || ['🎮 Game event!'];
     return options[Math.floor(Math.random() * options.length)];
   }
+
+  /**
+   * Ask AI Assistant a question about the game
+   */
+  async askAssistant(question) {
+    try {
+      const response = await api.post('/ai/assistant', { question });
+      return response.answer;
+    } catch (error) {
+      console.error('AI Assistant error:', error);
+      return this.getFallbackAnswer(question);
+    }
+  }
+
+  /**
+   * Fallback answers when API fails
+   */
+  getFallbackAnswer(question) {
+    const q = question.toLowerCase();
+    
+    if (q.includes('play') || q.includes('rules')) {
+      return `TAG! is a GPS tag game! 🎮 One player is IT and must tag others. When tagged, you become IT. Use power-ups and strategy to win!`;
+    }
+    if (q.includes('mode')) {
+      return `We have 7 modes: Classic Tag, Freeze Tag, Infection, Team Tag, Manhunt, Hot Potato, and Hide & Seek! 🎯`;
+    }
+    if (q.includes('power')) {
+      return `Power-ups include: Speed Boost 🏃, Invisibility 👻, Shield 🛡️, Radar 📡, Freeze ❄️, Teleport ⚡, and Decoy 🎭!`;
+    }
+    if (q.includes('tag') && q.includes('how')) {
+      return `Get within range of another player (shown on map), then tap the TAG button when it appears! 🎯`;
+    }
+    
+    return `Great question! 🤔 I can help with game rules, modes, power-ups, and strategies. What would you like to know?`;
+  }
+
 }
 
 export const aiService = new AIService();
 export default aiService;
+
