@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabaseAuth } from '../services/supabase';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -35,7 +35,7 @@ export default function AuthCallback() {
         // Handle email verification
         if (type === 'signup' || type === 'email_change') {
           setStatus('Email verified! Redirecting...');
-          const { error: sessionError } = await supabase.auth.getSession();
+          const { error: sessionError } = await supabaseAuth.auth.getSession();
           if (sessionError) throw sessionError;
           setTimeout(() => navigate('/'), 1500);
           return;
@@ -47,7 +47,7 @@ export default function AuthCallback() {
           
           // Exchange the code for a session using Supabase's built-in method
           // This replaces the old call to /api/auth/token which was returning 404
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          const { data, error: exchangeError } = await supabaseAuth.auth.exchangeCodeForSession(code);
           
           if (exchangeError) {
             console.error('Code exchange error:', exchangeError);
@@ -62,7 +62,7 @@ export default function AuthCallback() {
         }
 
         // Check if we already have a session (magic link flow)
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabaseAuth.auth.getSession();
         
         if (sessionError) {
           throw sessionError;
