@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MessageSquare, Send, Zap, X, Sparkles } from 'lucide-react';
-import { aiService } from '../services/ai';
-import { socketService } from '../services/socket';
+import { aiService } from '../../services/ai';
+import { socketService } from '../../services/socket';
 
 export default function SmartQuickChat({ 
   isOpen, 
