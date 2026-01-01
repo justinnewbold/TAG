@@ -111,6 +111,7 @@ function CreateGame() {
     minPlayers: null, // null = use game mode default
     scheduledStartTime: null, // null = manual start
     requireApproval: false, // Host must approve joins
+    tagImmunityTime: 5000, // 5 seconds immunity after being tagged
   });
 
   // Game presets for quick setup
@@ -908,6 +909,48 @@ function CreateGame() {
                 />
               )}
             </div>
+
+          {/* Tag Rules */}
+          <div className="card p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Target className="w-5 h-5 text-orange-400" />
+              <h3 className="font-medium">Tag Rules</h3>
+            </div>
+            
+            {/* Tag Immunity Time */}
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm text-white/60 mb-2 block">Immunity After Being Tagged</label>
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { value: 0, label: 'None' },
+                    { value: 3000, label: '3s' },
+                    { value: 5000, label: '5s' },
+                    { value: 10000, label: '10s' },
+                    { value: 15000, label: '15s' },
+                    { value: 30000, label: '30s' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setSettings({ ...settings, tagImmunityTime: opt.value })}
+                      className={`touch-target-48 px-4 py-2 rounded-xl transition-all ${
+                        settings.tagImmunityTime === opt.value
+                          ? 'bg-orange-400/20 border-2 border-orange-400 text-orange-400'
+                          : 'bg-white/5 border border-white/10 active:scale-95'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-white/40 mt-2">
+                  {settings.tagImmunityTime === 0 
+                    ? 'No immunity - can be tagged again immediately'
+                    : `${settings.tagImmunityTime / 1000} seconds before they can be tagged again`}
+                </p>
+              </div>
+            </div>
+          </div>
           </div>
         </div>
       </BottomSheet>
