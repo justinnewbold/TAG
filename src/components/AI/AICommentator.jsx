@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Radio, Volume2, VolumeX } from 'lucide-react';
-import { aiService } from '../services/ai';
+import { aiService } from '../../services/ai';
 
 export default function AICommentator({ events, isActive = true }) {
   const [commentary, setCommentary] = useState([]);
