@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Avatar from '../components/Avatar';
+import UpgradeBanner from '../components/UpgradeBanner';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Users, MapPin, Timer, Target, Trophy, Award, History, Crown, Gamepad2, ChevronUp } from 'lucide-react';
 import { useStore, useSounds, ACHIEVEMENTS } from '../store';
@@ -48,6 +49,8 @@ function Home() {
       </div>
       
       {/* Middle Section - Scrollable content */}
+        {/* Upgrade Banner for anonymous users */}
+        <UpgradeBanner />
       <div className="flex-1 overflow-y-auto px-4 pb-48">
         {/* Active Game Banner */}
         {currentGame && (
