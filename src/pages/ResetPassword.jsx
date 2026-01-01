@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabaseAuth } from '../services/supabase';
 import { useToast } from '../components/Toast';
 
 export default function ResetPassword() {
@@ -16,7 +16,7 @@ export default function ResetPassword() {
   useEffect(() => {
     // Check if we have a valid recovery session
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabaseAuth.auth.getSession();
       if (!session) {
         showToast('Invalid or expired reset link. Please request a new one.', 'error');
         setTimeout(() => navigate('/forgot-password'), 2000);
@@ -41,7 +41,7 @@ export default function ResetPassword() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await supabaseAuth.auth.updateUser({ password });
 
       if (error) throw error;
 
@@ -49,7 +49,7 @@ export default function ResetPassword() {
       showToast('Password updated successfully!', 'success');
       
       // Sign out and redirect to login
-      await supabase.auth.signOut();
+      await supabaseAuth.auth.signOut();
       setTimeout(() => navigate('/login'), 2000);
     } catch (error) {
       console.error('Password reset error:', error);
