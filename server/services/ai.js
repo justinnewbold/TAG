@@ -1,17 +1,25 @@
 /**
  * TAG! AI Service
- * Provides AI-powered features using Claude/OpenAI
+ * Provides AI-powered features using Google Gemini
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+// Initialize Gemini client
+const genAI = process.env.GEMINI_API_KEY 
+  ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+  : null;
+
+// Get model - using Gemini 2.0 Flash for speed, or Pro for quality
+const getModel = (useFlash = true) => {
+  if (!genAI) return null;
+  return genAI.getGenerativeModel({ 
+    model: useFlash ? 'gemini-2.0-flash-exp' : 'gemini-1.5-pro'
+  });
+};
 
 // Fallback to basic generation if no API key
-const hasAI = !!process.env.ANTHROPIC_API_KEY;
+const hasAI = !!process.env.GEMINI_API_KEY;
 
 /**
  * Generate a fun, engaging game recap
@@ -45,12 +53,8 @@ Total Distance Run: ${totalDistance ? (totalDistance / 1000).toFixed(1) + 'km' :
   }
 
   try {
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 300,
-      messages: [{
-        role: 'user',
-        content: `You are an enthusiastic sports commentator for a real-world GPS tag game called TAG!
+    const model = getModel(true); // Use Flash for speed
+    const prompt = `You are an enthusiastic sports commentator for a real-world GPS tag game called TAG!
 
 Generate a fun, energetic 2-3 sentence game recap based on this data:
 ${context}
@@ -58,11 +62,11 @@ ${context}
 Be playful, use emojis, highlight exciting moments. Keep it brief but exciting!
 Examples of tone: "What a GAME! 🔥" or "Nobody saw that coming! 😱"
 
-Respond with just the recap, no preamble.`
-      }],
-    });
+Respond with just the recap, no preamble.`;
 
-    return message.content[0].text;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text();
   } catch (error) {
     console.error('AI recap generation failed:', error);
     return generateBasicRecap(gameData);
@@ -106,12 +110,8 @@ export async function generateTrashTalk(context) {
   }
 
   try {
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 200,
-      messages: [{
-        role: 'user',
-        content: `You're generating fun, safe trash talk for a GPS tag game.
+    const model = getModel(true); // Use Flash for speed
+    const prompt = `You're generating fun, safe trash talk for a GPS tag game.
 
 Context:
 - Player is: ${playerRole === 'it' ? 'IT (the chaser)' : 'a Runner (being chased)'}
@@ -122,11 +122,13 @@ ${streak ? `- Current streak: ${streak} tags` : ''}
 
 Generate 5 short, playful trash talk messages (max 50 chars each).
 Keep it fun and family-friendly. Use emojis!
-Format: one message per line, no numbers or bullets.`
-      }],
-    });
+Format: one message per line, no numbers or bullets.`;
 
-    const aiMessages = message.content[0].text
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    const aiMessages = text
       .split('\n')
       .map(m => m.trim())
       .filter(m => m && m.length <= 60);
@@ -405,7 +407,7 @@ export function calculateSkillRating(playerStats) {
 }
 
 /**
- * Generate personalized strategy tips
+ * Generate personalized strategy tips using Gemini
  */
 export async function generateStrategyTips(playerStats, recentGames) {
   const tips = [];
@@ -441,6 +443,35 @@ export async function generateStrategyTips(playerStats, recentGames) {
       tip: "Focus on players who seem distracted or are near boundaries.",
       priority: 'medium',
     });
+  }
+
+  // Use Gemini for personalized tips if available
+  if (hasAI && gamesPlayed >= 5) {
+    try {
+      const model = getModel(true);
+      const prompt = `You're a coach for a real-world GPS tag game. Based on these stats, give ONE specific tip (max 100 chars):
+- Games played: ${gamesPlayed}
+- Avg survival time: ${avgSurvivalTime}s
+- Avg time to tag someone: ${avgTagTime}s
+- Total tags: ${totalTags}
+- Times tagged: ${timesTagged}
+
+Give actionable advice. No intro, just the tip.`;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const aiTip = response.text().trim();
+      
+      if (aiTip && aiTip.length < 150) {
+        tips.unshift({
+          category: 'ai_coach',
+          tip: aiTip,
+          priority: 'high',
+        });
+      }
+    } catch (error) {
+      console.error('AI strategy tip failed:', error);
+    }
   }
 
   // Add general tips
