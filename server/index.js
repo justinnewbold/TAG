@@ -16,6 +16,11 @@ import { weatherRouter } from './routes/weather.js';
 import { powerupRouter } from './routes/powerups.js';
 import { usersRouter } from './routes/users.js';
 import healthRouter from './routes/health.js';
+import { challengeRouter } from './routes/challenges.js';
+import { cosmeticsRouter } from './routes/cosmetics.js';
+import { matchmakingRouter } from './routes/matchmaking.js';
+import { privacyRouter } from './routes/privacy.js';
+import { analyticsRouter } from './routes/analytics.js';
 import { GameManager } from './game/GameManager.js';
 import { setupSocketHandlers } from './socket/handlers.js';
 import { logger } from './utils/logger.js';
@@ -171,6 +176,11 @@ app.use('/api/weather', authenticateToken, weatherRouter);
 app.use('/api/powerups', authenticateToken, powerupRouter);
 app.use('/api/users', authenticateToken, usersRouter);
 app.use('/api/ai', authenticateToken, aiRoutes);
+app.use('/api/challenges', authenticateToken, challengeRouter);
+app.use('/api/cosmetics', authenticateToken, cosmeticsRouter);
+app.use('/api/matchmaking', authenticateToken, matchmakingRouter);
+app.use('/api/settings', authenticateToken, privacyRouter);
+app.use('/api/analytics', authenticateToken, analyticsRouter);
 
 // Initialize additional database tables
 (async () => {

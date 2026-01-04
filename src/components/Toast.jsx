@@ -1,7 +1,7 @@
 import React, { useState, useEffect, createContext, useContext, useCallback } from 'react';
-import { 
-  CheckCircle, XCircle, AlertCircle, Info, X, 
-  Wifi, WifiOff, Trophy, Target
+import {
+  CheckCircle, XCircle, AlertCircle, Info, X,
+  Wifi, WifiOff, Trophy, Target, Loader, MapPin, Zap
 } from 'lucide-react';
 
 // Toast context
@@ -37,6 +37,14 @@ const TOAST_TYPES = {
     iconColor: 'text-blue-400',
     progressColor: 'bg-blue-500',
   },
+  loading: {
+    icon: Loader,
+    bgColor: 'bg-neon-cyan/10',
+    borderColor: 'border-neon-cyan/30',
+    iconColor: 'text-neon-cyan',
+    progressColor: 'bg-neon-cyan',
+    animate: true,
+  },
   connection: {
     icon: Wifi,
     bgColor: 'bg-cyan-500/10',
@@ -65,13 +73,28 @@ const TOAST_TYPES = {
     iconColor: 'text-red-400',
     progressColor: 'bg-red-500',
   },
+  gps: {
+    icon: MapPin,
+    bgColor: 'bg-orange-500/10',
+    borderColor: 'border-orange-500/30',
+    iconColor: 'text-orange-400',
+    progressColor: 'bg-orange-500',
+  },
+  powerup: {
+    icon: Zap,
+    bgColor: 'bg-purple-500/10',
+    borderColor: 'border-purple-500/30',
+    iconColor: 'text-purple-400',
+    progressColor: 'bg-purple-500',
+  },
 };
 
 // Individual toast component
-function ToastItem({ toast, onDismiss }) {
+function ToastItem({ toast, onDismiss, onUpdate }) {
   const [isExiting, setIsExiting] = useState(false);
   const config = TOAST_TYPES[toast.type] || TOAST_TYPES.info;
   const Icon = toast.customIcon || config.icon;
+  const isLoading = toast.type === 'loading';
 
   const handleDismiss = () => {
     setIsExiting(true);
@@ -98,7 +121,7 @@ function ToastItem({ toast, onDismiss }) {
     >
       <div className="flex items-start gap-3 p-4">
         <div className={`flex-shrink-0 ${config.iconColor}`}>
-          <Icon className="w-5 h-5" />
+          <Icon className={`w-5 h-5 ${config.animate ? 'animate-spin' : ''}`} />
         </div>
         
         <div className="flex-1 min-w-0">
@@ -183,16 +206,48 @@ export function ToastProvider({ children }) {
     });
   }, [addToast]);
 
+  // Update a toast
+  const updateToast = useCallback((id, updates) => {
+    setToasts(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+  }, []);
+
   // Convenience methods
   toast.success = (message, options = {}) => addToast({ type: 'success', message, ...options });
-  toast.error = (message, options = {}) => addToast({ type: 'error', message, ...options });
+  toast.error = (message, options = {}) => addToast({ type: 'error', message, duration: 7000, ...options });
   toast.warning = (message, options = {}) => addToast({ type: 'warning', message, ...options });
   toast.info = (message, options = {}) => addToast({ type: 'info', message, ...options });
+  toast.loading = (message, options = {}) => addToast({ type: 'loading', message, duration: 0, ...options });
   toast.achievement = (title, message) => addToast({ type: 'achievement', title, message, duration: 5000 });
   toast.tag = (message) => addToast({ type: 'tag', message, duration: 3000 });
+  toast.gps = (message, options = {}) => addToast({ type: 'gps', message, ...options });
+  toast.powerup = (message, options = {}) => addToast({ type: 'powerup', message, duration: 3000, ...options });
   toast.connected = () => addToast({ type: 'connection', message: 'Connected to server', duration: 2000 });
   toast.disconnected = () => addToast({ type: 'disconnection', message: 'Connection lost', duration: 0 });
   toast.dismiss = dismissToast;
+  toast.update = updateToast;
+
+  // Promise-based toast for async operations
+  toast.promise = async (promiseFn, messages = {}) => {
+    const id = toast.loading(messages.loading || 'Loading...');
+    try {
+      const result = await promiseFn();
+      updateToast(id, {
+        type: 'success',
+        message: messages.success || 'Success!',
+        duration: 3000,
+      });
+      setTimeout(() => dismissToast(id), 3000);
+      return result;
+    } catch (err) {
+      updateToast(id, {
+        type: 'error',
+        message: messages.error || err.message || 'An error occurred',
+        duration: 7000,
+      });
+      setTimeout(() => dismissToast(id), 7000);
+      throw err;
+    }
+  };
 
   return (
     <ToastContext.Provider value={toast}>
