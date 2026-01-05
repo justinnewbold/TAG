@@ -123,12 +123,41 @@ export const GAME_MODES = {
     icon: '🔥',
     color: 'rose-500',
     minPlayers: 3,
-    features: ['Shrinking play zone', 'No respawns', 'Tag = Eliminate'],
+    features: ['Shrinking play zone', 'No respawns', 'Tag = Eliminate', 'Global scale support'],
     settings: {
       shrinkInterval: 120000, // 2 minutes between shrinks
       shrinkAmount: 0.15, // 15% smaller each time
       damageOutsideZone: true, // Eliminate if outside too long
       outsideZoneGrace: 30000, // 30 seconds to get back in
+      // Global scale settings
+      globalMode: false, // Enable for worldwide play
+      startingRadius: null, // null = use custom boundary or unlimited
+      minimumRadius: 100, // Minimum zone radius in meters
+      zoneVisibility: 'always', // 'always', 'warning', 'never'
+      eliminationWarningTime: 60000, // 1 minute warning before elimination
+    },
+  },
+  // NEW: Global Battle Royale variant
+  globalBattleRoyale: {
+    id: 'globalBattleRoyale',
+    name: 'Global Battle Royale',
+    description: 'Worldwide battle royale! Start anywhere on Earth, zone shrinks globally. Last survivor wins!',
+    icon: '🌍',
+    color: 'blue-500',
+    minPlayers: 10,
+    features: ['Worldwide play area', 'Continental shrinking zones', 'GPS tracking across globe', 'Massive scale warfare', 'Country-based phases'],
+    settings: {
+      shrinkInterval: 3600000, // 1 hour between shrinks for global scale
+      shrinkAmount: 0.20, // 20% smaller each shrink
+      damageOutsideZone: true,
+      outsideZoneGrace: 300000, // 5 minutes to get back in zone (global travel takes time)
+      globalMode: true,
+      startingRadius: 20015000, // Start with entire globe
+      minimumRadius: 1000, // End at 1km radius
+      zoneVisibility: 'always',
+      eliminationWarningTime: 600000, // 10 minute warning
+      phaseCount: 10, // Number of shrink phases
+      finalZoneSelectionMethod: 'random_land', // 'random', 'random_land', 'most_players', 'poi'
     },
   },
 };
@@ -257,10 +286,15 @@ export const GAME_LIMITS = {
   GPS_INTERVAL_MAX: 86400000,  // 24 hours
   GPS_INTERVAL_DEFAULT: 10000, // 10 seconds
 
-  // Tag radius (in meters)
+  // Tag radius (in meters) - supports globe-scale games
   TAG_RADIUS_MIN: 1,
-  TAG_RADIUS_MAX: 1000,
+  TAG_RADIUS_MAX: 20015000,    // Half Earth's circumference (~20,015 km)
   TAG_RADIUS_DEFAULT: 20,
+
+  // Play area radius (in meters) - supports globe-scale games
+  PLAY_AREA_RADIUS_MIN: 10,
+  PLAY_AREA_RADIUS_MAX: 20015000, // Half Earth's circumference
+  PLAY_AREA_RADIUS_DEFAULT: 1000,
 
   // Game duration (in milliseconds)
   DURATION_MIN: 300000,        // 5 minutes
@@ -269,12 +303,12 @@ export const GAME_LIMITS = {
 
   // Players
   PLAYERS_MIN: 2,
-  PLAYERS_MAX: 50,
+  PLAYERS_MAX: 1000,           // Increased for massive global games
   PLAYERS_DEFAULT: 10,
 
   // No-tag zones
-  NO_TAG_ZONES_MAX: 10,
-  NO_TAG_ZONE_RADIUS_MAX: 1000,
+  NO_TAG_ZONES_MAX: 100,       // More zones for large-scale games
+  NO_TAG_ZONE_RADIUS_MAX: 1000000, // 1000km max zone radius
 
   // No-tag times
   NO_TAG_TIMES_MAX: 10,

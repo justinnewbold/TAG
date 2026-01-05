@@ -159,6 +159,20 @@ function CreateGame() {
       },
     },
     {
+      id: 'global',
+      name: 'Global Hunt',
+      icon: '🌍',
+      desc: 'Worldwide battle royale',
+      color: 'blue-500',
+      settings: {
+        gameMode: 'globalBattleRoyale',
+        gpsInterval: 60 * 60 * 1000, // 1 hour updates
+        tagRadius: 1000, // 1km tag range
+        duration: 7 * 24 * 60 * 60 * 1000, // 1 week
+        maxPlayers: 100,
+      },
+    },
+    {
       id: 'custom',
       name: 'Custom',
       icon: '🎛️',
@@ -237,6 +251,14 @@ function CreateGame() {
     { value: 250, label: '250m', desc: 'Very wide' },
     { value: 500, label: '500m', desc: 'Huge' },
     { value: 1000, label: '1km', desc: 'Massive' },
+    { value: 5000, label: '5km', desc: 'City-wide' },
+    { value: 10000, label: '10km', desc: 'Metro area' },
+    { value: 50000, label: '50km', desc: 'Regional' },
+    { value: 100000, label: '100km', desc: 'State/Province' },
+    { value: 500000, label: '500km', desc: 'Country' },
+    { value: 1000000, label: '1000km', desc: 'Continental' },
+    { value: 5000000, label: '5000km', desc: 'Hemisphere' },
+    { value: 20015000, label: 'Global', desc: 'Entire Earth' },
   ];
   
   const durationOptions = [
@@ -394,7 +416,9 @@ function CreateGame() {
   };
   
   const formatRadius = (meters) => {
-    if (meters >= 1000) return `${(meters / 1000).toFixed(1)}km`;
+    if (meters >= 20015000) return '🌍 Global';
+    if (meters >= 1000000) return `${(meters / 1000000).toFixed(0)}K km`;
+    if (meters >= 1000) return `${(meters / 1000).toFixed(meters >= 10000 ? 0 : 1)}km`;
     return `${meters}m`;
   };
 
@@ -511,36 +535,46 @@ function CreateGame() {
             </div>
             <span className="text-2xl font-bold text-neon-purple">{formatRadius(settings.tagRadius)}</span>
           </div>
-          
-          {/* Large thumb-friendly slider */}
+
+          {/* Large thumb-friendly slider - logarithmic scale for globe range */}
           <div className="py-2">
             <input
               type="range"
-              min="10"
-              max="1000"
-              step="10"
-              value={settings.tagRadius}
-              onChange={(e) => setSettings({ ...settings, tagRadius: parseInt(e.target.value) })}
+              min="0"
+              max="100"
+              step="1"
+              value={Math.log10(settings.tagRadius) / Math.log10(20015000) * 100}
+              onChange={(e) => {
+                const logValue = parseFloat(e.target.value) / 100 * Math.log10(20015000);
+                const actualValue = Math.round(Math.pow(10, logValue));
+                setSettings({ ...settings, tagRadius: Math.max(10, actualValue) });
+              }}
               className="w-full h-3 bg-white/10 rounded-lg appearance-none cursor-pointer accent-neon-purple slider-thumb-large"
               style={{
-                background: `linear-gradient(to right, #a855f7 ${(settings.tagRadius - 10) / 990 * 100}%, rgba(255,255,255,0.1) ${(settings.tagRadius - 10) / 990 * 100}%)`
+                background: `linear-gradient(to right, #a855f7 ${Math.log10(settings.tagRadius) / Math.log10(20015000) * 100}%, rgba(255,255,255,0.1) ${Math.log10(settings.tagRadius) / Math.log10(20015000) * 100}%)`
               }}
             />
+            <div className="flex justify-between text-xs text-white/40 mt-1">
+              <span>10m</span>
+              <span>1km</span>
+              <span>100km</span>
+              <span>🌍 Global</span>
+            </div>
           </div>
-          
-          {/* Quick select chips */}
+
+          {/* Quick select chips - now with global options */}
           <div className="flex gap-2 mt-3 overflow-x-auto pb-1 -mx-1 px-1">
-            {[25, 50, 100, 250, 500].map((r) => (
+            {[25, 50, 100, 500, 1000, 10000, 100000, 1000000, 20015000].map((r) => (
               <button
                 key={r}
                 onClick={() => setSettings({ ...settings, tagRadius: r })}
-                className={`touch-target-48 px-4 py-2 rounded-full whitespace-nowrap transition-all ${
+                className={`touch-target-48 px-4 py-2 rounded-full whitespace-nowrap transition-all flex-shrink-0 ${
                   settings.tagRadius === r
                     ? 'bg-neon-purple text-white'
                     : 'bg-white/10 hover:bg-white/20 active:scale-95'
                 }`}
               >
-                {formatRadius(r)}
+                {r === 20015000 ? '🌍' : formatRadius(r)}
               </button>
             ))}
           </div>
@@ -576,22 +610,27 @@ function CreateGame() {
             <Users className="w-5 h-5 text-amber-400" />
             <h3 className="font-medium">Max Players</h3>
           </div>
-          
+
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-            {[4, 6, 8, 10, 15, 20].map((num) => (
+            {[4, 6, 8, 10, 15, 20, 50, 100, 250, 500, 1000].map((num) => (
               <button
                 key={num}
                 onClick={() => setSettings({ ...settings, maxPlayers: num })}
-                className={`touch-target-48 w-14 h-14 rounded-xl flex items-center justify-center text-lg font-bold transition-all flex-shrink-0 ${
+                className={`touch-target-48 min-w-14 h-14 px-3 rounded-xl flex items-center justify-center text-lg font-bold transition-all flex-shrink-0 ${
                   settings.maxPlayers === num
                     ? 'bg-amber-400/20 border-2 border-amber-400 text-amber-400'
                     : 'bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95'
                 }`}
               >
-                {num}
+                {num >= 1000 ? '1K' : num}
               </button>
             ))}
           </div>
+          {settings.maxPlayers >= 100 && (
+            <p className="text-xs text-amber-400/70 mt-2">
+              🌍 Large-scale games recommended for global play
+            </p>
+          )}
         </div>
 
         {/* Error Display */}
