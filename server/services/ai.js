@@ -490,8 +490,6 @@ Give actionable advice. No intro, just the tip.`;
   return tips.slice(0, 3); // Return top 3 tips
 }
 
-export { askAssistant };
-
 export default {
   generateGameRecap,
   generateTrashTalk,

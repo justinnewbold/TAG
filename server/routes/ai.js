@@ -3,7 +3,7 @@
  */
 
 import express from 'express';
-import { authMiddleware } from '../middleware/auth.js';
+import { authenticateToken as authMiddleware } from '../auth.js';
 import aiService from '../services/ai.js';
 
 const router = express.Router();

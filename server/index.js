@@ -21,6 +21,11 @@ import { cosmeticsRouter } from './routes/cosmetics.js';
 import { matchmakingRouter } from './routes/matchmaking.js';
 import { privacyRouter } from './routes/privacy.js';
 import { analyticsRouter } from './routes/analytics.js';
+import rankedRouter from './routes/ranked.js';
+import clansRouter from './routes/clans.js';
+import spectatorRouter from './routes/spectator.js';
+import poisRouter from './routes/pois.js';
+import offlineRouter from './routes/offline.js';
 import { GameManager } from './game/GameManager.js';
 import { setupSocketHandlers } from './socket/handlers.js';
 import { logger } from './utils/logger.js';
@@ -181,6 +186,11 @@ app.use('/api/cosmetics', authenticateToken, cosmeticsRouter);
 app.use('/api/matchmaking', authenticateToken, matchmakingRouter);
 app.use('/api/settings', authenticateToken, privacyRouter);
 app.use('/api/analytics', authenticateToken, analyticsRouter);
+app.use('/api/ranked', authenticateToken, rankedRouter);
+app.use('/api/clans', authenticateToken, clansRouter);
+app.use('/api/spectator', authenticateToken, spectatorRouter);
+app.use('/api/pois', authenticateToken, poisRouter);
+app.use('/api/offline', authenticateToken, offlineRouter);
 
 // Initialize additional database tables
 (async () => {
