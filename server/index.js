@@ -26,6 +26,8 @@ import clansRouter from './routes/clans.js';
 import spectatorRouter from './routes/spectator.js';
 import poisRouter from './routes/pois.js';
 import offlineRouter from './routes/offline.js';
+import { tournamentRouter } from './routes/tournaments.js';
+import { gameModesRouter } from './routes/gameModes.js';
 import { GameManager } from './game/GameManager.js';
 import { setupSocketHandlers } from './socket/handlers.js';
 import { logger } from './utils/logger.js';
@@ -191,6 +193,8 @@ app.use('/api/clans', authenticateToken, clansRouter);
 app.use('/api/spectator', authenticateToken, spectatorRouter);
 app.use('/api/pois', authenticateToken, poisRouter);
 app.use('/api/offline', authenticateToken, offlineRouter);
+app.use('/api/tournaments', authenticateToken, tournamentRouter);
+app.use('/api/game-modes', gameModesRouter); // No auth required for reading modes
 
 // Initialize additional database tables
 (async () => {
