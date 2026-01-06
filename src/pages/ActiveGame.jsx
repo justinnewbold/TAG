@@ -2,15 +2,18 @@ import React, { useEffect, useState, useRef, lazy, Suspense, useMemo, useCallbac
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Target, Users, Clock, X, Zap, AlertTriangle, Flag, Shield, Calendar, Loader2, Snowflake, Skull, Heart, Signal, MessageCircle, Gift, Eye, ChevronUp, ChevronDown, Menu } from 'lucide-react';
+import { Target, Users, Clock, Flag, Shield, Loader2, MessageCircle, Gift } from 'lucide-react';
 import { useStore, useSounds, isInNoTagTime, isInNoTagZone, canTagNow, GAME_MODES } from '../store';
-import { getDistance, formatTime, formatInterval } from '../../shared/utils.js';
+import { getDistance, formatTime } from '../../shared/utils.js';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import GameEndSummary from '../components/GameEndSummary';
 import { useSwipe } from '../hooks/useGestures';
 
-// Lazy load new feature components
+// Game sub-components
+import { GameHUD, TagButton, NearestPlayerCard, SwipeProgressOverlay } from '../components/game';
+
+// Lazy load feature components
 const SafetyControls = lazy(() => import('../components/SafetyControls'));
 const GameChat = lazy(() => import('../components/GameChat'));
 const PowerupInventory = lazy(() => import('../components/PowerupInventory'));
@@ -457,151 +460,35 @@ function ActiveGame() {
   return (
     <div className="fixed inset-0 flex flex-col" {...(isIt && inTagRange ? swipeHandlers : {})}>
       {/* Swipe-to-tag progress indicator */}
-      {swipeProgress > 0 && isIt && inTagRange && (
-        <div 
-          className="fixed inset-x-0 bottom-0 z-50 pointer-events-none"
-          style={{ height: `${swipeProgress * 40}%` }}
-        >
-          <div className="absolute inset-0 bg-gradient-to-t from-neon-orange/50 to-transparent" />
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 text-center">
-            <p className="text-2xl font-bold text-white text-high-contrast animate-pulse">
-              {swipeProgress >= 0.8 ? '🎯 RELEASE TO TAG!' : '⬆️ SWIPE UP TO TAG'}
-            </p>
-          </div>
-        </div>
-      )}
-      
+      <SwipeProgressOverlay
+        swipeProgress={swipeProgress}
+        isIt={isIt}
+        inTagRange={inTagRange}
+      />
+
       {/* Collapsible Header HUD */}
-      <div className={`relative z-10 bg-dark-900/95 backdrop-blur-md transition-all duration-300 ${hudExpanded ? '' : ''}`}>
-        {/* Minimal Header - Always visible */}
-        <div className="p-3 flex items-center justify-between">
-          {/* Left: Essential info */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full">
-              <Clock className="w-4 h-4 text-white/60" />
-              <span className="font-mono text-base font-bold">{formatTime(gameTime)}</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-sm text-white/60">
-              <Users className="w-4 h-4" />
-              <span>{currentGame.players?.length || 0}</span>
-            </div>
-          </div>
-          
-          {/* Right: Actions */}
-          <div className="flex items-center gap-2">
-            {/* GPS indicator - compact */}
-            {(() => {
-              const quality = getGpsQuality(user?.location?.accuracy);
-              return (
-                <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${quality.level === 'poor' ? 'bg-red-500/20' : 'bg-white/10'} ${quality.color}`}>
-                  <Signal className="w-3 h-3" />
-                </div>
-              );
-            })()}
-            
-            {/* Expand/Collapse HUD */}
-            <button 
-              onClick={() => setHudExpanded(!hudExpanded)} 
-              className="btn-icon w-10 h-10"
-            >
-              {hudExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-            </button>
-            
-            {/* Quick Menu */}
-            <button 
-              onClick={() => setShowQuickMenu(!showQuickMenu)}
-              className="btn-icon w-10 h-10 bg-neon-purple/20"
-            >
-              <Menu className="w-5 h-5 text-neon-purple" />
-            </button>
-          </div>
-        </div>
-        
-        {/* Expanded HUD Content */}
-        {hudExpanded && (
-          <div className="px-3 pb-3 space-y-2 animate-slide-down">
-            {/* No-Tag Status Banners */}
-            {(noTagStatus.inTime || noTagStatus.inZone) && (
-              <div className="flex gap-2">
-                {noTagStatus.inTime && (
-                  <div className="flex-1 flex items-center gap-2 p-2 bg-blue-500/20 border border-blue-500/30 rounded-lg">
-                    <Calendar className="w-4 h-4 text-blue-400" />
-                    <span className="text-xs text-blue-400">No-Tag Time</span>
-                  </div>
-                )}
-                {noTagStatus.inZone && (
-                  <div className="flex-1 flex items-center gap-2 p-2 bg-green-500/20 border border-green-500/30 rounded-lg">
-                    <Shield className="w-4 h-4 text-green-400" />
-                    <span className="text-xs text-green-400">Safe Zone</span>
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {/* Countdown Warning */}
-            {showCountdownWarning && timeRemaining > 0 && (
-              <div className={`flex items-center justify-center gap-2 p-2 rounded-lg ${
-                timeRemaining <= 10000 
-                  ? 'bg-red-500/30 border border-red-500/50 animate-pulse' 
-                  : 'bg-amber-500/20 border border-amber-500/30'
-              }`}>
-                <Clock className={`w-4 h-4 ${timeRemaining <= 10000 ? 'text-red-400' : 'text-amber-400'}`} />
-                <span className={`font-mono font-bold ${timeRemaining <= 10000 ? 'text-red-400' : 'text-amber-400'}`}>
-                  {Math.ceil(timeRemaining / 1000)}s
-                </span>
-              </div>
-            )}
-            
-            {/* Game Mode Badge */}
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-lg">{modeConfig.icon}</span>
-              <span className="text-white/70">{modeConfig.name}</span>
-              
-              {/* Mode-specific stats */}
-              {gameMode === 'freezeTag' && (
-                <span className="text-xs text-blue-400 ml-auto">
-                  <Snowflake className="w-3 h-3 inline mr-1" />
-                  {frozenCount} frozen
-                </span>
-              )}
-              {gameMode === 'infection' && (
-                <span className="text-xs text-green-400 ml-auto">
-                  🧟 {infectedCount} / {survivorCount}
-                </span>
-              )}
-              {gameMode === 'teamTag' && (
-                <span className="text-xs ml-auto">
-                  <span className="text-red-400">🔴 {redTeamAlive}</span>
-                  <span className="mx-1 text-white/40">vs</span>
-                  <span className="text-blue-400">🔵 {blueTeamAlive}</span>
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-        
-        {/* Always show critical status when not expanded */}
-        {!hudExpanded && (noTagStatus.inTime || noTagStatus.inZone || (showCountdownWarning && timeRemaining > 0)) && (
-          <div className="px-3 pb-2 flex gap-2">
-            {noTagStatus.inZone && (
-              <span className="text-xs text-green-400 flex items-center gap-1">
-                <Shield className="w-3 h-3" /> Safe
-              </span>
-            )}
-            {noTagStatus.inTime && (
-              <span className="text-xs text-blue-400 flex items-center gap-1">
-                <Calendar className="w-3 h-3" /> No-Tag
-              </span>
-            )}
-            {showCountdownWarning && timeRemaining > 0 && (
-              <span className={`text-xs font-mono font-bold ml-auto ${timeRemaining <= 10000 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>
-                {Math.ceil(timeRemaining / 1000)}s
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-      
+      <GameHUD
+        gameTime={gameTime}
+        playerCount={currentGame?.players?.length || 0}
+        gpsAccuracy={user?.location?.accuracy}
+        hudExpanded={hudExpanded}
+        setHudExpanded={setHudExpanded}
+        showQuickMenu={showQuickMenu}
+        setShowQuickMenu={setShowQuickMenu}
+        noTagStatus={noTagStatus}
+        showCountdownWarning={showCountdownWarning}
+        timeRemaining={timeRemaining}
+        gameMode={gameMode}
+        modeConfig={modeConfig}
+        frozenCount={frozenCount}
+        infectedCount={infectedCount}
+        survivorCount={survivorCount}
+        redTeamAlive={redTeamAlive}
+        blueTeamAlive={blueTeamAlive}
+        formatTime={formatTime}
+        getGpsQuality={getGpsQuality}
+      />
+
       {/* Map */}
       <div className="flex-1 relative">
         <MapContainer
@@ -731,64 +618,15 @@ function ActiveGame() {
         </MapContainer>
         
         {/* Nearest Player Info */}
-        {isIt && nearestPlayer && (
-          <div className="absolute top-4 left-4 right-4 z-10">
-            <div className="card p-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-xl">
-                  {nearestPlayer.isFrozen ? '🧊' : 
-                   nearestPlayer.team === 'red' ? '🔴' :
-                   nearestPlayer.team === 'blue' ? '🔵' :
-                   nearestPlayer.avatar || '🏃'}
-                </span>
-                <div>
-                  <p className="font-medium text-sm">{nearestPlayer.name}</p>
-                  <p className="text-xs text-white/50">
-                    {isInNoTagZone(nearestPlayer.location, noTagZones) ? '🛡️ In Safe Zone' : 
-                     nearestPlayer.isFrozen ? '🧊 Frozen - touch to unfreeze' :
-                     gameMode === 'teamTag' ? `Team ${nearestPlayer.team}` :
-                     'Nearest target'}
-                  </p>
-                </div>
-              </div>
-              <div className={`text-right ${inTagRange && tagCheck.allowed ? 'text-neon-orange' : ''}`}>
-                <p className="font-bold">
-                  {nearestDistance < 1000 
-                    ? `${Math.round(nearestDistance)}m` 
-                    : `${(nearestDistance / 1000).toFixed(1)}km`}
-                </p>
-                {inTagRange && tagCheck.allowed && (
-                  <p className="text-xs text-neon-orange animate-pulse">In range!</p>
-                )}
-                {inTagRange && !tagCheck.allowed && (
-                  <p className="text-xs text-yellow-400">Protected</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Freeze tag: Show unfreeze button for non-IT players near frozen teammates */}
-        {gameMode === 'freezeTag' && !isIt && nearestPlayer?.isFrozen && (
-          <div className="absolute top-4 left-4 right-4 z-10">
-            <div className="card p-3 flex items-center justify-between bg-blue-500/20 border-blue-500/30">
-              <div className="flex items-center gap-3">
-                <span className="text-xl">🧊</span>
-                <div>
-                  <p className="font-medium text-sm">{nearestPlayer.name}</p>
-                  <p className="text-xs text-blue-400">Touch to unfreeze!</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="font-bold text-blue-400">
-                  {nearestDistance < 1000 
-                    ? `${Math.round(nearestDistance)}m` 
-                    : `${(nearestDistance / 1000).toFixed(1)}km`}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        <NearestPlayerCard
+          gameMode={gameMode}
+          isIt={isIt}
+          nearestPlayer={nearestPlayer}
+          nearestDistance={nearestDistance}
+          inTagRange={inTagRange}
+          tagCheck={tagCheck}
+          noTagZones={noTagZones}
+        />
       </div>
       
       {/* Bottom Action Zone - Thumb Friendly */}
@@ -827,67 +665,19 @@ function ActiveGame() {
         {/* TAG Button Zone - Large touch target */}
         {!isEliminated && !isFrozen && (
           <div className="flex justify-center pb-4">
-            {/* TAG Button for IT players / Team Tag / Freeze Tag unfreeze */}
-            {(isIt || (gameMode === 'teamTag' && nearestPlayer) || (gameMode === 'freezeTag' && !isIt && nearestPlayer?.isFrozen)) && (
-              <div className="relative">
-                {/* Swipe hint when in range */}
-                {inTagRange && tagCheck.allowed && !isTagging && (
-                  <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-center animate-bounce">
-                    <span className="text-xs text-white/60">⬆️ Swipe or tap</span>
-                  </div>
-                )}
-                
-                <button
-                  onClick={handleTag}
-                  disabled={!inTagRange || isTagging || isHidingPhase}
-                  className={`w-28 h-28 rounded-full font-display font-bold text-2xl transition-all transform touch-manipulation ${
-                    isHidingPhase
-                      ? 'bg-pink-500/50 text-pink-200'
-                      : canTag && !isTagging
-                      ? gameMode === 'freezeTag' && !isIt
-                        ? 'bg-gradient-to-br from-blue-400 to-cyan-500 shadow-lg shadow-blue-400/50 animate-pulse active:scale-90'
-                        : gameMode === 'hotPotato'
-                        ? 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-400/50 animate-pulse active:scale-90'
-                        : 'bg-gradient-to-br from-neon-orange to-red-500 shadow-lg shadow-neon-orange/50 animate-pulse active:scale-90'
-                      : inTagRange && !tagCheck.allowed
-                      ? 'bg-yellow-500/50 text-yellow-200'
-                      : 'bg-white/10 text-white/30'
-                  } ${tagAnimation ? 'scale-110' : ''}`}
-                >
-                  {isTagging ? (
-                    <Loader2 className="w-8 h-8 animate-spin mx-auto" />
-                  ) : isHidingPhase ? (
-                    '👀'
-                  ) : !inTagRange ? (
-                    <span className="text-4xl">
-                      {gameMode === 'freezeTag' && !isIt ? '❄️' :
-                       gameMode === 'hotPotato' ? '🥔' :
-                       gameMode === 'infection' ? '🧟' :
-                       '🏃'}
-                    </span>
-                  ) : !tagCheck.allowed ? (
-                    '🛡️'
-                  ) : (
-                    <span className="text-xl">
-                      {gameMode === 'freezeTag' && !isIt ? 'FREE!' :
-                       gameMode === 'freezeTag' && isIt ? 'FREEZE!' :
-                       gameMode === 'hotPotato' ? 'PASS!' :
-                       gameMode === 'infection' ? 'INFECT!' :
-                       'TAG!'}
-                    </span>
-                  )}
-                </button>
-                
-                {/* Range indicator */}
-                {nearestPlayer && (
-                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-center whitespace-nowrap">
-                    <span className={`text-xs font-mono ${inTagRange ? 'text-neon-orange' : 'text-white/40'}`}>
-                      {nearestDistance < 1000 ? `${Math.round(nearestDistance)}m` : `${(nearestDistance / 1000).toFixed(1)}km`}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
+            <TagButton
+              gameMode={gameMode}
+              isIt={isIt}
+              isTagging={isTagging}
+              isHidingPhase={isHidingPhase}
+              inTagRange={inTagRange}
+              canTag={canTag}
+              tagCheck={tagCheck}
+              tagAnimation={tagAnimation}
+              nearestPlayer={nearestPlayer}
+              nearestDistance={nearestDistance}
+              onTag={handleTag}
+            />
           </div>
         )}
       </div>
