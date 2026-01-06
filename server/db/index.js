@@ -343,6 +343,41 @@ if (usePostgres) {
     async cleanupOldGames(maxAgeMs = 7 * 24 * 60 * 60 * 1000) {
       const cutoff = Date.now() - maxAgeMs;
       await pool.query('DELETE FROM games WHERE status = $1 AND ended_at < $2', ['ended', cutoff]);
+    },
+
+    // Get all active/waiting games (for server restart recovery)
+    async getActiveGames() {
+      const result = await pool.query(
+        `SELECT * FROM games WHERE status IN ('waiting', 'active', 'hiding') ORDER BY created_at DESC`
+      );
+      return Promise.all(result.rows.map(g => this._hydrateGame(g)));
+    },
+
+    // Get public games for browsing
+    async getPublicGames(limit = 20) {
+      const result = await pool.query(`
+        SELECT g.*,
+          (SELECT COUNT(*) FROM game_players WHERE game_id = g.id) as player_count
+        FROM games g
+        WHERE g.status IN ('waiting', 'active')
+        AND g.settings::jsonb->>'isPublic' = 'true'
+        ORDER BY g.created_at DESC
+        LIMIT $1
+      `, [limit]);
+
+      return result.rows.map(row => ({
+        id: row.id,
+        code: row.code,
+        name: JSON.parse(row.settings).gameName || 'Unnamed Game',
+        host_name: row.host_name,
+        gameMode: JSON.parse(row.settings).gameMode || 'classic',
+        status: row.status,
+        player_count: parseInt(row.player_count) || 0,
+        max_players: JSON.parse(row.settings).maxPlayers || 10,
+        created_at: parseInt(row.created_at),
+        tagRadius: JSON.parse(row.settings).tagRadius,
+        requireApproval: JSON.parse(row.settings).requireApproval,
+      }));
     }
   };
 
@@ -641,6 +676,44 @@ if (usePostgres) {
     async cleanupOldGames(maxAgeMs = 7 * 24 * 60 * 60 * 1000) {
       const cutoff = Date.now() - maxAgeMs;
       sqliteDb.prepare('DELETE FROM games WHERE status = ? AND ended_at < ?').run('ended', cutoff);
+    },
+
+    // Get all active/waiting games (for server restart recovery)
+    async getActiveGames() {
+      const games = sqliteDb.prepare(
+        `SELECT * FROM games WHERE status IN ('waiting', 'active', 'hiding') ORDER BY created_at DESC`
+      ).all();
+      return Promise.all(games.map(g => this._hydrateGame(g)));
+    },
+
+    // Get public games for browsing
+    async getPublicGames(limit = 20) {
+      const games = sqliteDb.prepare(`
+        SELECT g.*,
+          (SELECT COUNT(*) FROM game_players WHERE game_id = g.id) as player_count
+        FROM games g
+        WHERE g.status IN ('waiting', 'active')
+        AND json_extract(g.settings, '$.isPublic') = 1
+        ORDER BY g.created_at DESC
+        LIMIT ?
+      `).all(limit);
+
+      return games.map(row => {
+        const settings = JSON.parse(row.settings);
+        return {
+          id: row.id,
+          code: row.code,
+          name: settings.gameName || 'Unnamed Game',
+          host_name: row.host_name,
+          gameMode: settings.gameMode || 'classic',
+          status: row.status,
+          player_count: row.player_count || 0,
+          max_players: settings.maxPlayers || 10,
+          created_at: row.created_at,
+          tagRadius: settings.tagRadius,
+          requireApproval: settings.requireApproval,
+        };
+      });
     }
   };
 

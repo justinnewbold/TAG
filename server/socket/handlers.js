@@ -3,7 +3,7 @@ import { pushService } from '../services/push.js';
 import { getDistance, calculateSpeed, isValidSpeed } from '../shared/utils.js';
 import { ANTI_CHEAT, SOCKET_RATE_LIMITS } from '../shared/constants.js';
 
-// Rate limiter for socket events
+// Rate limiter for socket events with retry-after support
 class RateLimiter {
   constructor() {
     this.events = new Map(); // userId -> { eventType -> { count, resetTime } }
@@ -24,7 +24,26 @@ class RateLimiter {
     userEvents.set(eventType, eventData);
     this.events.set(userId, userEvents);
 
-    return eventData.count <= limit;
+    const allowed = eventData.count <= limit;
+    const retryAfter = allowed ? 0 : Math.ceil((eventData.resetTime - now) / 1000);
+    const remaining = Math.max(0, limit - eventData.count);
+
+    return { allowed, retryAfter, remaining, limit };
+  }
+
+  // Get current rate limit status without incrementing
+  getStatus(userId, eventType, limit) {
+    const now = Date.now();
+    const userEvents = this.events.get(userId);
+    if (!userEvents) return { remaining: limit, resetIn: 60 };
+
+    const eventData = userEvents.get(eventType);
+    if (!eventData || now > eventData.resetTime) return { remaining: limit, resetIn: 60 };
+
+    return {
+      remaining: Math.max(0, limit - eventData.count),
+      resetIn: Math.ceil((eventData.resetTime - now) / 1000)
+    };
   }
 
   // Cleanup old entries periodically
@@ -91,14 +110,41 @@ class LocationTracker {
     // Flag if 5+ violations in last 5 minutes
     return violations.count >= 5 && (Date.now() - violations.lastViolation < 300000);
   }
+
+  // Remove tracking for a specific player (on disconnect)
+  removePlayer(playerId) {
+    this.history.delete(playerId);
+    this.violations.delete(playerId);
+  }
+
+  // Cleanup old entries periodically (players inactive for 10+ minutes)
+  cleanup() {
+    const now = Date.now();
+    const STALE_THRESHOLD = 10 * 60 * 1000; // 10 minutes
+
+    for (const [playerId, data] of this.history) {
+      if (now - data.timestamp > STALE_THRESHOLD) {
+        this.history.delete(playerId);
+      }
+    }
+
+    for (const [playerId, data] of this.violations) {
+      if (now - data.lastViolation > STALE_THRESHOLD) {
+        this.violations.delete(playerId);
+      }
+    }
+  }
 }
 
 // Global instances
 const rateLimiter = new RateLimiter();
 const locationTracker = new LocationTracker();
 
-// Cleanup rate limiter every 5 minutes
-setInterval(() => rateLimiter.cleanup(), 300000);
+// Cleanup rate limiter and location tracker every 5 minutes
+setInterval(() => {
+  rateLimiter.cleanup();
+  locationTracker.cleanup();
+}, 300000);
 
 export function setupSocketHandlers(io, socket, gameManager) {
   const user = socket.user;
@@ -132,9 +178,15 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
   // Update player location (synchronous for performance - uses cache only)
   socket.on('location:update', (location) => {
-    // Rate limiting check
-    if (!rateLimiter.check(user.id, 'location:update', SOCKET_RATE_LIMITS.LOCATION_UPDATE)) {
-      socket.emit('error:rateLimit', { event: 'location:update', message: 'Too many location updates' });
+    // Rate limiting check with retry-after info
+    const rateCheck = rateLimiter.check(user.id, 'location:update', SOCKET_RATE_LIMITS.LOCATION_UPDATE);
+    if (!rateCheck.allowed) {
+      socket.emit('error:rateLimit', {
+        event: 'location:update',
+        message: 'Too many location updates',
+        retryAfter: rateCheck.retryAfter,
+        remaining: rateCheck.remaining,
+      });
       return;
     }
 
@@ -272,9 +324,14 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
   // Tag attempt via WebSocket (alternative to REST)
   socket.on('tag:attempt', async ({ targetId }) => {
-    // Rate limiting check
-    if (!rateLimiter.check(user.id, 'tag:attempt', SOCKET_RATE_LIMITS.TAG_ATTEMPT)) {
-      socket.emit('tag:result', { success: false, error: 'Too many tag attempts. Please wait.' });
+    // Rate limiting check with retry-after info
+    const rateCheck = rateLimiter.check(user.id, 'tag:attempt', SOCKET_RATE_LIMITS.TAG_ATTEMPT);
+    if (!rateCheck.allowed) {
+      socket.emit('tag:result', {
+        success: false,
+        error: 'Too many tag attempts. Please wait.',
+        retryAfter: rateCheck.retryAfter,
+      });
       return;
     }
 
@@ -441,6 +498,9 @@ export function setupSocketHandlers(io, socket, gameManager) {
   // Handle disconnect
   socket.on('disconnect', async (reason) => {
     console.log(`User disconnected: ${user.name} (${reason})`);
+
+    // Clean up location tracker data for this player
+    locationTracker.removePlayer(user.id);
 
     const game = await gameManager.getPlayerGame(user.id);
     if (game && game.status === 'active') {
