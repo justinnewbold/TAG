@@ -5,13 +5,13 @@ import { api } from './services/api';
 import { socketService } from './services/socket';
 
 // Eagerly loaded pages (for fast initial render)
-import Home from './pages/Home';
+import Home from './pages/HomeNew';
 import NotFound from './pages/NotFound';
 
 // Lazy loaded pages (heavy components with maps)
-const CreateGame = lazy(() => import('./pages/CreateGame'));
+const CreateGame = lazy(() => import('./pages/CreateGameNew'));
 const JoinGame = lazy(() => import('./pages/JoinGame'));
-const GameLobby = lazy(() => import('./pages/GameLobby'));
+const GameLobby = lazy(() => import('./pages/GameLobbyNew'));
 const ActiveGame = lazy(() => import('./pages/ActiveGame'));
 const Stats = lazy(() => import('./pages/Stats'));
 const EnhancedStats = lazy(() => import('./pages/EnhancedStats'));
