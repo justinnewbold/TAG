@@ -52,9 +52,23 @@ export class GameManager {
     this._loadActiveGames();
   }
 
-  _loadActiveGames() {
-    // This would load waiting/active games from DB
-    // For now, we start fresh - games in progress would need reconnection
+  async _loadActiveGames() {
+    // Load waiting and active games from database on startup
+    try {
+      const activeGames = await gameDb.getActiveGames?.();
+      if (activeGames && activeGames.length > 0) {
+        for (const game of activeGames) {
+          this._cacheGame(game);
+          console.log(`Restored game: ${game.code} (${game.status}) with ${game.players.length} players`);
+        }
+        console.log(`GameManager: Restored ${activeGames.length} active games from database`);
+      } else {
+        console.log('GameManager: No active games to restore');
+      }
+    } catch (err) {
+      console.error('GameManager: Failed to load active games from database:', err.message);
+      // Continue anyway - games will be created fresh
+    }
     console.log('GameManager initialized with database persistence');
   }
 

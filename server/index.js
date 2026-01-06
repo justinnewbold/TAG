@@ -58,6 +58,56 @@ if (!JWT_SECRET || DEFAULT_SECRETS.some(s => JWT_SECRET.includes(s))) {
   }
 }
 
+// Startup validation for required configuration
+const validateStartup = () => {
+  const warnings = [];
+  const errors = [];
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // Database check
+  if (!process.env.DATABASE_URL) {
+    warnings.push('DATABASE_URL not set - using SQLite for local development');
+  }
+
+  // VAPID keys for push notifications
+  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    warnings.push('VAPID keys not configured - push notifications disabled');
+  }
+
+  // Check at least one auth method is available
+  const hasEmailAuth = process.env.SMTP_HOST && process.env.SMTP_USER;
+  const hasSmsAuth = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN;
+  const hasOAuth = process.env.GOOGLE_CLIENT_ID || process.env.APPLE_CLIENT_ID;
+
+  if (!hasEmailAuth && !hasSmsAuth && !hasOAuth && isProduction) {
+    warnings.push('No auth providers configured (email/SMS/OAuth) - only anonymous users allowed');
+  }
+
+  // Sentry for error tracking in production
+  if (!process.env.SENTRY_DSN && isProduction) {
+    warnings.push('SENTRY_DSN not set - error tracking disabled in production');
+  }
+
+  // Log warnings and errors
+  if (warnings.length > 0) {
+    console.log('\n⚠️  Startup Warnings:');
+    warnings.forEach(w => console.log(`   - ${w}`));
+  }
+
+  if (errors.length > 0) {
+    console.error('\n❌ Startup Errors:');
+    errors.forEach(e => console.error(`   - ${e}`));
+    process.exit(1);
+  }
+
+  if (warnings.length === 0 && errors.length === 0) {
+    console.log('✅ All configuration validated');
+  }
+  console.log('');
+};
+
+validateStartup();
+
 const app = express();
 const httpServer = createServer(app);
 
