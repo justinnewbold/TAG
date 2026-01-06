@@ -248,6 +248,9 @@ if (usePostgres) {
         avatar: p.avatar,
         location: null,
         isIt: !!p.is_it,
+        isFrozen: !!p.is_frozen,  // For freeze tag mode
+        isEliminated: !!p.is_eliminated,  // For elimination modes
+        team: p.team || null,  // For team tag mode
         joinedAt: parseInt(p.joined_at),
         lastUpdate: null,
         tagCount: p.tag_count,
@@ -266,13 +269,20 @@ if (usePostgres) {
         location: t.location_lat ? { lat: t.location_lat, lng: t.location_lng } : null,
       }));
 
+      let settings = {};
+      try {
+        settings = JSON.parse(row.settings);
+      } catch (e) {
+        console.error(`Failed to parse settings for game ${row.id}:`, e.message);
+      }
+
       return {
         id: row.id,
         code: row.code,
         host: row.host_id,
         hostName: row.host_name,
         status: row.status,
-        settings: JSON.parse(row.settings),
+        settings,
         players,
         itPlayerId: row.it_player_id,
         startedAt: row.started_at ? parseInt(row.started_at) : null,
@@ -365,19 +375,27 @@ if (usePostgres) {
         LIMIT $1
       `, [limit]);
 
-      return result.rows.map(row => ({
-        id: row.id,
-        code: row.code,
-        name: JSON.parse(row.settings).gameName || 'Unnamed Game',
-        host_name: row.host_name,
-        gameMode: JSON.parse(row.settings).gameMode || 'classic',
-        status: row.status,
-        player_count: parseInt(row.player_count) || 0,
-        max_players: JSON.parse(row.settings).maxPlayers || 10,
-        created_at: parseInt(row.created_at),
-        tagRadius: JSON.parse(row.settings).tagRadius,
-        requireApproval: JSON.parse(row.settings).requireApproval,
-      }));
+      return result.rows.map(row => {
+        let settings = {};
+        try {
+          settings = JSON.parse(row.settings);
+        } catch (e) {
+          console.error(`Failed to parse settings for game ${row.id}:`, e.message);
+        }
+        return {
+          id: row.id,
+          code: row.code,
+          name: settings.gameName || 'Unnamed Game',
+          host_name: row.host_name,
+          gameMode: settings.gameMode || 'classic',
+          status: row.status,
+          player_count: parseInt(row.player_count) || 0,
+          max_players: settings.maxPlayers || 10,
+          created_at: parseInt(row.created_at),
+          tagRadius: settings.tagRadius,
+          requireApproval: settings.requireApproval,
+        };
+      });
     }
   };
 
@@ -609,7 +627,8 @@ if (usePostgres) {
     async _hydrateGame(row) {
       const players = sqliteDb.prepare('SELECT * FROM game_players WHERE game_id = ?').all(row.id).map(p => ({
         id: p.user_id, name: p.name, avatar: p.avatar, location: null,
-        isIt: !!p.is_it, joinedAt: p.joined_at, lastUpdate: null,
+        isIt: !!p.is_it, isFrozen: !!p.is_frozen, isEliminated: !!p.is_eliminated,
+        team: p.team || null, joinedAt: p.joined_at, lastUpdate: null,
         tagCount: p.tag_count, survivalTime: p.survival_time,
         becameItAt: p.became_it_at, finalSurvivalTime: p.final_survival_time,
       }));
@@ -619,9 +638,16 @@ if (usePostgres) {
         tagTime: t.tag_time, location: t.location_lat ? { lat: t.location_lat, lng: t.location_lng } : null,
       }));
 
+      let settings = {};
+      try {
+        settings = JSON.parse(row.settings);
+      } catch (e) {
+        console.error(`Failed to parse settings for game ${row.id}:`, e.message);
+      }
+
       return {
         id: row.id, code: row.code, host: row.host_id, hostName: row.host_name,
-        status: row.status, settings: JSON.parse(row.settings), players,
+        status: row.status, settings, players,
         itPlayerId: row.it_player_id, startedAt: row.started_at, endedAt: row.ended_at,
         winnerId: row.winner_id, winnerName: row.winner_name, gameDuration: row.game_duration,
         tags, createdAt: row.created_at,

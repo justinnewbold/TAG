@@ -151,10 +151,14 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
   // Join game room when connecting (async IIFE for initial setup)
   (async () => {
-    const currentGame = await gameManager.getPlayerGame(user.id);
-    if (currentGame) {
-      socket.join(`game:${currentGame.id}`);
-      console.log(`${user.name} rejoined game room: ${currentGame.code}`);
+    try {
+      const currentGame = await gameManager.getPlayerGame(user.id);
+      if (currentGame) {
+        socket.join(`game:${currentGame.id}`);
+        console.log(`${user.name} rejoined game room: ${currentGame.code}`);
+      }
+    } catch (err) {
+      console.error(`Failed to rejoin game for ${user.name}:`, err.message);
     }
   })();
 

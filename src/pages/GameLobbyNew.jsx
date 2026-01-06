@@ -291,9 +291,12 @@ function GameLobby() {
 
   const formatDuration = (ms) => {
     if (!ms) return 'Unlimited';
-    if (ms < 60 * 60 * 1000) return `${Math.floor(ms / (60 * 1000))} min`;
-    if (ms < 24 * 60 * 60 * 1000) return `${Math.floor(ms / (60 * 60 * 1000))} hour`;
-    return `${Math.floor(ms / (24 * 60 * 60 * 1000))} day`;
+    const mins = Math.floor(ms / (60 * 1000));
+    const hours = Math.floor(ms / (60 * 60 * 1000));
+    const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+    if (ms < 60 * 60 * 1000) return `${mins} min`;
+    if (ms < 24 * 60 * 60 * 1000) return `${hours} hour${hours !== 1 ? 's' : ''}`;
+    return `${days} day${days !== 1 ? 's' : ''}`;
   };
 
   if (!currentGame) {
