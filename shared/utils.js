@@ -141,3 +141,75 @@ export function debounce(func, wait) {
     timeout = setTimeout(() => func.apply(this, args), wait);
   };
 }
+
+/**
+ * Check if current time is in a no-tag period
+ * @param {Array} noTagTimes - Array of no-tag time rules
+ * @returns {boolean} True if currently in a no-tag period
+ */
+export function isInNoTagTime(noTagTimes) {
+  if (!noTagTimes || noTagTimes.length === 0) return false;
+
+  const now = new Date();
+  const currentDay = now.getDay();
+  const currentTime = now.getHours() * 60 + now.getMinutes();
+
+  return noTagTimes.some(rule => {
+    // Check if current day is included
+    if (!rule.days.includes(currentDay)) return false;
+
+    // Parse times
+    const [startHour, startMin] = rule.startTime.split(':').map(Number);
+    const [endHour, endMin] = rule.endTime.split(':').map(Number);
+    const startMins = startHour * 60 + startMin;
+    const endMins = endHour * 60 + endMin;
+
+    // Handle overnight times (e.g., 22:00 - 06:00)
+    if (endMins < startMins) {
+      return currentTime >= startMins || currentTime <= endMins;
+    }
+
+    return currentTime >= startMins && currentTime <= endMins;
+  });
+}
+
+/**
+ * Check if a location is in a no-tag zone (safe zone)
+ * @param {Object} location - Location with lat and lng properties
+ * @param {Array} noTagZones - Array of no-tag zones with lat, lng, radius
+ * @returns {boolean} True if location is in a no-tag zone
+ */
+export function isInNoTagZone(location, noTagZones) {
+  if (!location || !noTagZones || noTagZones.length === 0) return false;
+
+  return noTagZones.some(zone => {
+    const distance = getDistance(location.lat, location.lng, zone.lat, zone.lng);
+    return distance <= zone.radius;
+  });
+}
+
+/**
+ * Check if tagging is currently allowed based on game rules
+ * @param {Object} game - Game object with settings
+ * @param {Object} taggerLocation - Tagger's location
+ * @param {Object} targetLocation - Target's location
+ * @returns {Object} { allowed: boolean, reason: string|null }
+ */
+export function canTagNow(game, taggerLocation, targetLocation) {
+  // Check no-tag times
+  if (isInNoTagTime(game?.settings?.noTagTimes)) {
+    return { allowed: false, reason: 'No-tag time period active' };
+  }
+
+  // Check if tagger is in no-tag zone
+  if (isInNoTagZone(taggerLocation, game?.settings?.noTagZones)) {
+    return { allowed: false, reason: 'You are in a safe zone' };
+  }
+
+  // Check if target is in no-tag zone
+  if (isInNoTagZone(targetLocation, game?.settings?.noTagZones)) {
+    return { allowed: false, reason: 'Target is in a safe zone' };
+  }
+
+  return { allowed: true, reason: null };
+}

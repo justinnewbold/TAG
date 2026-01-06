@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
+import React, { useEffect, useState, useRef, lazy, Suspense, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Target, Users, Clock, X, Zap, AlertTriangle, Flag, Shield, Calendar, Loader2, Snowflake, Skull, Heart, Signal, MessageCircle, Gift, Eye, ChevronUp, ChevronDown, Menu } from 'lucide-react';
 import { useStore, useSounds, isInNoTagTime, isInNoTagZone, canTagNow, GAME_MODES } from '../store';
+import { getDistance, formatTime, formatInterval } from '../../shared/utils.js';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import GameEndSummary from '../components/GameEndSummary';
@@ -109,14 +110,14 @@ function ActiveGame() {
     preventScroll: true
   });
 
-  // Get GPS accuracy quality level
-  const getGpsQuality = (accuracy) => {
+  // Get GPS accuracy quality level - memoized
+  const getGpsQuality = useCallback((accuracy) => {
     if (!accuracy) return { level: 'unknown', color: 'text-white/40', label: 'GPS...' };
     if (accuracy <= 10) return { level: 'excellent', color: 'text-green-400', label: `±${accuracy}m` };
     if (accuracy <= 25) return { level: 'good', color: 'text-neon-cyan', label: `±${accuracy}m` };
     if (accuracy <= 50) return { level: 'fair', color: 'text-yellow-400', label: `±${accuracy}m` };
     return { level: 'poor', color: 'text-red-400', label: `±${Math.round(accuracy)}m` };
-  };
+  }, []);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -223,51 +224,64 @@ function ActiveGame() {
     return null;
   }
 
-  // Game mode info
-  const gameMode = currentGame.gameMode || 'classic';
-  const modeConfig = GAME_MODES[gameMode] || GAME_MODES.classic;
-  
-  // Mode-specific player state
-  const currentPlayer = currentGame.players?.find(p => p.id === user?.id);
-  const isIt = gameMode === 'teamTag' 
-    ? true // Everyone can tag in team mode
-    : gameMode === 'infection'
-    ? currentPlayer?.isIt
-    : currentGame.itPlayerId === user?.id;
+  // Memoize game mode derived values
+  const gameMode = useMemo(() => currentGame?.gameMode || 'classic', [currentGame?.gameMode]);
+  const modeConfig = useMemo(() => GAME_MODES[gameMode] || GAME_MODES.classic, [gameMode]);
+
+  // Memoize current player state
+  const currentPlayer = useMemo(() =>
+    currentGame?.players?.find(p => p.id === user?.id),
+    [currentGame?.players, user?.id]
+  );
+
+  const isIt = useMemo(() => {
+    if (gameMode === 'teamTag') return true;
+    if (gameMode === 'infection') return currentPlayer?.isIt;
+    return currentGame?.itPlayerId === user?.id;
+  }, [gameMode, currentPlayer?.isIt, currentGame?.itPlayerId, user?.id]);
+
   const isFrozen = currentPlayer?.isFrozen;
   const isEliminated = currentPlayer?.isEliminated;
   const playerTeam = currentPlayer?.team;
-  const itPlayer = currentGame.players?.find((p) => p.id === currentGame.itPlayerId);
-  const otherPlayers = currentGame.players?.filter((p) => p.id !== user?.id) || [];
-  
-  // Get counts for game modes
-  const frozenCount = currentGame.players?.filter(p => p.isFrozen && !p.isIt).length || 0;
-  const infectedCount = currentGame.players?.filter(p => p.isIt).length || 0;
-  const survivorCount = currentGame.players?.filter(p => !p.isIt && !p.isEliminated).length || 0;
-  const redTeamAlive = currentGame.players?.filter(p => p.team === 'red' && !p.isEliminated).length || 0;
-  const blueTeamAlive = currentGame.players?.filter(p => p.team === 'blue' && !p.isEliminated).length || 0;
-  
-  // Hot potato timer
-  const potatoTimeLeft = currentGame.potatoExpiresAt ? Math.max(0, currentGame.potatoExpiresAt - Date.now()) : 0;
-  
-  // Hide and seek hiding phase
-  const isHidingPhase = currentGame.status === 'hiding';
-  const hideTimeLeft = currentGame.hidePhaseEndAt ? Math.max(0, currentGame.hidePhaseEndAt - Date.now()) : 0;
-  
-  const getDistance = (lat1, lng1, lat2, lng2) => {
-    const R = 6371e3;
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lng2 - lng1) * Math.PI) / 180;
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-  
-  const getNearestTaggable = () => {
+
+  const itPlayer = useMemo(() =>
+    currentGame?.players?.find(p => p.id === currentGame?.itPlayerId),
+    [currentGame?.players, currentGame?.itPlayerId]
+  );
+
+  const otherPlayers = useMemo(() =>
+    currentGame?.players?.filter(p => p.id !== user?.id) || [],
+    [currentGame?.players, user?.id]
+  );
+
+  // Memoize game mode counts
+  const { frozenCount, infectedCount, survivorCount, redTeamAlive, blueTeamAlive } = useMemo(() => ({
+    frozenCount: currentGame?.players?.filter(p => p.isFrozen && !p.isIt).length || 0,
+    infectedCount: currentGame?.players?.filter(p => p.isIt).length || 0,
+    survivorCount: currentGame?.players?.filter(p => !p.isIt && !p.isEliminated).length || 0,
+    redTeamAlive: currentGame?.players?.filter(p => p.team === 'red' && !p.isEliminated).length || 0,
+    blueTeamAlive: currentGame?.players?.filter(p => p.team === 'blue' && !p.isEliminated).length || 0,
+  }), [currentGame?.players]);
+
+  // Memoize hot potato and hide/seek timers
+  const potatoTimeLeft = useMemo(() =>
+    currentGame?.potatoExpiresAt ? Math.max(0, currentGame.potatoExpiresAt - Date.now()) : 0,
+    [currentGame?.potatoExpiresAt]
+  );
+
+  const isHidingPhase = currentGame?.status === 'hiding';
+  const hideTimeLeft = useMemo(() =>
+    currentGame?.hidePhaseEndAt ? Math.max(0, currentGame.hidePhaseEndAt - Date.now()) : 0,
+    [currentGame?.hidePhaseEndAt]
+  );
+
+  const noTagZones = useMemo(() =>
+    currentGame?.settings?.noTagZones || [],
+    [currentGame?.settings?.noTagZones]
+  );
+
+  // Memoized function to find nearest taggable player
+  const getNearestTaggable = useCallback(() => {
     if (!user?.location) return { player: null, distance: Infinity };
     
     // Determine which players can be tagged based on game mode
@@ -310,9 +324,13 @@ function ActiveGame() {
     });
     
     return { player: nearest, distance: nearestDist };
-  };
-  
-  const { player: nearestPlayer, distance: nearestDistance } = getNearestTaggable();
+  }, [user?.location, otherPlayers, gameMode, playerTeam, isIt]);
+
+  // Memoize nearest player calculation result
+  const { player: nearestPlayer, distance: nearestDistance } = useMemo(
+    () => getNearestTaggable(),
+    [getNearestTaggable]
+  );
   const inTagRange = isIt && nearestPlayer && nearestDistance <= (currentGame.settings?.tagRadius || 20);
   
   // Check if tagging is allowed
@@ -351,7 +369,7 @@ function ActiveGame() {
     lastProximityZoneRef.current = zone;
   }, [isIt, nearestDistance, noTagStatus.inZone, noTagStatus.inTime, vibrate]);
   
-  const handleTag = async () => {
+  const handleTag = useCallback(async () => {
     if (!inTagRange || isTagging) return;
 
     if (!tagCheck.allowed) {
@@ -397,9 +415,9 @@ function ActiveGame() {
         setIsTagging(false);
       }
     }
-  };
+  }, [inTagRange, isTagging, tagCheck, nearestPlayer, currentGame?.id, playSound, vibrate, tagPlayer]);
 
-  const handleEndGame = async () => {
+  const handleEndGame = useCallback(async () => {
     if (isEnding) return;
 
     setIsEnding(true);
@@ -420,31 +438,21 @@ function ActiveGame() {
     } finally {
       setIsEnding(false);
     }
-  };
-  
-  const formatTime = (ms) => {
-    const seconds = Math.floor(ms / 1000);
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-  
-  const formatInterval = (ms) => {
-    if (ms < 60 * 60 * 1000) return `${Math.floor(ms / (60 * 1000))}m`;
-    if (ms < 24 * 60 * 60 * 1000) return `${Math.floor(ms / (60 * 60 * 1000))}h`;
-    return `${Math.floor(ms / (24 * 60 * 60 * 1000))}d`;
-  };
-  
-  const userLocation = user?.location || { lat: 37.7749, lng: -122.4194 };
-  const noTagZones = currentGame.settings?.noTagZones || [];
-  
-  // Quick action menu items
-  const quickActions = [
+  }, [isEnding, currentGame, endGame, isIt, user?.id]);
+
+  // Memoize user location with fallback
+  const userLocation = useMemo(() =>
+    user?.location || { lat: 37.7749, lng: -122.4194 },
+    [user?.location]
+  );
+
+  // Memoize quick action menu items
+  const quickActions = useMemo(() => [
     { id: 'chat', icon: MessageCircle, label: 'Chat', onAction: () => setShowChat(true) },
     { id: 'safety', icon: Shield, label: 'Safety', onAction: () => setShowSafety(true) },
     ...(powerupInventory?.length > 0 ? [{ id: 'powerups', icon: Gift, label: 'Powerups', onAction: () => setShowPowerups(true) }] : []),
     { id: 'end', icon: Flag, label: 'End Game', onAction: () => setShowEndConfirm(true) },
-  ];
+  ], [powerupInventory?.length]);
   
   return (
     <div className="fixed inset-0 flex flex-col" {...(isIt && inTagRange ? swipeHandlers : {})}>

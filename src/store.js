@@ -1,67 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { getDistance, generateId, generateGameCode } from '../shared/utils.js';
+import { getDistance, generateId, generateGameCode, isInNoTagTime, isInNoTagZone, canTagNow } from '../shared/utils.js';
 import { GAME_MODES, ACHIEVEMENTS } from '../shared/constants.js';
 
 // Re-export for backward compatibility
-export { GAME_MODES, ACHIEVEMENTS };
-
-// Helper to check if current time is in a no-tag period
-export const isInNoTagTime = (noTagTimes) => {
-  if (!noTagTimes || noTagTimes.length === 0) return false;
-  
-  const now = new Date();
-  const currentDay = now.getDay();
-  const currentTime = now.getHours() * 60 + now.getMinutes();
-  
-  return noTagTimes.some(rule => {
-    // Check if current day is included
-    if (!rule.days.includes(currentDay)) return false;
-    
-    // Parse times
-    const [startHour, startMin] = rule.startTime.split(':').map(Number);
-    const [endHour, endMin] = rule.endTime.split(':').map(Number);
-    const startMins = startHour * 60 + startMin;
-    const endMins = endHour * 60 + endMin;
-    
-    // Handle overnight times (e.g., 22:00 - 06:00)
-    if (endMins < startMins) {
-      return currentTime >= startMins || currentTime <= endMins;
-    }
-    
-    return currentTime >= startMins && currentTime <= endMins;
-  });
-};
-
-// Helper to check if location is in a no-tag zone
-export const isInNoTagZone = (location, noTagZones) => {
-  if (!location || !noTagZones || noTagZones.length === 0) return false;
-
-  return noTagZones.some(zone => {
-    const distance = getDistance(location.lat, location.lng, zone.lat, zone.lng);
-    return distance <= zone.radius;
-  });
-};
-
-// Check if tagging is currently allowed
-export const canTagNow = (game, taggerLocation, targetLocation) => {
-  // Check no-tag times
-  if (isInNoTagTime(game?.settings?.noTagTimes)) {
-    return { allowed: false, reason: 'No-tag time period active' };
-  }
-  
-  // Check if tagger is in no-tag zone
-  if (isInNoTagZone(taggerLocation, game?.settings?.noTagZones)) {
-    return { allowed: false, reason: 'You are in a safe zone' };
-  }
-  
-  // Check if target is in no-tag zone
-  if (isInNoTagZone(targetLocation, game?.settings?.noTagZones)) {
-    return { allowed: false, reason: 'Target is in a safe zone' };
-  }
-  
-  return { allowed: true, reason: null };
-};
+export { GAME_MODES, ACHIEVEMENTS, isInNoTagTime, isInNoTagZone, canTagNow };
 
 // Initial state
 const initialState = {
