@@ -15,6 +15,9 @@ import {
   generateGameCode,
   throttle,
   debounce,
+  isInNoTagTime,
+  isInNoTagZone,
+  canTagNow,
 } from './utils.js';
 
 describe('getDistance', () => {
@@ -257,6 +260,188 @@ describe('debounce', () => {
 
     await new Promise(resolve => setTimeout(resolve, 60));
     assert.strictEqual(count, 1);
+  });
+});
+
+describe('isInNoTagTime', () => {
+  it('should return false for empty rules', () => {
+    assert.strictEqual(isInNoTagTime([]), false);
+    assert.strictEqual(isInNoTagTime(null), false);
+    assert.strictEqual(isInNoTagTime(undefined), false);
+  });
+
+  it('should detect when in a no-tag time period', () => {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const currentHour = now.getHours();
+    const currentMin = now.getMinutes();
+
+    // Create a rule that includes current time
+    const startTime = `${String(currentHour).padStart(2, '0')}:${String(Math.max(0, currentMin - 5)).padStart(2, '0')}`;
+    const endTime = `${String(currentHour).padStart(2, '0')}:${String(Math.min(59, currentMin + 5)).padStart(2, '0')}`;
+
+    const rules = [{
+      days: [currentDay],
+      startTime,
+      endTime,
+    }];
+
+    assert.strictEqual(isInNoTagTime(rules), true);
+  });
+
+  it('should return false when not in no-tag time', () => {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const futureHour = (now.getHours() + 2) % 24;
+
+    const rules = [{
+      days: [currentDay],
+      startTime: `${String(futureHour).padStart(2, '0')}:00`,
+      endTime: `${String(futureHour).padStart(2, '0')}:30`,
+    }];
+
+    assert.strictEqual(isInNoTagTime(rules), false);
+  });
+
+  it('should return false when day does not match', () => {
+    const now = new Date();
+    const differentDay = (now.getDay() + 1) % 7;
+    const currentHour = now.getHours();
+
+    const rules = [{
+      days: [differentDay],
+      startTime: `${String(currentHour).padStart(2, '0')}:00`,
+      endTime: `${String(currentHour).padStart(2, '0')}:59`,
+    }];
+
+    assert.strictEqual(isInNoTagTime(rules), false);
+  });
+
+  it('should handle overnight time periods', () => {
+    // This test is inherently time-dependent
+    // We'll just verify the logic handles overnight correctly
+    // by checking that when end < start, it's treated as overnight
+    const now = new Date();
+    const currentDay = now.getDay();
+    const currentHour = now.getHours();
+
+    // Create a rule that spans the current time overnight-style
+    // If between 22:00-23:59 or 00:00-06:00, a 22:00-06:00 rule should match
+    if (currentHour >= 22 || currentHour < 6) {
+      const rules = [{
+        days: [currentDay],
+        startTime: '22:00',
+        endTime: '06:00',
+      }];
+      assert.strictEqual(isInNoTagTime(rules), true);
+    } else {
+      // Outside overnight window - just verify it doesn't crash
+      const rules = [{
+        days: [currentDay],
+        startTime: '22:00',
+        endTime: '06:00',
+      }];
+      // Should return false since we're not in overnight window
+      assert.strictEqual(isInNoTagTime(rules), false);
+    }
+  });
+});
+
+describe('isInNoTagZone', () => {
+  it('should return false for empty zones', () => {
+    const location = { lat: 37.7749, lng: -122.4194 };
+    assert.strictEqual(isInNoTagZone(location, []), false);
+    assert.strictEqual(isInNoTagZone(location, null), false);
+    assert.strictEqual(isInNoTagZone(null, []), false);
+  });
+
+  it('should detect when inside a zone', () => {
+    const location = { lat: 37.7749, lng: -122.4194 };
+    const zones = [{
+      lat: 37.7749,
+      lng: -122.4194,
+      radius: 50, // 50 meters
+    }];
+
+    assert.strictEqual(isInNoTagZone(location, zones), true);
+  });
+
+  it('should return false when outside a zone', () => {
+    const location = { lat: 37.7749, lng: -122.4194 };
+    const zones = [{
+      lat: 37.78, // ~500m away
+      lng: -122.4194,
+      radius: 50,
+    }];
+
+    assert.strictEqual(isInNoTagZone(location, zones), false);
+  });
+
+  it('should handle multiple zones', () => {
+    const location = { lat: 37.7749, lng: -122.4194 };
+    const zones = [
+      { lat: 37.78, lng: -122.42, radius: 50 }, // Far zone
+      { lat: 37.7749, lng: -122.4194, radius: 100 }, // Matching zone
+    ];
+
+    assert.strictEqual(isInNoTagZone(location, zones), true);
+  });
+
+  it('should correctly use radius boundary', () => {
+    const location = { lat: 37.7749, lng: -122.4194 };
+    // Zone exactly 100m away with 99m radius should NOT contain location
+    const zones = [{
+      lat: 37.7758, // ~100m north
+      lng: -122.4194,
+      radius: 90,
+    }];
+
+    assert.strictEqual(isInNoTagZone(location, zones), false);
+  });
+});
+
+describe('canTagNow', () => {
+  it('should allow tagging with no restrictions', () => {
+    const game = { settings: {} };
+    const taggerLoc = { lat: 37.7749, lng: -122.4194 };
+    const targetLoc = { lat: 37.7750, lng: -122.4194 };
+
+    const result = canTagNow(game, taggerLoc, targetLoc);
+    assert.strictEqual(result.allowed, true);
+    assert.strictEqual(result.reason, null);
+  });
+
+  it('should block tagging when tagger is in safe zone', () => {
+    const game = {
+      settings: {
+        noTagZones: [{ lat: 37.7749, lng: -122.4194, radius: 50 }],
+      },
+    };
+    const taggerLoc = { lat: 37.7749, lng: -122.4194 }; // In zone
+    const targetLoc = { lat: 37.78, lng: -122.4194 }; // Not in zone
+
+    const result = canTagNow(game, taggerLoc, targetLoc);
+    assert.strictEqual(result.allowed, false);
+    assert.strictEqual(result.reason, 'You are in a safe zone');
+  });
+
+  it('should block tagging when target is in safe zone', () => {
+    const game = {
+      settings: {
+        noTagZones: [{ lat: 37.7749, lng: -122.4194, radius: 50 }],
+      },
+    };
+    const taggerLoc = { lat: 37.78, lng: -122.4194 }; // Not in zone
+    const targetLoc = { lat: 37.7749, lng: -122.4194 }; // In zone
+
+    const result = canTagNow(game, taggerLoc, targetLoc);
+    assert.strictEqual(result.allowed, false);
+    assert.strictEqual(result.reason, 'Target is in a safe zone');
+  });
+
+  it('should handle null game settings', () => {
+    const result = canTagNow(null, { lat: 0, lng: 0 }, { lat: 0, lng: 0 });
+    assert.strictEqual(result.allowed, true);
   });
 });
 

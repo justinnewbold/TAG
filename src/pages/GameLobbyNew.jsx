@@ -1,18 +1,26 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import Avatar from '../components/Avatar';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Circle, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import {
-  ArrowLeft, Users, Copy, Check, Play, UserPlus, Clock, Target, MapPin,
-  Shield, Share2, Loader2, ChevronDown, X, MoreVertical, Globe, Lock,
-  UserCheck, UserX, Ban, Map, Maximize2, Minimize2, Eye
+  ArrowLeft, Users, Clock, Target,
+  Shield, Globe, Lock,
+  Map, Maximize2, Minimize2, Eye
 } from 'lucide-react';
 import { useStore, useSounds, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import InviteModal from '../components/InviteModal';
 import BottomSheet from '../components/BottomSheet';
+
+// Lobby sub-components
+import {
+  GameCodeCard,
+  PlayersList,
+  LobbyActionBar,
+  CountdownOverlay,
+  LeaveConfirmModal,
+} from '../components/lobby';
 
 // Map controller
 function MapController({ center, zoom }) {
@@ -47,12 +55,10 @@ function GameLobby() {
   const { playSound, vibrate } = useSounds();
 
   // UI State
-  const [copied, setCopied] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
-  const [playerMenuId, setPlayerMenuId] = useState(null);
 
   // Action State
   const [countdown, setCountdown] = useState(null);
@@ -154,25 +160,6 @@ function GameLobby() {
   }, [navigate, playSound, vibrate, syncGameState, user?.id, leaveGame]);
 
   // Actions
-  const handleCopyCode = async () => {
-    try {
-      await navigator.clipboard.writeText(currentGame?.code || '');
-      setCopied(true);
-      vibrate([50]);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      // Fallback
-      const textArea = document.createElement('textarea');
-      textArea.value = currentGame?.code || '';
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   const handleStartGame = async () => {
     if (!canStart || isStarting || gameStartedRef.current) return;
 
@@ -338,31 +325,7 @@ function GameLobby() {
       </header>
 
       {/* Game Code - Prominent */}
-      <div className="px-4 py-3">
-        <button
-          onClick={handleCopyCode}
-          className="w-full p-4 bg-gradient-to-r from-neon-purple/20 to-neon-cyan/20 border border-white/10 rounded-2xl flex items-center justify-between active:scale-[0.98] transition-transform"
-        >
-          <div>
-            <p className="text-xs text-white/50 mb-1">GAME CODE</p>
-            <p className="text-3xl font-display font-bold tracking-[0.3em] text-neon-cyan">
-              {currentGame.code}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {copied ? (
-              <div className="flex items-center gap-1 text-green-400 text-sm">
-                <Check className="w-5 h-5" />
-                <span>Copied!</span>
-              </div>
-            ) : (
-              <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
-                <Copy className="w-5 h-5 text-white/70" />
-              </div>
-            )}
-          </div>
-        </button>
-      </div>
+      <GameCodeCard code={currentGame.code} onVibrate={vibrate} />
 
       {/* Map Preview */}
       <div className={`relative mx-4 rounded-2xl overflow-hidden border border-white/10 transition-all duration-300 ${mapExpanded ? 'flex-1' : 'h-40'}`}>
@@ -632,47 +595,14 @@ function GameLobby() {
       </div>
 
       {/* Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-dark-900/95 backdrop-blur-xl border-t border-white/10 p-4 pb-safe">
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowInvite(true)}
-            className="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center"
-          >
-            <Share2 className="w-6 h-6" />
-          </button>
-
-          {isHost ? (
-            <button
-              onClick={handleStartGame}
-              disabled={!canStart || isStarting}
-              className={`flex-1 h-14 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all active:scale-[0.98] ${
-                canStart && !isStarting
-                  ? 'bg-gradient-to-r from-neon-purple to-neon-cyan'
-                  : 'bg-white/10 text-white/40'
-              }`}
-            >
-              {isStarting ? (
-                <>
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                  Starting...
-                </>
-              ) : canStart ? (
-                <>
-                  <Play className="w-6 h-6" />
-                  Start Game
-                </>
-              ) : (
-                `Waiting for ${minPlayers - playerCount} more...`
-              )}
-            </button>
-          ) : (
-            <div className="flex-1 h-14 bg-white/5 rounded-xl flex items-center justify-center gap-3">
-              <Loader2 className="w-5 h-5 animate-spin text-white/50" />
-              <span className="text-white/60">Waiting for host...</span>
-            </div>
-          )}
-        </div>
-      </div>
+      <LobbyActionBar
+        isHost={isHost}
+        canStart={canStart}
+        isStarting={isStarting}
+        minPlayersNeeded={minPlayers - playerCount}
+        onInvite={() => setShowInvite(true)}
+        onStart={handleStartGame}
+      />
 
       {/* Settings Sheet */}
       <BottomSheet isOpen={showSettings} onClose={() => setShowSettings(false)} title="Game Settings">
@@ -720,41 +650,16 @@ function GameLobby() {
       </BottomSheet>
 
       {/* Leave Confirmation */}
-      {showLeaveConfirm && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end justify-center p-4">
-          <div className="bg-dark-800 border border-white/10 rounded-3xl p-6 w-full max-w-md animate-slide-up pb-safe">
-            <h2 className="text-xl font-bold mb-2 text-center">Leave Game?</h2>
-            <p className="text-white/60 mb-6 text-center">
-              {isHost ? "You're the host. The game will be cancelled." : "You can rejoin with the code."}
-            </p>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={handleLeave}
-                disabled={isLeaving}
-                className="w-full h-14 bg-red-500 rounded-xl text-lg font-bold flex items-center justify-center"
-              >
-                {isLeaving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Leave Game'}
-              </button>
-              <button
-                onClick={() => setShowLeaveConfirm(false)}
-                className="w-full h-14 bg-white/10 rounded-xl text-lg"
-              >
-                Stay
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <LeaveConfirmModal
+        isOpen={showLeaveConfirm}
+        isHost={isHost}
+        isLeaving={isLeaving}
+        onLeave={handleLeave}
+        onCancel={() => setShowLeaveConfirm(false)}
+      />
 
       {/* Countdown Overlay */}
-      {countdown !== null && (
-        <div className="fixed inset-0 z-50 bg-dark-900/95 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-9xl font-display font-bold text-neon-cyan mb-4 animate-bounce">{countdown}</div>
-            <p className="text-2xl text-white/60">Get Ready!</p>
-          </div>
-        </div>
-      )}
+      <CountdownOverlay countdown={countdown} />
 
       {/* Invite Modal */}
       {showInvite && (
