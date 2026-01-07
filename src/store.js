@@ -42,6 +42,7 @@ const initialState = {
     highAccuracyGPS: true,
     darkMode: true,
     showDistance: true,
+    useImperial: false, // false = metric (m/km), true = imperial (ft/mi)
     hasSeenOnboarding: false,
     // Battery optimization
     batteryMode: 'balanced', // 'power-save', 'balanced', 'high-accuracy'

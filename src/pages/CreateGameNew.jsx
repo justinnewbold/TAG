@@ -8,6 +8,7 @@ import {
 import { useStore, useSounds, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
+import { formatRadius as formatRadiusUtil } from '../../shared/utils';
 import BottomSheet from '../components/BottomSheet';
 import {
   QuickPresets,
@@ -62,8 +63,9 @@ const safeZoneIcon = L.divIcon({
 
 function CreateGame() {
   const navigate = useNavigate();
-  const { createGame, syncGameState, user } = useStore();
+  const { createGame, syncGameState, user, settings: appSettings } = useStore();
   const { vibrate } = useSounds();
+  const useImperial = appSettings?.useImperial ?? false;
 
   // Core state
   const [userLocation, setUserLocation] = useState(null);
@@ -177,13 +179,10 @@ function CreateGame() {
     return 17;
   }, []);
 
-  // Format radius for display
+  // Format radius for display (using shared utility with unit preference)
   const formatRadius = useCallback((meters) => {
-    if (meters >= 20015000) return '🌍 Global';
-    if (meters >= 1000000) return `${(meters / 1000000).toFixed(0)}K km`;
-    if (meters >= 1000) return `${(meters / 1000).toFixed(meters >= 10000 ? 0 : 1)} km`;
-    return `${meters}m`;
-  }, []);
+    return formatRadiusUtil(meters, useImperial);
+  }, [useImperial]);
 
   // Handle game creation
   const handleCreate = useCallback(async () => {

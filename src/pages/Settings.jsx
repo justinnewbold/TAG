@@ -1,7 +1,7 @@
 import React, { useState, lazy, Suspense } from 'react';
 import Avatar, { hasUrlAvatar } from '../components/Avatar';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Volume2, Vibrate, MapPin, Moon, LogOut, Trash2, User, Info, ChevronRight, Shield, Download, Accessibility, Loader2, ArrowLeft, Check, Play } from 'lucide-react';
+import { Bell, Volume2, Vibrate, MapPin, Moon, LogOut, Trash2, User, Info, ChevronRight, Shield, Download, Accessibility, Loader2, ArrowLeft, Check, Play, Ruler } from 'lucide-react';
 import { useStore } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
@@ -260,6 +260,13 @@ function Settings() {
               description="Display distance to other players"
               value={settings.showDistance}
               onChange={() => toggleSetting('showDistance')}
+            />
+            <SettingToggle
+              icon={Ruler}
+              label="Imperial Units"
+              description={settings.useImperial ? "Using feet & miles" : "Using meters & km"}
+              value={settings.useImperial ?? false}
+              onChange={() => toggleSetting('useImperial')}
             />
           </div>
         </div>

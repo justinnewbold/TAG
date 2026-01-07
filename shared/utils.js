@@ -95,6 +95,95 @@ export function formatInterval(ms) {
   return `${Math.floor(ms / (24 * 60 * 60 * 1000))}d`;
 }
 
+// ============================================
+// Distance Formatting (Metric/Imperial)
+// ============================================
+
+const METERS_PER_FOOT = 0.3048;
+const METERS_PER_MILE = 1609.344;
+const FEET_PER_MILE = 5280;
+
+/**
+ * Convert meters to feet
+ * @param {number} meters
+ * @returns {number}
+ */
+export function metersToFeet(meters) {
+  return meters / METERS_PER_FOOT;
+}
+
+/**
+ * Convert meters to miles
+ * @param {number} meters
+ * @returns {number}
+ */
+export function metersToMiles(meters) {
+  return meters / METERS_PER_MILE;
+}
+
+/**
+ * Format distance for display with metric or imperial units
+ * @param {number} meters - Distance in meters
+ * @param {boolean} useImperial - If true, use feet/miles; if false, use meters/km
+ * @returns {string} Formatted distance string
+ */
+export function formatDistance(meters, useImperial = false) {
+  if (useImperial) {
+    const feet = metersToFeet(meters);
+    if (feet < FEET_PER_MILE / 4) {
+      return `${Math.round(feet)}ft`;
+    }
+    const miles = feet / FEET_PER_MILE;
+    if (miles >= 10) {
+      return `${Math.round(miles)}mi`;
+    }
+    return `${miles.toFixed(1)}mi`;
+  }
+
+  if (meters < 1000) {
+    return `${Math.round(meters)}m`;
+  }
+  const km = meters / 1000;
+  if (km >= 10) {
+    return `${Math.round(km)}km`;
+  }
+  return `${km.toFixed(1)}km`;
+}
+
+/**
+ * Format radius for game settings (supports global scale)
+ * @param {number} meters - Radius in meters
+ * @param {boolean} useImperial - If true, use feet/miles; if false, use meters/km
+ * @returns {string} Formatted radius string
+ */
+export function formatRadius(meters, useImperial = false) {
+  if (meters >= 20015000) return '🌍 Global';
+
+  if (useImperial) {
+    const feet = metersToFeet(meters);
+    const miles = metersToMiles(meters);
+
+    if (miles >= 1000) {
+      return `${(miles / 1000).toFixed(0)}K mi`;
+    }
+    if (miles >= 1) {
+      return `${miles >= 10 ? Math.round(miles) : miles.toFixed(1)} mi`;
+    }
+    if (feet >= 1000) {
+      return `${(feet / 1000).toFixed(1)}K ft`;
+    }
+    return `${Math.round(feet)}ft`;
+  }
+
+  if (meters >= 1000000) {
+    return `${(meters / 1000000).toFixed(0)}K km`;
+  }
+  if (meters >= 1000) {
+    return `${(meters / 1000).toFixed(meters >= 10000 ? 0 : 1)} km`;
+  }
+  return `${meters}m`;
+}
+
 /**
  * Generate a unique ID
  * @returns {string} Random ID string

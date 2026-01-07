@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
-import { getDistance } from '../../shared/utils';
+import { getDistance, formatDistance } from '../../shared/utils';
+import { useStore } from '../store';
 
 // Memoized player list item
 const PlayerListItem = memo(function PlayerListItem({
@@ -13,6 +14,7 @@ const PlayerListItem = memo(function PlayerListItem({
   isCurrentUser,
   currentUserLocation,
   showDistance,
+  useImperial,
   onSelect,
   onTag,
   style,
@@ -35,13 +37,6 @@ const PlayerListItem = memo(function PlayerListItem({
     player.location?.lat,
     player.location?.lng,
   ]);
-
-  const formatDistance = (meters) => {
-    if (meters < 1000) {
-      return `${Math.round(meters)}m`;
-    }
-    return `${(meters / 1000).toFixed(1)}km`;
-  };
 
   return (
     <div
@@ -70,7 +65,7 @@ const PlayerListItem = memo(function PlayerListItem({
           </div>
           {showDistance && distance !== null && (
             <span className="text-sm text-white/50">
-              {formatDistance(distance)} away
+              {formatDistance(distance, useImperial)} away
             </span>
           )}
         </div>
@@ -122,6 +117,7 @@ export function VirtualPlayerList({
   const containerRef = useRef(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(maxHeight);
+  const useImperial = useStore((state) => state.settings?.useImperial ?? false);
 
   // Sort players: current user first, then IT, then by name
   const sortedPlayers = useMemo(() => {
@@ -224,6 +220,7 @@ export function VirtualPlayerList({
             isCurrentUser={player.id === currentUserId}
             currentUserLocation={currentUserLocation}
             showDistance={showDistance}
+            useImperial={useImperial}
             onSelect={onPlayerSelect}
             onTag={onTag}
             style={{}}
@@ -250,6 +247,7 @@ export function VirtualPlayerList({
             isCurrentUser={player.id === currentUserId}
             currentUserLocation={currentUserLocation}
             showDistance={showDistance}
+            useImperial={useImperial}
             onSelect={onPlayerSelect}
             onTag={onTag}
             style={style}

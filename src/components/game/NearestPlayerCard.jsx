@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
-import { isInNoTagZone } from '../../store';
+import { isInNoTagZone, useStore } from '../../store';
+import { formatDistance } from '../../../shared/utils';
 
 /**
  * NearestPlayerCard - Shows info about the nearest taggable player
@@ -14,6 +15,7 @@ const NearestPlayerCard = memo(function NearestPlayerCard({
   tagCheck,
   noTagZones,
 }) {
+  const useImperial = useStore((state) => state.settings?.useImperial ?? false);
   if (!nearestPlayer) return null;
 
   // Check if this is the freeze tag unfreeze scenario
@@ -47,9 +49,7 @@ const NearestPlayerCard = memo(function NearestPlayerCard({
           </div>
           <div className={`text-right ${inTagRange && tagCheck.allowed ? 'text-neon-orange' : isUnfreezeMode ? 'text-blue-400' : ''}`}>
             <p className="font-bold">
-              {nearestDistance < 1000
-                ? `${Math.round(nearestDistance)}m`
-                : `${(nearestDistance / 1000).toFixed(1)}km`}
+              {formatDistance(nearestDistance, useImperial)}
             </p>
             {inTagRange && tagCheck.allowed && (
               <p className="text-xs text-neon-orange animate-pulse">In range!</p>

@@ -124,6 +124,117 @@ export function formatInterval(ms: number): string {
 }
 
 // ============================================
+// Distance Formatting (Metric/Imperial)
+// ============================================
+
+// Conversion constants
+const METERS_PER_FOOT = 0.3048;
+const METERS_PER_MILE = 1609.344;
+const METERS_PER_YARD = 0.9144;
+const FEET_PER_MILE = 5280;
+
+/**
+ * Convert meters to feet
+ */
+export function metersToFeet(meters: number): number {
+  return meters / METERS_PER_FOOT;
+}
+
+/**
+ * Convert meters to miles
+ */
+export function metersToMiles(meters: number): number {
+  return meters / METERS_PER_MILE;
+}
+
+/**
+ * Convert meters to yards
+ */
+export function metersToYards(meters: number): number {
+  return meters / METERS_PER_YARD;
+}
+
+/**
+ * Format distance for display with metric or imperial units
+ * @param meters - Distance in meters
+ * @param useImperial - If true, use feet/miles; if false, use meters/km
+ * @returns Formatted distance string (e.g., "50m", "1.2km", "150ft", "0.5mi")
+ */
+export function formatDistance(meters: number, useImperial: boolean = false): string {
+  if (useImperial) {
+    const feet = metersToFeet(meters);
+    if (feet < FEET_PER_MILE / 4) {
+      // Less than 0.25 miles, show in feet
+      return `${Math.round(feet)}ft`;
+    }
+    // Show in miles
+    const miles = feet / FEET_PER_MILE;
+    if (miles >= 10) {
+      return `${Math.round(miles)}mi`;
+    }
+    return `${miles.toFixed(1)}mi`;
+  }
+
+  // Metric
+  if (meters < 1000) {
+    return `${Math.round(meters)}m`;
+  }
+  const km = meters / 1000;
+  if (km >= 10) {
+    return `${Math.round(km)}km`;
+  }
+  return `${km.toFixed(1)}km`;
+}
+
+/**
+ * Format radius for game settings (supports global scale)
+ * @param meters - Radius in meters
+ * @param useImperial - If true, use feet/miles; if false, use meters/km
+ * @returns Formatted radius string
+ */
+export function formatRadius(meters: number, useImperial: boolean = false): string {
+  // Global (half of Earth's circumference)
+  if (meters >= 20015000) return '🌍 Global';
+
+  if (useImperial) {
+    const feet = metersToFeet(meters);
+    const miles = metersToMiles(meters);
+
+    if (miles >= 1000) {
+      return `${(miles / 1000).toFixed(0)}K mi`;
+    }
+    if (miles >= 1) {
+      return `${miles >= 10 ? Math.round(miles) : miles.toFixed(1)} mi`;
+    }
+    if (feet >= 1000) {
+      return `${(feet / 1000).toFixed(1)}K ft`;
+    }
+    return `${Math.round(feet)}ft`;
+  }
+
+  // Metric
+  if (meters >= 1000000) {
+    return `${(meters / 1000000).toFixed(0)}K km`;
+  }
+  if (meters >= 1000) {
+    return `${(meters / 1000).toFixed(meters >= 10000 ? 0 : 1)} km`;
+  }
+  return `${meters}m`;
+}
+
+/**
+ * Get the short unit label for the current unit system
+ * @param useImperial - If true, return imperial unit; if false, return metric
+ * @param large - If true, return large unit (km/mi); if false, return small unit (m/ft)
+ */
+export function getUnitLabel(useImperial: boolean, large: boolean = false): string {
+  if (useImperial) {
+    return large ? 'mi' : 'ft';
+  }
+  return large ? 'km' : 'm';
+}
+
+// ============================================
 // ID Generation
 // ============================================
 
