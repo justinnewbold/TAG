@@ -1,12 +1,13 @@
 import React, { useState, lazy, Suspense } from 'react';
 import Avatar, { hasUrlAvatar } from '../components/Avatar';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Volume2, Vibrate, MapPin, Moon, LogOut, Trash2, User, Info, ChevronRight, Shield, Download, Accessibility, Loader2, ArrowLeft, Check, Play, Ruler } from 'lucide-react';
+import { Bell, Volume2, Vibrate, MapPin, Moon, LogOut, Trash2, User, Info, ChevronRight, Shield, Download, Accessibility, Loader2, ArrowLeft, Check, Play, Ruler, BellRing } from 'lucide-react';
 import { useStore } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import BottomSheet from '../components/BottomSheet';
 import { useSoundHaptic } from '../hooks/useSoundHaptic';
+import { pushNotificationService, NotificationType } from '../services/pushNotificationService';
 
 // Lazy load accessibility settings
 const AccessibilitySettings = lazy(() => import('../components/AccessibilitySettings'));
@@ -23,7 +24,9 @@ function Settings() {
   const [showAvatarSheet, setShowAvatarSheet] = useState(false);
   const [showSoundTest, setShowSoundTest] = useState(false);
   const [testingSound, setTestingSound] = useState(null);
-  
+  const [showNotifPrefs, setShowNotifPrefs] = useState(false);
+  const [notifPrefs, setNotifPrefs] = useState(() => pushNotificationService.preferences);
+
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   
   // Listen for PWA install prompt
@@ -104,6 +107,30 @@ function Settings() {
     { id: 'achievement', label: 'Badge', icon: '🎖️' },
     { id: 'levelup', label: 'Level', icon: '⬆️' },
     { id: 'notification', label: 'Notify', icon: '🔔' },
+  ];
+
+  const toggleNotifPref = (type) => {
+    const newPrefs = { ...notifPrefs, [type]: !notifPrefs[type] };
+    setNotifPrefs(newPrefs);
+    pushNotificationService.savePreferences(newPrefs);
+  };
+
+  // Notification preference labels
+  const notifPrefItems = [
+    { type: NotificationType.FRIEND_REQUEST, label: 'Friend Requests', icon: '👋' },
+    { type: NotificationType.GAME_INVITE, label: 'Game Invites', icon: '🎮' },
+    { type: NotificationType.YOU_ARE_IT, label: "You're IT!", icon: '🏃' },
+    { type: NotificationType.TAG_RECEIVED, label: 'Tagged by Others', icon: '🎯' },
+    { type: NotificationType.IT_NEARBY, label: 'IT Nearby Warnings', icon: '⚠️' },
+    { type: NotificationType.GAME_STARTING, label: 'Game Starting', icon: '⏰' },
+    { type: NotificationType.GAME_ENDED, label: 'Game Ended', icon: '🏁' },
+    { type: NotificationType.ACHIEVEMENT, label: 'Achievements', icon: '🏆' },
+    { type: NotificationType.CHALLENGE_COMPLETE, label: 'Challenges', icon: '✅' },
+    { type: NotificationType.FRIEND_ONLINE, label: 'Friends Online', icon: '🟢' },
+    { type: NotificationType.FRIEND_CREATED_GAME, label: 'Friend Started Game', icon: '🎲' },
+    { type: NotificationType.DAILY_REWARD, label: 'Daily Rewards', icon: '🎁' },
+    { type: NotificationType.SAFE_ZONE_ENDING, label: 'Safe Zone Ending', icon: '🛡️' },
+    { type: NotificationType.LEADERBOARD_RANK, label: 'Leaderboard Updates', icon: '📊' },
   ];
   
   const avatars = ['🏃', '🏃‍♀️', '🏃‍♂️', '🦊', '🐺', '🦁', '🐯', '🦅', '🦈', '🐉', '👤', '⭐', '🎮', '🎯', '🏆', '💎'];
@@ -243,6 +270,52 @@ function Settings() {
           </div>
         )}
         
+        {/* Notification Preferences */}
+        {settings.notifications && (
+          <div className="card overflow-hidden">
+            <button
+              onClick={() => setShowNotifPrefs(!showNotifPrefs)}
+              className="w-full flex items-center gap-4 p-4 active:bg-white/5 transition-colors"
+            >
+              <div className="touch-target-48 flex items-center justify-center">
+                <BellRing className="w-6 h-6 text-neon-cyan" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-medium">Notification Preferences</p>
+                <p className="text-xs text-white/50">Choose which alerts you receive</p>
+              </div>
+              <ChevronRight className={`w-6 h-6 text-white/40 transition-transform ${showNotifPrefs ? 'rotate-90' : ''}`} />
+            </button>
+
+            {showNotifPrefs && (
+              <div className="px-4 pb-4 space-y-1">
+                {notifPrefItems.map(({ type, label, icon }) => (
+                  <button
+                    key={type}
+                    onClick={() => toggleNotifPref(type)}
+                    className="w-full flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <span className="text-lg w-6 text-center">{icon}</span>
+                    <span className="flex-1 text-left text-sm">{label}</span>
+                    <div
+                      className={`w-10 h-6 rounded-full transition-all relative ${
+                        notifPrefs[type] ? 'bg-neon-cyan' : 'bg-white/20'
+                      }`}
+                    >
+                      <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                        notifPrefs[type] ? 'left-4' : 'left-0.5'
+                      }`} />
+                    </div>
+                  </button>
+                ))}
+                <p className="text-xs text-white/30 mt-3 text-center pt-2">
+                  Toggle notifications you want to receive
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* GPS & Privacy */}
         <div className="card overflow-hidden">
           <h3 className="text-xs font-semibold text-white/40 uppercase tracking-wider px-4 pt-4 pb-2">Location & Privacy</h3>

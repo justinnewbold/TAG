@@ -14,6 +14,7 @@ export const LeaderboardType = {
   LONGEST_SURVIVAL: 'longest_survival',
   GAMES_PLAYED: 'games_played',
   FASTEST_TAG: 'fastest_tag',
+  DISTANCE_TRAVELED: 'distance_traveled',
 };
 
 // Leaderboard periods
@@ -239,6 +240,7 @@ class LeaderboardService {
       [LeaderboardType.LONGEST_SURVIVAL]: 'Longest Survival',
       [LeaderboardType.GAMES_PLAYED]: 'Games Played',
       [LeaderboardType.FASTEST_TAG]: 'Fastest Tag',
+      [LeaderboardType.DISTANCE_TRAVELED]: 'Distance Traveled',
     };
     return labels[type] || type;
   }

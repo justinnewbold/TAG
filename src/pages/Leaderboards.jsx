@@ -1,21 +1,24 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import Avatar from '../components/Avatar';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trophy, Target, Shield, Clock, Medal, Crown, Users, RefreshCw, Share2 } from 'lucide-react';
+import { ArrowLeft, Trophy, Target, Shield, Clock, Medal, Crown, Users, RefreshCw, Share2, Globe, UserCheck, Route } from 'lucide-react';
 import { useStore } from '../store';
 import { useSwipe, usePullToRefresh } from '../hooks/useGestures';
+import { formatDistance } from '../../shared/utils';
 
 function Leaderboards() {
   const navigate = useNavigate();
-  const { games, user, friends } = useStore();
-  const [activeTab, setActiveTab] = useState('allTime');
+  const { games, user, friends, settings } = useStore();
+  const useImperial = settings?.useImperial ?? false;
   const [activeBoard, setActiveBoard] = useState('wins');
+  const [showFriendsOnly, setShowFriendsOnly] = useState(false);
+  const [timePeriod, setTimePeriod] = useState('allTime'); // allTime, weekly, daily
   
   // Swipe gestures
   const swipeHandlers = useSwipe({
     onSwipeRight: () => navigate(-1),
     onSwipeLeft: () => {
-      const boards = ['wins', 'tags', 'survival', 'games'];
+      const boards = ['wins', 'tags', 'survival', 'games', 'distance'];
       const currentIndex = boards.indexOf(activeBoard);
       if (currentIndex < boards.length - 1) {
         setActiveBoard(boards[currentIndex + 1]);
@@ -23,6 +26,13 @@ function Leaderboards() {
     },
     threshold: 80,
   });
+
+  // Get friend IDs for filtering
+  const friendIds = useMemo(() => {
+    const ids = new Set(friends?.map(f => f.id) || []);
+    if (user?.id) ids.add(user.id); // Include self in friends view
+    return ids;
+  }, [friends, user?.id]);
   
   // Pull to refresh
   const handleRefresh = useCallback(async () => {
@@ -31,56 +41,81 @@ function Leaderboards() {
   
   const { pullHandlers, isPulling, isRefreshing, pullProgress } = usePullToRefresh(handleRefresh);
   
-  // Calculate player stats from all games
-  const calculatePlayerStats = () => {
+  // Get time filter cutoff
+  const getTimeCutoff = useCallback(() => {
+    const now = Date.now();
+    switch (timePeriod) {
+      case 'daily': return now - 24 * 60 * 60 * 1000;
+      case 'weekly': return now - 7 * 24 * 60 * 60 * 1000;
+      default: return 0; // allTime
+    }
+  }, [timePeriod]);
+
+  // Calculate player stats from games with filters
+  const allPlayerStats = useMemo(() => {
     const playerStats = {};
-    
-    games.filter(g => g.status === 'ended').forEach((game) => {
-      game.players?.forEach((player) => {
-        if (!playerStats[player.id]) {
-          playerStats[player.id] = {
-            id: player.id,
-            name: player.name,
-            avatar: player.avatar || '👤',
-            gamesPlayed: 0,
-            wins: 0,
-            tags: 0,
-            timesTagged: 0,
-            totalSurvivalTime: 0,
-          };
-        }
-        
-        playerStats[player.id].gamesPlayed += 1;
-        
-        if (game.winnerId === player.id) {
-          playerStats[player.id].wins += 1;
-        }
-        
-        // Count tags
-        const playerTags = game.tags?.filter(t => t.taggerId === player.id).length || 0;
-        const playerTagged = game.tags?.filter(t => t.taggedId === player.id).length || 0;
-        playerStats[player.id].tags += playerTags;
-        playerStats[player.id].timesTagged += playerTagged;
-        
-        // Survival time
-        if (player.finalSurvivalTime) {
-          playerStats[player.id].totalSurvivalTime += player.finalSurvivalTime;
-        }
+    const timeCutoff = getTimeCutoff();
+
+    games
+      .filter(g => g.status === 'ended')
+      .filter(g => !timeCutoff || (g.endedAt || g.createdAt) >= timeCutoff)
+      .forEach((game) => {
+        game.players?.forEach((player) => {
+          if (!playerStats[player.id]) {
+            playerStats[player.id] = {
+              id: player.id,
+              name: player.name,
+              avatar: player.avatar || '👤',
+              gamesPlayed: 0,
+              wins: 0,
+              tags: 0,
+              timesTagged: 0,
+              totalSurvivalTime: 0,
+              totalDistance: 0,
+            };
+          }
+
+          playerStats[player.id].gamesPlayed += 1;
+
+          if (game.winnerId === player.id) {
+            playerStats[player.id].wins += 1;
+          }
+
+          // Count tags
+          const playerTags = game.tags?.filter(t => t.taggerId === player.id).length || 0;
+          const playerTagged = game.tags?.filter(t => t.taggedId === player.id).length || 0;
+          playerStats[player.id].tags += playerTags;
+          playerStats[player.id].timesTagged += playerTagged;
+
+          // Survival time
+          if (player.finalSurvivalTime) {
+            playerStats[player.id].totalSurvivalTime += player.finalSurvivalTime;
+          }
+
+          // Distance traveled (in meters)
+          if (player.distanceTraveled) {
+            playerStats[player.id].totalDistance += player.distanceTraveled;
+          }
+        });
       });
-    });
-    
+
     return Object.values(playerStats);
-  };
+  }, [games, getTimeCutoff]);
+
+  // Filter for friends if enabled
+  const filteredStats = useMemo(() => {
+    if (!showFriendsOnly) return allPlayerStats;
+    return allPlayerStats.filter(p => friendIds.has(p.id));
+  }, [allPlayerStats, showFriendsOnly, friendIds]);
   
-  const allPlayerStats = calculatePlayerStats();
-  
-  // Sort for different leaderboards
-  const leaderboards = {
-    wins: [...allPlayerStats].sort((a, b) => b.wins - a.wins),
-    tags: [...allPlayerStats].sort((a, b) => b.tags - a.tags),
-    survival: [...allPlayerStats].sort((a, b) => b.totalSurvivalTime - a.totalSurvivalTime),
-    games: [...allPlayerStats].sort((a, b) => b.gamesPlayed - a.gamesPlayed),
-  };
+  // Sort for different leaderboards (using filtered stats)
+  const leaderboards = useMemo(() => ({
+    wins: [...filteredStats].sort((a, b) => b.wins - a.wins),
+    tags: [...filteredStats].sort((a, b) => b.tags - a.tags),
+    survival: [...filteredStats].sort((a, b) => b.totalSurvivalTime - a.totalSurvivalTime),
+    games: [...filteredStats].sort((a, b) => b.gamesPlayed - a.gamesPlayed),
+    distance: [...filteredStats].sort((a, b) => b.totalDistance - a.totalDistance),
+  }), [filteredStats]);
   
   const formatTime = (ms) => {
     const seconds = Math.floor(ms / 1000);
@@ -94,25 +129,28 @@ function Leaderboards() {
       case 'tags': return player.tags;
       case 'survival': return formatTime(player.totalSurvivalTime);
       case 'games': return player.gamesPlayed;
+      case 'distance': return formatDistance(player.totalDistance, useImperial);
       default: return 0;
     }
   };
-  
+
   const getStatLabel = () => {
     switch (activeBoard) {
       case 'wins': return 'Wins';
       case 'tags': return 'Tags';
       case 'survival': return 'Survived';
       case 'games': return 'Games';
+      case 'distance': return 'Distance';
       default: return '';
     }
   };
-  
+
   const boardIcons = {
     wins: Trophy,
     tags: Target,
     survival: Shield,
     games: Users,
+    distance: Route,
   };
   
   const BoardIcon = boardIcons[activeBoard];
@@ -137,7 +175,7 @@ function Leaderboards() {
       
       {/* Header - Compact */}
       <div className="sticky top-0 z-40 bg-dark-900/95 backdrop-blur-sm p-4 border-b border-white/10">
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 mb-3">
           <button
             onClick={() => navigate(-1)}
             className="p-3 hover:bg-white/10 rounded-xl transition-colors min-h-[48px] min-w-[48px] flex items-center justify-center"
@@ -147,13 +185,46 @@ function Leaderboards() {
           </button>
           <div className="flex-1">
             <h1 className="text-xl font-display font-bold">Leaderboards</h1>
-            <p className="text-xs text-white/50">See who's on top</p>
+            <p className="text-xs text-white/50">
+              {showFriendsOnly ? 'Friends only' : 'Everyone'} • {timePeriod === 'allTime' ? 'All time' : timePeriod === 'weekly' ? 'This week' : 'Today'}
+            </p>
           </div>
           {isRefreshing && (
             <RefreshCw className="w-5 h-5 text-neon-cyan animate-spin" />
           )}
         </div>
-        
+
+        {/* Scope and Time Period Filters */}
+        <div className="flex gap-2 mb-3">
+          {/* Global / Friends Toggle */}
+          <button
+            onClick={() => setShowFriendsOnly(!showFriendsOnly)}
+            className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-all ${
+              showFriendsOnly
+                ? 'bg-neon-purple/20 border border-neon-purple/50 text-neon-purple'
+                : 'bg-white/5 border border-white/10 text-white/60'
+            }`}
+          >
+            {showFriendsOnly ? <UserCheck className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
+            {showFriendsOnly ? 'Friends' : 'Global'}
+          </button>
+
+          {/* Time Period Pills */}
+          {['daily', 'weekly', 'allTime'].map((period) => (
+            <button
+              key={period}
+              onClick={() => setTimePeriod(period)}
+              className={`py-2 px-3 rounded-xl text-xs font-medium transition-all ${
+                timePeriod === period
+                  ? 'bg-neon-cyan/20 border border-neon-cyan/50 text-neon-cyan'
+                  : 'bg-white/5 border border-white/10 text-white/60'
+              }`}
+            >
+              {period === 'daily' ? 'Day' : period === 'weekly' ? 'Week' : 'All'}
+            </button>
+          ))}
+        </div>
+
         {/* Board Type Tabs - Large touch targets, horizontal scroll */}
         <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
           {[
@@ -161,6 +232,7 @@ function Leaderboards() {
             { key: 'tags', icon: Target, label: 'Tags' },
             { key: 'survival', icon: Shield, label: 'Survival' },
             { key: 'games', icon: Users, label: 'Games' },
+            { key: 'distance', icon: Route, label: 'Distance' },
           ].map(({ key, icon: Icon, label }) => (
             <button
               key={key}
@@ -291,34 +363,35 @@ function Leaderboards() {
       </div>
       
       {/* Your Rank Card - Fixed at bottom for easy access */}
-      {user && allPlayerStats.length > 0 && (
+      {user && filteredStats.length > 0 && (
         <div className="fixed bottom-20 left-4 right-4 z-40">
           <div className="card-glow p-4 bg-dark-800/95 backdrop-blur-sm">
             <div className="flex items-center gap-3 mb-3">
               <Medal className="w-5 h-5 text-neon-cyan" />
               <span className="font-semibold">Your Rankings</span>
+              {showFriendsOnly && <span className="text-xs text-neon-purple bg-neon-purple/20 px-2 py-0.5 rounded-full">Friends</span>}
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              {['wins', 'tags', 'survival', 'games'].map((board) => {
+            <div className="grid grid-cols-5 gap-1.5">
+              {['wins', 'tags', 'survival', 'games', 'distance'].map((board) => {
                 const sorted = leaderboards[board];
                 const userRank = sorted.findIndex(p => p.id === user.id) + 1;
                 const Icon = boardIcons[board];
-                
+
                 return (
                   <button
                     key={board}
                     onClick={() => setActiveBoard(board)}
-                    className={`text-center p-3 rounded-xl min-h-[64px] transition-all ${
-                      activeBoard === board 
-                        ? 'bg-neon-cyan/20 border border-neon-cyan/50' 
+                    className={`text-center p-2 rounded-xl min-h-[60px] transition-all ${
+                      activeBoard === board
+                        ? 'bg-neon-cyan/20 border border-neon-cyan/50'
                         : 'bg-white/5'
                     }`}
                   >
                     <Icon className={`w-4 h-4 mx-auto mb-1 ${activeBoard === board ? 'text-neon-cyan' : 'text-white/40'}`} />
-                    <p className={`text-lg font-bold ${activeBoard === board ? 'text-neon-cyan' : ''}`}>
+                    <p className={`text-base font-bold ${activeBoard === board ? 'text-neon-cyan' : ''}`}>
                       {userRank > 0 ? `#${userRank}` : '-'}
                     </p>
-                    <p className="text-xs text-white/40 capitalize">{board}</p>
+                    <p className="text-[10px] text-white/40 capitalize truncate">{board === 'distance' ? 'Dist' : board}</p>
                   </button>
                 );
               })}

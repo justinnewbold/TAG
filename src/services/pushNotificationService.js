@@ -17,6 +17,10 @@ export const NotificationType = {
   GAME_ENDED: 'game_ended',
   CHALLENGE_COMPLETE: 'challenge_complete',
   DAILY_REWARD: 'daily_reward',
+  IT_NEARBY: 'it_nearby',
+  FRIEND_CREATED_GAME: 'friend_created_game',
+  SAFE_ZONE_ENDING: 'safe_zone_ending',
+  LEADERBOARD_RANK: 'leaderboard_rank',
 };
 
 class PushNotificationService {
@@ -53,6 +57,10 @@ class PushNotificationService {
       [NotificationType.GAME_ENDED]: true,
       [NotificationType.CHALLENGE_COMPLETE]: true,
       [NotificationType.DAILY_REWARD]: true,
+      [NotificationType.IT_NEARBY]: true,
+      [NotificationType.FRIEND_CREATED_GAME]: true,
+      [NotificationType.SAFE_ZONE_ENDING]: true,
+      [NotificationType.LEADERBOARD_RANK]: true,
     };
   }
 
@@ -276,9 +284,32 @@ class PushNotificationService {
 
     itNearby: (distance) => ({
       title: '⚠️ IT is Near!',
-      body: `IT is only ${distance}m away! Run!`,
-      type: NotificationType.YOU_ARE_IT,
+      body: `IT is only ${distance} away! Run!`,
+      type: NotificationType.IT_NEARBY,
       data: { action: 'open_game' },
+    }),
+
+    friendCreatedGame: (friendName, gameCode) => ({
+      title: '🎮 Friend Started a Game',
+      body: `${friendName} created a new game! Join them now.`,
+      type: NotificationType.FRIEND_CREATED_GAME,
+      data: { action: 'join_game', gameCode },
+    }),
+
+    safeZoneEnding: (zoneName, timeLeft) => ({
+      title: '🛡️ Safe Zone Ending Soon',
+      body: `${zoneName || 'Your safe zone'} expires in ${timeLeft}!`,
+      type: NotificationType.SAFE_ZONE_ENDING,
+      data: { action: 'open_game' },
+    }),
+
+    leaderboardRank: (category, rank, change) => ({
+      title: change > 0 ? '📈 Rank Up!' : '🏆 Leaderboard Update',
+      body: change > 0
+        ? `You moved up to #${rank} in ${category}!`
+        : `You're now #${rank} in ${category}`,
+      type: NotificationType.LEADERBOARD_RANK,
+      data: { action: 'view_leaderboard', category },
     }),
   };
 
