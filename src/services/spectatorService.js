@@ -1,10 +1,27 @@
 /**
  * Enhanced Spectator Mode Service
- * Live commentary, multi-camera following, replay sharing
+ * Live commentary, multi-camera following, AI predictions, replay sharing
  */
 
 import { api } from './api';
 import { socketService } from './socket';
+import { getDistance } from '../../shared/utils';
+
+// Prediction types
+export const PredictionType = {
+  NEXT_TAG: 'next_tag',
+  WINNER: 'winner',
+  TAG_TIME: 'tag_time',
+  SURVIVOR: 'survivor',
+};
+
+// View modes
+export const ViewMode = {
+  OVERVIEW: 'overview',
+  FOLLOW_IT: 'follow_it',
+  FOLLOW_PLAYER: 'follow_player',
+  DRAMA_CAM: 'drama_cam',
+};
 
 // Event types for commentary
 export const GAME_EVENT_TYPES = {
@@ -77,6 +94,18 @@ class SpectatorService {
     this.eventListeners = new Map();
     this.isSpectating = false;
     this.autoFollow = true; // Auto-follow action
+    this.viewMode = ViewMode.DRAMA_CAM;
+
+    // AI Predictions
+    this.predictions = new Map();
+    this.currentPredictions = [];
+    this.predictionHistory = [];
+    this.userPoints = 100; // Starting points for predictions
+    this.playerStats = new Map();
+
+    // Excitement tracking
+    this.excitementLevel = 50;
+    this.dramaFocus = null;
   }
 
   /**
@@ -288,6 +317,237 @@ class SpectatorService {
   getFollowedPlayer() {
     if (!this.followedPlayerId) return null;
     return this.getPlayer(this.followedPlayerId);
+  }
+
+  // ============ AI PREDICTIONS ============
+
+  /**
+   * Analyze game state and generate predictions
+   */
+  analyzeAndPredict(gameState) {
+    if (!gameState?.players) return;
+
+    const players = gameState.players;
+    const itPlayer = players.find(p => p.id === gameState.itPlayerId);
+    const runners = players.filter(p => p.id !== gameState.itPlayerId);
+
+    if (!itPlayer) return;
+
+    // Calculate distances and probabilities
+    const analysis = runners.map(runner => {
+      const distance = runner.location && itPlayer.location
+        ? getDistance(runner.location, itPlayer.location)
+        : Infinity;
+
+      const stats = this.playerStats.get(runner.id) || { evasionScore: 50 };
+      let tagProbability = Math.max(0, 100 - distance * 2);
+      tagProbability -= stats.evasionScore * 0.3;
+
+      return {
+        player: runner,
+        distance,
+        tagProbability: Math.max(0, Math.min(100, tagProbability)),
+      };
+    }).sort((a, b) => a.distance - b.distance);
+
+    const closest = analysis[0];
+
+    // Update excitement level
+    if (closest) {
+      if (closest.distance < 15) this.excitementLevel = 100;
+      else if (closest.distance < 30) this.excitementLevel = 85;
+      else if (closest.distance < 50) this.excitementLevel = 70;
+      else if (closest.distance < 100) this.excitementLevel = 50;
+      else this.excitementLevel = 30;
+    }
+
+    // Generate predictions
+    this.currentPredictions = [];
+
+    // Next tag prediction
+    if (closest && closest.tagProbability > 20) {
+      this.currentPredictions.push({
+        type: PredictionType.NEXT_TAG,
+        prediction: closest.player.name,
+        confidence: Math.round(closest.tagProbability),
+        reasoning: `${Math.round(closest.distance)}m from IT`,
+        odds: this.calculateOdds(closest.tagProbability),
+      });
+    }
+
+    // Tag timing prediction
+    if (closest && closest.distance < 30) {
+      const timeEstimate = closest.distance < 15 ? 'Under 10s' : 'Under 30s';
+      this.currentPredictions.push({
+        type: PredictionType.TAG_TIME,
+        prediction: timeEstimate,
+        confidence: closest.distance < 15 ? 85 : 60,
+        reasoning: 'Active pursuit detected',
+        odds: closest.distance < 15 ? 1.2 : 1.8,
+      });
+    }
+
+    // Winner prediction
+    const winnerPred = this.predictWinner(players, gameState.itPlayerId);
+    if (winnerPred) {
+      this.currentPredictions.push(winnerPred);
+    }
+
+    // Drama cam auto-focus
+    if (this.viewMode === ViewMode.DRAMA_CAM) {
+      this.updateDramaFocus(itPlayer, closest, analysis);
+    }
+
+    this.emitEvent('predictions', this.currentPredictions);
+    this.emitEvent('excitement', this.excitementLevel);
+  }
+
+  /**
+   * Calculate betting odds from probability
+   */
+  calculateOdds(probability) {
+    if (probability <= 0) return 10.0;
+    const odds = (100 / probability);
+    return Math.round(odds * 10) / 10;
+  }
+
+  /**
+   * Predict likely winner
+   */
+  predictWinner(players, currentItId) {
+    const scores = players.map(player => {
+      const stats = this.playerStats.get(player.id) || {};
+      let score = 50;
+
+      score += (stats.evasionScore || 0) * 0.5;
+      score -= (stats.tagsReceived || 0) * 5;
+      score += ((stats.tagsMade || 0) - (stats.tagsReceived || 0)) * 3;
+
+      // Non-IT players have survival advantage
+      if (player.id !== currentItId) score += 10;
+
+      return { player, score };
+    }).sort((a, b) => b.score - a.score);
+
+    if (scores.length < 2) return null;
+
+    const confidence = Math.min(85, 50 + (scores[0].score - scores[1].score));
+
+    return {
+      type: PredictionType.WINNER,
+      prediction: scores[0].player.name,
+      confidence: Math.round(confidence),
+      reasoning: 'Based on performance metrics',
+      odds: this.calculateOdds(confidence),
+    };
+  }
+
+  /**
+   * Update drama camera focus
+   */
+  updateDramaFocus(itPlayer, closest, analysis) {
+    let newFocus;
+
+    if (closest && closest.distance < 20) {
+      newFocus = { mode: 'chase', it: itPlayer, target: closest.player };
+    } else if (analysis.filter(a => a.distance < 80).length > 2) {
+      newFocus = { mode: 'overview' };
+    } else {
+      newFocus = { mode: 'follow', player: itPlayer };
+    }
+
+    if (JSON.stringify(newFocus) !== JSON.stringify(this.dramaFocus)) {
+      this.dramaFocus = newFocus;
+      this.emitEvent('camera', newFocus);
+    }
+  }
+
+  /**
+   * Make a prediction bet
+   */
+  placeBet(predictionType, choice, points = 10) {
+    if (this.userPoints < points) return null;
+
+    const prediction = this.currentPredictions.find(p => p.type === predictionType);
+    if (!prediction) return null;
+
+    const bet = {
+      id: `bet_${Date.now()}`,
+      type: predictionType,
+      choice,
+      points,
+      odds: prediction.odds,
+      timestamp: Date.now(),
+      resolved: false,
+    };
+
+    this.userPoints -= points;
+    this.predictions.set(bet.id, bet);
+    this.emitEvent('bet_placed', bet);
+
+    return bet;
+  }
+
+  /**
+   * Resolve a bet
+   */
+  resolveBet(betId, correct) {
+    const bet = this.predictions.get(betId);
+    if (!bet || bet.resolved) return;
+
+    bet.resolved = true;
+    bet.correct = correct;
+
+    if (correct) {
+      const winnings = Math.round(bet.points * bet.odds);
+      this.userPoints += winnings;
+      this.emitEvent('bet_won', { bet, winnings });
+    } else {
+      this.emitEvent('bet_lost', { bet });
+    }
+
+    this.predictionHistory.push(bet);
+  }
+
+  /**
+   * Get current predictions
+   */
+  getPredictions() {
+    return this.currentPredictions;
+  }
+
+  /**
+   * Get user betting stats
+   */
+  getBettingStats() {
+    const total = this.predictionHistory.length;
+    const wins = this.predictionHistory.filter(b => b.correct).length;
+
+    return {
+      points: this.userPoints,
+      totalBets: total,
+      wins,
+      accuracy: total > 0 ? Math.round((wins / total) * 100) : 0,
+    };
+  }
+
+  /**
+   * Get excitement description
+   */
+  getExcitementLabel() {
+    if (this.excitementLevel >= 90) return '🔥 INSANE!';
+    if (this.excitementLevel >= 75) return '⚡ ELECTRIC!';
+    if (this.excitementLevel >= 60) return '😱 INTENSE!';
+    if (this.excitementLevel >= 40) return '👀 Heating up...';
+    return '😌 Calm';
+  }
+
+  /**
+   * Set view mode
+   */
+  setViewMode(mode) {
+    this.viewMode = mode;
+    this.emitEvent('view_mode', mode);
   }
 
   // ============ REPLAY SHARING ============
