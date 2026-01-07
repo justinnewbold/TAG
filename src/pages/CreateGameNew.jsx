@@ -1,20 +1,23 @@
-import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Circle, Marker, useMap, useMapEvents, Polygon } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import {
-  ArrowLeft, Clock, Target, Users, Timer, Gamepad2, MapPin,
-  Plus, X, Shield, Map, Crosshair, Loader2, Zap, ChevronDown,
-  ChevronUp, Settings, Globe, Lock, UserCheck, Play, Eye,
-  Maximize2, Minimize2, Navigation, LocateFixed, Layers
+  ArrowLeft, MapPin, Loader2, Settings, Maximize2, Minimize2, LocateFixed, Target, Map
 } from 'lucide-react';
 import { useStore, useSounds, GAME_MODES } from '../store';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import BottomSheet from '../components/BottomSheet';
-
-// Lazy load boundary editor
-const BoundaryEditor = lazy(() => import('../components/BoundaryEditor'));
+import {
+  QuickPresets,
+  GameModeSelector,
+  RadiusSlider,
+  MaxPlayersSelector,
+  GameNameInput,
+  CreateActionBar,
+  AdvancedSettingsContent,
+} from '../components/create';
 
 // Map controller for dynamic updates
 function MapController({ center, zoom, bounds }) {
@@ -94,7 +97,7 @@ function CreateGame() {
   });
 
   // Presets for quick setup
-  const GAME_PRESETS = [
+  const GAME_PRESETS = useMemo(() => [
     {
       id: 'quick',
       name: 'Quick',
@@ -123,7 +126,7 @@ function CreateGame() {
       desc: 'Worldwide',
       settings: { tagRadius: 1000, playAreaRadius: 20015000, maxPlayers: 100, duration: 7 * 24 * 60 * 60 * 1000 },
     },
-  ];
+  ], []);
 
   // Get user location on mount
   useEffect(() => {
@@ -153,17 +156,17 @@ function CreateGame() {
   }, []);
 
   // Apply preset
-  const applyPreset = (presetId) => {
+  const applyPreset = useCallback((presetId) => {
     const preset = GAME_PRESETS.find(p => p.id === presetId);
     if (preset) {
       setSelectedPreset(presetId);
       setSettings(prev => ({ ...prev, ...preset.settings }));
       vibrate([30]);
     }
-  };
+  }, [GAME_PRESETS, vibrate]);
 
   // Calculate appropriate zoom level for map
-  const getZoomForRadius = (radius) => {
+  const getZoomForRadius = useCallback((radius) => {
     if (radius >= 10000000) return 2;
     if (radius >= 1000000) return 4;
     if (radius >= 100000) return 6;
@@ -172,18 +175,18 @@ function CreateGame() {
     if (radius >= 500) return 14;
     if (radius >= 100) return 16;
     return 17;
-  };
+  }, []);
 
   // Format radius for display
-  const formatRadius = (meters) => {
+  const formatRadius = useCallback((meters) => {
     if (meters >= 20015000) return '🌍 Global';
     if (meters >= 1000000) return `${(meters / 1000000).toFixed(0)}K km`;
     if (meters >= 1000) return `${(meters / 1000).toFixed(meters >= 10000 ? 0 : 1)} km`;
     return `${meters}m`;
-  };
+  }, []);
 
   // Handle game creation
-  const handleCreate = async () => {
+  const handleCreate = useCallback(async () => {
     if (isCreating) return;
     setIsCreating(true);
     setError('');
@@ -220,10 +223,10 @@ function CreateGame() {
     } finally {
       setIsCreating(false);
     }
-  };
+  }, [isCreating, settings, userLocation, vibrate, syncGameState, navigate, createGame]);
 
   // Re-center map to user location
-  const recenterMap = () => {
+  const recenterMap = useCallback(() => {
     if (navigator.geolocation) {
       setIsLocating(true);
       navigator.geolocation.getCurrentPosition(
@@ -238,7 +241,47 @@ function CreateGame() {
         { enableHighAccuracy: true }
       );
     }
-  };
+  }, []);
+
+  // Quick radius options for sliders
+  const tagRadiusOptions = useMemo(() => [
+    { value: 25, label: '25m' },
+    { value: 50, label: '50m' },
+    { value: 100, label: '100m' },
+    { value: 250, label: '250m' },
+    { value: 500, label: '500m' },
+    { value: 1000, label: '1km' },
+  ], []);
+
+  const playAreaOptions = useMemo(() => [
+    { value: 300, label: '300m' },
+    { value: 500, label: '500m' },
+    { value: 1000, label: '1km' },
+    { value: 5000, label: '5km' },
+    { value: 10000, label: '10km' },
+    { value: 20015000, label: '🌍 No Limit' },
+  ], []);
+
+  // Callbacks for settings updates
+  const handleGameModeChange = useCallback((mode) => {
+    setSettings(prev => ({ ...prev, gameMode: mode }));
+  }, []);
+
+  const handleTagRadiusChange = useCallback((value) => {
+    setSettings(prev => ({ ...prev, tagRadius: value }));
+  }, []);
+
+  const handlePlayAreaChange = useCallback((value) => {
+    setSettings(prev => ({ ...prev, playAreaRadius: value }));
+  }, []);
+
+  const handleMaxPlayersChange = useCallback((value) => {
+    setSettings(prev => ({ ...prev, maxPlayers: value }));
+  }, []);
+
+  const handleGameNameChange = useCallback((value) => {
+    setSettings(prev => ({ ...prev, gameName: value }));
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-dark-900">
@@ -393,175 +436,55 @@ function CreateGame() {
         {/* Settings Section - Scrollable */}
         <div className={`flex-1 overflow-y-auto ${mapExpanded ? 'hidden' : ''}`}>
           <div className="p-4 space-y-4 pb-32">
+            {/* Quick Presets */}
+            <QuickPresets
+              presets={GAME_PRESETS}
+              selectedPreset={selectedPreset}
+              onSelect={applyPreset}
+            />
 
-            {/* Quick Presets - Large Touch Targets */}
-            <div className="grid grid-cols-4 gap-2">
-              {GAME_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  onClick={() => applyPreset(preset.id)}
-                  className={`py-3 px-2 rounded-xl text-center transition-all ${
-                    selectedPreset === preset.id
-                      ? 'bg-neon-purple/20 border-2 border-neon-purple'
-                      : 'bg-white/5 border border-white/10 active:scale-95'
-                  }`}
-                >
-                  <span className="text-2xl block mb-1">{preset.icon}</span>
-                  <span className={`text-xs font-medium ${selectedPreset === preset.id ? 'text-neon-purple' : 'text-white/70'}`}>
-                    {preset.name}
-                  </span>
-                </button>
-              ))}
-            </div>
+            {/* Game Mode */}
+            <GameModeSelector
+              modes={GAME_MODES}
+              selectedMode={settings.gameMode}
+              onSelect={handleGameModeChange}
+            />
 
-            {/* Game Mode - Horizontal Scroll */}
-            <section>
-              <h3 className="text-sm font-medium text-white/60 mb-2 px-1">Game Mode</h3>
-              <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 snap-x">
-                {Object.values(GAME_MODES).slice(0, 6).map((mode) => (
-                  <button
-                    key={mode.id}
-                    onClick={() => setSettings({ ...settings, gameMode: mode.id })}
-                    className={`flex-shrink-0 w-28 p-3 rounded-xl text-center transition-all snap-start ${
-                      settings.gameMode === mode.id
-                        ? 'bg-neon-cyan/20 border-2 border-neon-cyan'
-                        : 'bg-white/5 border border-white/10 active:scale-95'
-                    }`}
-                  >
-                    <span className="text-2xl block mb-1">{mode.icon}</span>
-                    <span className={`text-xs font-medium line-clamp-1 ${settings.gameMode === mode.id ? 'text-neon-cyan' : ''}`}>
-                      {mode.name}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            {/* Tag Radius - Visual Slider */}
-            <section className="bg-white/5 rounded-2xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Target className="w-5 h-5 text-neon-purple" />
-                  <span className="font-medium">Tag Range</span>
-                </div>
-                <span className="text-xl font-bold text-neon-purple">{formatRadius(settings.tagRadius)}</span>
-              </div>
-
-              {/* Large Thumb Slider */}
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={Math.log10(settings.tagRadius) / Math.log10(20015000) * 100}
-                onChange={(e) => {
-                  const logValue = parseFloat(e.target.value) / 100 * Math.log10(20015000);
-                  setSettings({ ...settings, tagRadius: Math.max(10, Math.round(Math.pow(10, logValue))) });
-                }}
-                className="w-full h-3 bg-white/10 rounded-full appearance-none cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, #a855f7 ${Math.log10(settings.tagRadius) / Math.log10(20015000) * 100}%, rgba(255,255,255,0.1) 0%)`
-                }}
-              />
-
-              {/* Quick Select Chips */}
-              <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-                {[25, 50, 100, 250, 500, 1000].map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setSettings({ ...settings, tagRadius: r })}
-                    className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-all flex-shrink-0 ${
-                      settings.tagRadius === r
-                        ? 'bg-neon-purple text-white'
-                        : 'bg-white/10 text-white/70 active:scale-95'
-                    }`}
-                  >
-                    {formatRadius(r)}
-                  </button>
-                ))}
-              </div>
-            </section>
+            {/* Tag Radius */}
+            <RadiusSlider
+              value={settings.tagRadius}
+              onChange={handleTagRadiusChange}
+              min={10}
+              label="Tag Range"
+              icon={Target}
+              color="purple"
+              quickOptions={tagRadiusOptions}
+              formatRadius={formatRadius}
+            />
 
             {/* Play Area */}
-            <section className="bg-white/5 rounded-2xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Map className="w-5 h-5 text-indigo-400" />
-                  <span className="font-medium">Play Area</span>
-                </div>
-                <span className="text-xl font-bold text-indigo-400">{formatRadius(settings.playAreaRadius)}</span>
-              </div>
+            <RadiusSlider
+              value={settings.playAreaRadius}
+              onChange={handlePlayAreaChange}
+              min={100}
+              label="Play Area"
+              icon={Map}
+              color="indigo"
+              quickOptions={playAreaOptions}
+              formatRadius={formatRadius}
+            />
 
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={Math.log10(settings.playAreaRadius) / Math.log10(20015000) * 100}
-                onChange={(e) => {
-                  const logValue = parseFloat(e.target.value) / 100 * Math.log10(20015000);
-                  setSettings({ ...settings, playAreaRadius: Math.max(100, Math.round(Math.pow(10, logValue))) });
-                }}
-                className="w-full h-3 bg-white/10 rounded-full appearance-none cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, #6366f1 ${Math.log10(settings.playAreaRadius) / Math.log10(20015000) * 100}%, rgba(255,255,255,0.1) 0%)`
-                }}
-              />
+            {/* Max Players */}
+            <MaxPlayersSelector
+              value={settings.maxPlayers}
+              onChange={handleMaxPlayersChange}
+            />
 
-              <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-                {[300, 500, 1000, 5000, 10000, 20015000].map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setSettings({ ...settings, playAreaRadius: r })}
-                    className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-all flex-shrink-0 ${
-                      settings.playAreaRadius === r
-                        ? 'bg-indigo-500 text-white'
-                        : 'bg-white/10 text-white/70 active:scale-95'
-                    }`}
-                  >
-                    {r === 20015000 ? '🌍 No Limit' : formatRadius(r)}
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            {/* Players */}
-            <section className="bg-white/5 rounded-2xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-amber-400" />
-                  <span className="font-medium">Max Players</span>
-                </div>
-                <span className="text-xl font-bold text-amber-400">{settings.maxPlayers}</span>
-              </div>
-
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {[4, 6, 8, 10, 15, 20, 50, 100].map((num) => (
-                  <button
-                    key={num}
-                    onClick={() => setSettings({ ...settings, maxPlayers: num })}
-                    className={`min-w-12 h-12 rounded-xl flex items-center justify-center font-bold transition-all flex-shrink-0 ${
-                      settings.maxPlayers === num
-                        ? 'bg-amber-400/20 border-2 border-amber-400 text-amber-400'
-                        : 'bg-white/10 text-white/70 active:scale-95'
-                    }`}
-                  >
-                    {num}
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            {/* Game Name - Simplified */}
-            <section className="bg-white/5 rounded-2xl p-4">
-              <label className="text-sm font-medium text-white/60 mb-2 block">Game Name</label>
-              <input
-                type="text"
-                value={settings.gameName}
-                onChange={(e) => setSettings({ ...settings, gameName: e.target.value })}
-                placeholder="Enter game name"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-neon-cyan"
-                maxLength={30}
-              />
-            </section>
+            {/* Game Name */}
+            <GameNameInput
+              value={settings.gameName}
+              onChange={handleGameNameChange}
+            />
 
             {/* Error */}
             {error && (
@@ -574,34 +497,12 @@ function CreateGame() {
       </main>
 
       {/* Fixed Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-dark-900/95 backdrop-blur-xl border-t border-white/10 p-4 pb-safe">
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowAdvancedSheet(true)}
-            className="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center"
-          >
-            <Settings className="w-6 h-6" />
-          </button>
-
-          <button
-            onClick={handleCreate}
-            disabled={isCreating || !userLocation}
-            className="flex-1 h-14 bg-gradient-to-r from-neon-purple to-neon-cyan rounded-xl flex items-center justify-center gap-3 text-lg font-bold disabled:opacity-50 active:scale-[0.98] transition-transform"
-          >
-            {isCreating ? (
-              <>
-                <Loader2 className="w-6 h-6 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              <>
-                <Play className="w-6 h-6" />
-                Create Game
-              </>
-            )}
-          </button>
-        </div>
-      </div>
+      <CreateActionBar
+        isCreating={isCreating}
+        isDisabled={!userLocation}
+        onSettingsClick={() => setShowAdvancedSheet(true)}
+        onCreate={handleCreate}
+      />
 
       {/* Advanced Settings Sheet */}
       <BottomSheet
@@ -609,143 +510,11 @@ function CreateGame() {
         onClose={() => setShowAdvancedSheet(false)}
         title="Settings"
       >
-        <div className="space-y-4 pb-8">
-          {/* Duration */}
-          <section className="bg-white/5 rounded-2xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Timer className="w-5 h-5 text-orange-400" />
-              <span className="font-medium">Game Duration</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { value: null, label: 'Unlimited' },
-                { value: 30 * 60 * 1000, label: '30 min' },
-                { value: 60 * 60 * 1000, label: '1 hour' },
-                { value: 24 * 60 * 60 * 1000, label: '1 day' },
-                { value: 7 * 24 * 60 * 60 * 1000, label: '1 week' },
-              ].map((opt) => (
-                <button
-                  key={opt.value ?? 'none'}
-                  onClick={() => setSettings({ ...settings, duration: opt.value })}
-                  className={`p-3 rounded-xl text-center transition-all ${
-                    settings.duration === opt.value
-                      ? 'bg-orange-400/20 border-2 border-orange-400 text-orange-400'
-                      : 'bg-white/5 border border-white/10 active:scale-95'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {/* GPS Updates */}
-          <section className="bg-white/5 rounded-2xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-5 h-5 text-cyan-400" />
-              <span className="font-medium">Location Updates</span>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {[
-                { value: 5 * 60 * 1000, label: '5 min' },
-                { value: 15 * 60 * 1000, label: '15 min' },
-                { value: 30 * 60 * 1000, label: '30 min' },
-                { value: 60 * 60 * 1000, label: '1 hour' },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setSettings({ ...settings, gpsInterval: opt.value })}
-                  className={`px-4 py-2 rounded-xl whitespace-nowrap transition-all flex-shrink-0 ${
-                    settings.gpsInterval === opt.value
-                      ? 'bg-cyan-400/20 border-2 border-cyan-400 text-cyan-400'
-                      : 'bg-white/5 border border-white/10 active:scale-95'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {/* Privacy */}
-          <section className="bg-white/5 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Globe className="w-5 h-5 text-blue-400" />
-              <span className="font-medium">Privacy</span>
-            </div>
-
-            <label className="flex items-center gap-3 p-3 bg-white/5 rounded-xl cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.isPublic}
-                onChange={(e) => setSettings({ ...settings, isPublic: e.target.checked })}
-                className="w-5 h-5 accent-blue-400"
-              />
-              <div className="flex-1">
-                <p className="font-medium text-sm">{settings.isPublic ? 'Public Game' : 'Private Game'}</p>
-                <p className="text-xs text-white/50">
-                  {settings.isPublic ? 'Anyone can find and join' : 'Invite only'}
-                </p>
-              </div>
-              {settings.isPublic ? <Globe className="w-4 h-4 text-blue-400" /> : <Lock className="w-4 h-4 text-amber-400" />}
-            </label>
-
-            <label className="flex items-center gap-3 p-3 bg-white/5 rounded-xl cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.requireApproval}
-                onChange={(e) => setSettings({ ...settings, requireApproval: e.target.checked })}
-                className="w-5 h-5 accent-amber-400"
-              />
-              <div className="flex-1">
-                <p className="font-medium text-sm">Require Approval</p>
-                <p className="text-xs text-white/50">You approve each player</p>
-              </div>
-              <UserCheck className="w-4 h-4 text-amber-400" />
-            </label>
-          </section>
-
-          {/* Safe Zones */}
-          <section className="bg-white/5 rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-green-400" />
-                <span className="font-medium">Safe Zones</span>
-              </div>
-              <span className="text-sm text-white/50">{settings.noTagZones.length} zones</span>
-            </div>
-
-            {settings.noTagZones.length > 0 ? (
-              <div className="space-y-2 mb-3">
-                {settings.noTagZones.map((zone) => (
-                  <div key={zone.id} className="flex items-center justify-between p-3 bg-green-400/10 rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-green-400" />
-                      <span className="text-sm">{zone.name}</span>
-                      <span className="text-xs text-white/50">{formatRadius(zone.radius)}</span>
-                    </div>
-                    <button
-                      onClick={() => setSettings({
-                        ...settings,
-                        noTagZones: settings.noTagZones.filter(z => z.id !== zone.id)
-                      })}
-                      className="p-1"
-                    >
-                      <X className="w-4 h-4 text-white/50" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-white/40 text-center py-3">No safe zones added</p>
-            )}
-
-            <button className="w-full p-3 bg-green-400/10 border border-green-400/30 rounded-xl text-green-400 text-sm font-medium flex items-center justify-center gap-2">
-              <Plus className="w-4 h-4" />
-              Add Safe Zone
-            </button>
-          </section>
-        </div>
+        <AdvancedSettingsContent
+          settings={settings}
+          onSettingsChange={setSettings}
+          formatRadius={formatRadius}
+        />
       </BottomSheet>
     </div>
   );
