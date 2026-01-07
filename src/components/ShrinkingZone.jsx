@@ -139,17 +139,17 @@ export default function ShrinkingZone({
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    return \`\${minutes}:\${remainingSeconds.toString().padStart(2, '0')}\`;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   return (
     <>
       <div className="fixed top-20 left-4 right-4 z-40">
-        <div className={\`p-3 rounded-xl border shadow-lg backdrop-blur-sm \${
-          isOutside ? 'bg-red-900/90 border-red-500' 
+        <div className={`p-3 rounded-xl border shadow-lg backdrop-blur-sm ${
+          isOutside ? 'bg-red-900/90 border-red-500'
             : zoneState.phase === 'shrinking' ? 'bg-amber-900/90 border-amber-500'
             : 'bg-gray-900/90 border-gray-700'
-        }\`}>
+        }`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {isOutside ? (
@@ -183,13 +183,13 @@ export default function ShrinkingZone({
           {zoneState.phase === 'shrinking' && (
             <div className="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
               <div className="h-full bg-amber-500 transition-all duration-100"
-                style={{ width: \`\${((Date.now() - (zoneState.shrinkEndTime - 30000)) / 30000) * 100}%\` }} />
+                style={{ width: `${((Date.now() - (zoneState.shrinkEndTime - 30000)) / 30000) * 100}%` }} />
             </div>
           )}
           {isOutside && damageOutsideZone && (
             <div className="mt-2 h-2 bg-red-900 rounded-full overflow-hidden">
               <div className="h-full bg-red-500 transition-all duration-1000"
-                style={{ width: \`\${(zoneState.outsideZoneTime / outsideZoneGrace) * 100}%\` }} />
+                style={{ width: `${(zoneState.outsideZoneTime / outsideZoneGrace) * 100}%` }} />
             </div>
           )}
         </div>
@@ -226,8 +226,8 @@ export function ShrinkingZoneSettings({ settings = {}, onChange, isHost = false 
       <button onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between p-4 hover:bg-gray-800/50 transition-colors">
         <div className="flex items-center gap-3">
-          <div className={\`p-2 rounded-lg \${zoneSettings.enableShrinkingZone ? 'bg-rose-500/20' : 'bg-gray-700'}\`}>
-            <Minimize2 className={\`w-5 h-5 \${zoneSettings.enableShrinkingZone ? 'text-rose-400' : 'text-gray-400'}\`} />
+          <div className={`p-2 rounded-lg ${zoneSettings.enableShrinkingZone ? 'bg-rose-500/20' : 'bg-gray-700'}`}>
+            <Minimize2 className={`w-5 h-5 ${zoneSettings.enableShrinkingZone ? 'text-rose-400' : 'text-gray-400'}`} />
           </div>
           <div className="text-left">
             <div className="font-semibold text-white">Shrinking Zone</div>
@@ -237,8 +237,8 @@ export function ShrinkingZoneSettings({ settings = {}, onChange, isHost = false 
         <div className="flex items-center gap-2">
           <button onClick={(e) => { e.stopPropagation(); isHost && updateSetting('enableShrinkingZone', !zoneSettings.enableShrinkingZone); }}
             disabled={!isHost}
-            className={\`relative w-12 h-6 rounded-full transition-colors \${zoneSettings.enableShrinkingZone ? 'bg-rose-500' : 'bg-gray-600'}\`}>
-            <div className={\`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform \${zoneSettings.enableShrinkingZone ? 'left-7' : 'left-1'}\`} />
+            className={`relative w-12 h-6 rounded-full transition-colors ${zoneSettings.enableShrinkingZone ? 'bg-rose-500' : 'bg-gray-600'}`}>
+            <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${zoneSettings.enableShrinkingZone ? 'left-7' : 'left-1'}`} />
           </button>
           {expanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
         </div>
@@ -315,8 +315,8 @@ export function ShrinkingZoneSettings({ settings = {}, onChange, isHost = false 
               </div>
               <button onClick={() => isHost && updateSetting('damageOutsideZone', !zoneSettings.damageOutsideZone)}
                 disabled={!isHost}
-                className={\`relative w-12 h-6 rounded-full transition-colors \${zoneSettings.damageOutsideZone ? 'bg-rose-500' : 'bg-gray-600'}\`}>
-                <div className={\`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform \${zoneSettings.damageOutsideZone ? 'left-7' : 'left-1'}\`} />
+                className={`relative w-12 h-6 rounded-full transition-colors ${zoneSettings.damageOutsideZone ? 'bg-rose-500' : 'bg-gray-600'}`}>
+                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${zoneSettings.damageOutsideZone ? 'left-7' : 'left-1'}`} />
               </button>
             </div>
           </div>

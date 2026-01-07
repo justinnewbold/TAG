@@ -5,7 +5,7 @@ import { supabaseAuth } from '../services/supabase';
 export default function AuthCallback() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [error, setError] = useState&lt;string | null&gt;(null);
+  const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('Processing authentication...');
 
   useEffect(() => {
@@ -44,11 +44,11 @@ export default function AuthCallback() {
         // Handle OAuth code exchange (Google, etc.)
         if (code) {
           setStatus('Completing sign in...');
-          
+
           // Exchange the code for a session using Supabase's built-in method
           // This replaces the old call to /api/auth/token which was returning 404
           const { data, error: exchangeError } = await supabaseAuth.auth.exchangeCodeForSession(code);
-          
+
           if (exchangeError) {
             console.error('Code exchange error:', exchangeError);
             throw exchangeError;
@@ -63,7 +63,7 @@ export default function AuthCallback() {
 
         // Check if we already have a session (magic link flow)
         const { data: { session }, error: sessionError } = await supabaseAuth.auth.getSession();
-        
+
         if (sessionError) {
           throw sessionError;
         }
@@ -78,9 +78,10 @@ export default function AuthCallback() {
         setError('Authentication failed. Please try again.');
         setTimeout(() => navigate('/login'), 3000);
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Auth callback error:', err);
-        setError(err.message || 'Authentication failed');
+        const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
+        setError(errorMessage);
         setTimeout(() => navigate('/login'), 3000);
       }
     };
@@ -89,23 +90,23 @@ export default function AuthCallback() {
   }, [navigate, searchParams]);
 
   return (
-    &lt;div className="min-h-screen flex items-center justify-center bg-slate-50"&gt;
-      &lt;div className="text-center p-8 max-w-md"&gt;
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="text-center p-8 max-w-md">
         {error ? (
-          &lt;div className="space-y-4"&gt;
-            &lt;div className="text-red-500 text-6xl"&gt;⚠️&lt;/div&gt;
-            &lt;h1 className="text-2xl font-bold text-slate-900"&gt;Authentication Error&lt;/h1&gt;
-            &lt;p className="text-red-600"&gt;{error}&lt;/p&gt;
-            &lt;p className="text-slate-500 text-sm"&gt;Redirecting to login...&lt;/p&gt;
-          &lt;/div&gt;
+          <div className="space-y-4">
+            <div className="text-red-500 text-6xl">⚠️</div>
+            <h1 className="text-2xl font-bold text-slate-900">Authentication Error</h1>
+            <p className="text-red-600">{error}</p>
+            <p className="text-slate-500 text-sm">Redirecting to login...</p>
+          </div>
         ) : (
-          &lt;div className="space-y-4"&gt;
-            &lt;div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto"&gt;&lt;/div&gt;
-            &lt;h1 className="text-2xl font-bold text-slate-900"&gt;{status}&lt;/h1&gt;
-            &lt;p className="text-slate-500"&gt;Please wait...&lt;/p&gt;
-          &lt;/div&gt;
+          <div className="space-y-4">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
+            <h1 className="text-2xl font-bold text-slate-900">{status}</h1>
+            <p className="text-slate-500">Please wait...</p>
+          </div>
         )}
-      &lt;/div&gt;
-    &lt;/div&gt;
+      </div>
+    </div>
   );
 }
