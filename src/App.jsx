@@ -27,6 +27,8 @@ const PublicGames = lazy(() => import('./pages/PublicGames'));
 const PlayerProfile = lazy(() => import('./pages/PlayerProfile'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const CustomGameModeBuilder = lazy(() => import('./pages/CustomGameModeBuilder'));
+const Challenges = lazy(() => import('./pages/Challenges'));
+const GameReplay = lazy(() => import('./pages/GameReplay'));
 
 // Auth pages - always accessible
 const Landing = lazy(() => import('./pages/Landing'));
@@ -238,6 +240,9 @@ function App() {
             <Route path="/profile/:userId" element={<ProtectedRoute><GameErrorBoundary><PlayerProfile /></GameErrorBoundary></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><GameErrorBoundary><AdminDashboard /></GameErrorBoundary></ProtectedRoute>} />
             <Route path="/custom-mode" element={<ProtectedRoute><GameErrorBoundary><CustomGameModeBuilder /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/challenges" element={<ProtectedRoute><GameErrorBoundary><Challenges /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/replay" element={<ProtectedRoute><GameErrorBoundary><GameReplay /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/replay/:gameId" element={<ProtectedRoute><GameErrorBoundary><GameReplay /></GameErrorBoundary></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

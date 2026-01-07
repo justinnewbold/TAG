@@ -4,9 +4,11 @@ import UpgradeBanner from '../components/UpgradeBanner';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Users, MapPin, Timer, Target, Trophy, Award, History, Crown,
-  Gamepad2, ChevronRight, Swords, Globe, Calendar, Star, Zap, TrendingUp
+  Gamepad2, ChevronRight, Swords, Globe, Calendar, Star, Zap, TrendingUp,
+  Play, Flame, Search, Radio
 } from 'lucide-react';
 import { useStore, useSounds, ACHIEVEMENTS, GAME_MODES } from '../store';
+import { matchmakingService, MatchmakingStatus } from '../services/matchmakingService';
 
 function Home() {
   const navigate = useNavigate();
@@ -16,6 +18,8 @@ function Home() {
 
   const completedGames = games.filter(g => g.status === 'ended').length;
   const unlockedAchievements = achievements.length;
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchTime, setSearchTime] = useState(0);
 
   // Set greeting based on time of day
   useEffect(() => {
@@ -25,6 +29,47 @@ function Home() {
     else setGreeting('Good evening');
   }, []);
 
+  // Quick Play matchmaking timer
+  useEffect(() => {
+    if (!isSearching) return;
+    const interval = setInterval(() => {
+      setSearchTime(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isSearching]);
+
+  const handleQuickPlay = async () => {
+    if (isSearching) {
+      // Cancel search
+      setIsSearching(false);
+      setSearchTime(0);
+      matchmakingService.leaveQueue();
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchTime(0);
+
+    try {
+      await matchmakingService.joinQueue({
+        mode: 'any',
+        maxDistance: 5000,
+      });
+
+      // Listen for match found
+      matchmakingService.onMatchFound((data) => {
+        setIsSearching(false);
+        // Navigate to the game
+        if (data.gameCode) {
+          navigate(`/lobby?code=${data.gameCode}`);
+        }
+      });
+    } catch (error) {
+      console.error('Matchmaking failed:', error);
+      setIsSearching(false);
+    }
+  };
+
   // Haptic feedback
   const handlePress = (callback) => {
     if (settings?.vibration !== false) vibrate([15]);
@@ -33,6 +78,24 @@ function Home() {
 
   // Quick features for the carousel
   const features = [
+    {
+      id: 'challenges',
+      icon: '🎯',
+      title: 'Challenges',
+      desc: 'Daily & weekly tasks',
+      path: '/challenges',
+      gradient: 'from-red-500/20 to-orange-500/20',
+      borderColor: 'border-red-500/30'
+    },
+    {
+      id: 'replay',
+      icon: '📹',
+      title: 'Game Replay',
+      desc: 'Relive your games',
+      path: '/replay',
+      gradient: 'from-cyan-500/20 to-blue-500/20',
+      borderColor: 'border-cyan-500/30'
+    },
     {
       id: 'tournaments',
       icon: '🏆',
@@ -258,6 +321,29 @@ function Home() {
       {/* Fixed Bottom Actions - Main CTA */}
       {!currentGame && (
         <div className="fixed bottom-20 left-0 right-0 p-4 bg-gradient-to-t from-dark-900 via-dark-900/98 to-transparent pt-16 z-30">
+          {/* Quick Play Button */}
+          <button
+            onClick={handleQuickPlay}
+            className={`w-full h-12 mb-3 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm transition-all ${
+              isSearching
+                ? 'bg-gradient-to-r from-orange-500 to-red-500 animate-pulse'
+                : 'bg-gradient-to-r from-orange-500/20 to-red-500/20 border border-orange-500/30 hover:border-orange-500/50'
+            }`}
+          >
+            {isSearching ? (
+              <>
+                <Radio className="w-5 h-5 animate-pulse" />
+                <span>Searching... {Math.floor(searchTime / 60)}:{(searchTime % 60).toString().padStart(2, '0')}</span>
+                <span className="text-xs opacity-70">(Tap to cancel)</span>
+              </>
+            ) : (
+              <>
+                <Search className="w-5 h-5" />
+                Quick Play - Find Nearby Game
+              </>
+            )}
+          </button>
+
           <div className="flex gap-3">
             <button
               onClick={() => handlePress(() => navigate('/join'))}
