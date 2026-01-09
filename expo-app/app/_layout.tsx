@@ -34,6 +34,8 @@ export default function RootLayout() {
           <Stack.Screen name="game" />
           <Stack.Screen name="history" />
           <Stack.Screen name="stats" />
+          <Stack.Screen name="friends" />
+          <Stack.Screen name="settings" />
         </Stack>
       </View>
     </SafeAreaProvider>

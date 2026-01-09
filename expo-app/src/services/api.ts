@@ -118,6 +118,50 @@ class ApiService {
       { method: 'POST' }
     );
   }
+
+  // Friends
+  async getFriends() {
+    return this.request<{ friends: Friend[] }>('/friends');
+  }
+
+  async getFriendRequests() {
+    return this.request<{ incoming: FriendRequest[]; outgoing: FriendRequest[] }>(
+      '/friends/requests'
+    );
+  }
+
+  async getFriendCode() {
+    return this.request<{ code: string }>('/friends/code');
+  }
+
+  async sendFriendRequest(code: string) {
+    return this.request<{ success: boolean }>('/friends/request', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  async acceptFriendRequest(requestId: string) {
+    return this.request<{ success: boolean }>(`/friends/requests/${requestId}/accept`, {
+      method: 'POST',
+    });
+  }
+
+  async declineFriendRequest(requestId: string) {
+    return this.request<{ success: boolean }>(`/friends/requests/${requestId}/decline`, {
+      method: 'POST',
+    });
+  }
+
+  async removeFriend(friendId: string) {
+    return this.request<{ success: boolean }>(`/friends/${friendId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getRecentPlayers() {
+    return this.request<{ recentPlayers: RecentPlayer[] }>('/friends/recent');
+  }
 }
 
 export const api = new ApiService();
@@ -202,4 +246,27 @@ export interface PlayerStats {
   tagCount: number;
   timesTagged: number;
   survivalTime: number;
+}
+
+export interface Friend {
+  id: string;
+  name: string;
+  avatar: string;
+  isOnline?: boolean;
+  inGame?: boolean;
+  lastSeen?: number;
+}
+
+export interface FriendRequest {
+  id: string;
+  fromUser: { id: string; name: string; avatar: string };
+  toUser: { id: string; name: string; avatar: string };
+  createdAt: number;
+}
+
+export interface RecentPlayer {
+  id: string;
+  name: string;
+  avatar: string;
+  lastPlayed: number;
 }

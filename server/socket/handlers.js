@@ -530,4 +530,125 @@ export function setupSocketHandlers(io, socket, gameManager) {
       });
     }
   });
+
+  // ============================================
+  // Game Invite System
+  // ============================================
+
+  // Send a game invite to a friend
+  socket.on('game:invite:send', async ({ friendId, gameCode }) => {
+    // Rate limit invites
+    const rateCheck = rateLimiter.check(user.id, 'game:invite', 10); // 10 invites per minute
+    if (!rateCheck.allowed) {
+      socket.emit('game:invite:error', {
+        error: 'Too many invites sent. Please wait.',
+        retryAfter: rateCheck.retryAfter,
+      });
+      return;
+    }
+
+    // Validate inputs
+    if (!friendId || !gameCode) {
+      socket.emit('game:invite:error', { error: 'Missing friendId or gameCode' });
+      return;
+    }
+
+    // Verify game exists and user is in it
+    const game = await gameManager.getGameByCode(gameCode);
+    if (!game) {
+      socket.emit('game:invite:error', { error: 'Game not found' });
+      return;
+    }
+
+    if (!game.players.some(p => p.id === user.id)) {
+      socket.emit('game:invite:error', { error: 'You are not in this game' });
+      return;
+    }
+
+    if (game.status !== 'waiting') {
+      socket.emit('game:invite:error', { error: 'Game has already started' });
+      return;
+    }
+
+    // Find the target user's socket
+    const targetSockets = await io.fetchSockets();
+    const targetSocket = targetSockets.find(s => s.user?.id === friendId);
+
+    if (targetSocket) {
+      // Send invite to target user
+      targetSocket.emit('game:invite', {
+        inviteId: `${user.id}-${friendId}-${Date.now()}`,
+        fromId: user.id,
+        fromName: user.name,
+        fromAvatar: user.avatar,
+        gameCode: gameCode,
+        gameName: game.settings?.gameName || 'TAG! Game',
+        playerCount: game.players.length,
+        maxPlayers: game.settings?.maxPlayers || 10,
+        timestamp: Date.now(),
+      });
+
+      socket.emit('game:invite:sent', {
+        success: true,
+        friendId,
+        message: 'Invite sent successfully',
+      });
+
+      console.log(`${user.name} invited ${friendId} to game ${gameCode}`);
+    } else {
+      // Target user is offline - could store for later or send push notification
+      pushService.sendToUser(friendId, {
+        title: '🎮 Game Invite!',
+        body: `${user.name} invited you to join their TAG! game`,
+        data: { type: 'game_invite', gameCode, fromId: user.id, fromName: user.name },
+      }).catch(() => {});
+
+      socket.emit('game:invite:sent', {
+        success: true,
+        friendId,
+        message: 'Invite sent (user is offline, push notification sent)',
+      });
+    }
+  });
+
+  // Respond to a game invite
+  socket.on('game:invite:respond', async ({ inviteId, accept, gameCode }) => {
+    if (!inviteId) {
+      socket.emit('game:invite:error', { error: 'Missing invite ID' });
+      return;
+    }
+
+    // Parse the invite ID to get sender info
+    const [senderId] = inviteId.split('-');
+
+    // Find sender's socket to notify them
+    const senderSockets = await io.fetchSockets();
+    const senderSocket = senderSockets.find(s => s.user?.id === senderId);
+
+    if (accept && gameCode) {
+      // Join the game via API
+      socket.emit('game:invite:response', {
+        inviteId,
+        accepted: true,
+        message: 'Use the game code to join',
+        gameCode,
+      });
+    } else {
+      socket.emit('game:invite:response', {
+        inviteId,
+        accepted: false,
+        message: 'Invite declined',
+      });
+    }
+
+    // Notify sender of the response
+    if (senderSocket) {
+      senderSocket.emit('game:invite:responded', {
+        inviteId,
+        responderId: user.id,
+        responderName: user.name,
+        accepted: accept,
+      });
+    }
+  });
 }

@@ -33,13 +33,47 @@ export const isInNoTagTime = (noTagTimes) => {
   });
 };
 
-// Helper to check if location is in a no-tag zone
+// Helper to check if a point is inside a polygon (ray casting algorithm)
+const isPointInPolygon = (lat, lng, polygon) => {
+  if (!polygon || polygon.length < 3) return false;
+
+  let inside = false;
+  const n = polygon.length;
+
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygon[i].lng;
+    const yi = polygon[i].lat;
+    const xj = polygon[j].lng;
+    const yj = polygon[j].lat;
+
+    const intersect = ((yi > lat) !== (yj > lat)) &&
+      (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+
+    if (intersect) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+};
+
+// Helper to check if location is in a no-tag zone (supports both circle and polygon)
 export const isInNoTagZone = (location, noTagZones) => {
   if (!location || !noTagZones || noTagZones.length === 0) return false;
 
   return noTagZones.some(zone => {
-    const distance = getDistance(location.lat, location.lng, zone.lat, zone.lng);
-    return distance <= zone.radius;
+    // Polygon zone support
+    if (zone.type === 'polygon' && zone.points?.length >= 3) {
+      return isPointInPolygon(location.lat, location.lng, zone.points);
+    }
+
+    // Circle zone (default)
+    if (zone.lat !== undefined && zone.lng !== undefined && zone.radius !== undefined) {
+      const distance = getDistance(location.lat, location.lng, zone.lat, zone.lng);
+      return distance <= zone.radius;
+    }
+
+    return false;
   });
 };
 

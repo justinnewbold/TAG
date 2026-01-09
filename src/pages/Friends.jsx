@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, UserPlus, Search, Users, Send, X, Trash2, Gamepad2, ChevronRight, Copy, Check, Clock, RefreshCw, Loader2, UserCheck, UserX } from 'lucide-react';
 import { useStore } from '../store';
 import { api } from '../services/api';
+import { socket } from '../services/socket';
 import BottomSheet from '../components/BottomSheet';
 
 function Friends() {
@@ -131,10 +132,46 @@ function Friends() {
     }
   };
   
-  const handleInviteToGame = (friendId) => {
+  const [inviteStatus, setInviteStatus] = useState({}); // { friendId: 'sending' | 'sent' | 'error' }
+
+  const handleInviteToGame = (friendId, friendName) => {
     // If in a game, send invite. Otherwise go to create game
     if (currentGame) {
-      // TODO: Implement game invite via socket
+      setInviteStatus(prev => ({ ...prev, [friendId]: 'sending' }));
+
+      socket.emit('game:invite:send', {
+        friendId,
+        gameCode: currentGame.code
+      });
+
+      // Listen for response
+      const handleSent = (data) => {
+        if (data.friendId === friendId) {
+          setInviteStatus(prev => ({ ...prev, [friendId]: 'sent' }));
+          // Reset after 3 seconds
+          setTimeout(() => {
+            setInviteStatus(prev => ({ ...prev, [friendId]: null }));
+          }, 3000);
+        }
+      };
+
+      const handleError = (data) => {
+        setInviteStatus(prev => ({ ...prev, [friendId]: 'error' }));
+        console.error('Invite error:', data.error);
+        // Reset after 3 seconds
+        setTimeout(() => {
+          setInviteStatus(prev => ({ ...prev, [friendId]: null }));
+        }, 3000);
+      };
+
+      socket.on('game:invite:sent', handleSent);
+      socket.on('game:invite:error', handleError);
+
+      // Cleanup listeners after a timeout
+      setTimeout(() => {
+        socket.off('game:invite:sent', handleSent);
+        socket.off('game:invite:error', handleError);
+      }, 5000);
     } else {
       navigate('/create');
     }
@@ -267,7 +304,9 @@ function Friends() {
                   onSwipeLeft={() => setSwipedFriend(friend.id)}
                   onSwipeRight={() => setSwipedFriend(null)}
                   onRemove={() => handleRemoveFriend(friend.id)}
-                  onInvite={() => handleInviteToGame(friend.id)}
+                  onInvite={() => handleInviteToGame(friend.id, friend.name)}
+                  inviteStatus={inviteStatus[friend.id]}
+                  hasGame={!!currentGame}
                 />
               ))}
             </div>
@@ -452,16 +491,16 @@ function Friends() {
 }
 
 // Friend Card with swipe actions
-function FriendCard({ friend, isSwiped, onSwipeLeft, onSwipeRight, onRemove, onInvite }) {
+function FriendCard({ friend, isSwiped, onSwipeLeft, onSwipeRight, onRemove, onInvite, inviteStatus, hasGame }) {
   const [translateX, setTranslateX] = useState(0);
   const startX = useRef(0);
   const isDragging = useRef(false);
-  
+
   const handleTouchStart = (e) => {
     startX.current = e.touches[0].clientX;
     isDragging.current = true;
   };
-  
+
   const handleTouchMove = (e) => {
     if (!isDragging.current) return;
     const diff = e.touches[0].clientX - startX.current;
@@ -471,7 +510,7 @@ function FriendCard({ friend, isSwiped, onSwipeLeft, onSwipeRight, onRemove, onI
       setTranslateX(Math.min(-100 + diff, 0));
     }
   };
-  
+
   const handleTouchEnd = () => {
     isDragging.current = false;
     if (translateX < -50) {
@@ -482,22 +521,51 @@ function FriendCard({ friend, isSwiped, onSwipeLeft, onSwipeRight, onRemove, onI
       onSwipeRight();
     }
   };
-  
+
   React.useEffect(() => {
     if (!isSwiped) setTranslateX(0);
   }, [isSwiped]);
-  
+
+  const getInviteButtonContent = () => {
+    switch (inviteStatus) {
+      case 'sending':
+        return <Loader2 className="w-6 h-6 animate-spin" />;
+      case 'sent':
+        return <Check className="w-6 h-6" />;
+      case 'error':
+        return <X className="w-6 h-6" />;
+      default:
+        return <Gamepad2 className="w-6 h-6" />;
+    }
+  };
+
+  const getInviteButtonClass = () => {
+    switch (inviteStatus) {
+      case 'sent':
+        return 'bg-green-500';
+      case 'error':
+        return 'bg-red-500';
+      default:
+        return 'bg-neon-cyan';
+    }
+  };
+
   return (
     <div className="relative overflow-hidden">
       <div className="absolute inset-y-0 right-0 flex">
-        <button onClick={onInvite} className="w-20 bg-neon-cyan flex items-center justify-center">
-          <Gamepad2 className="w-6 h-6" />
+        <button
+          onClick={onInvite}
+          disabled={inviteStatus === 'sending'}
+          className={`w-20 ${getInviteButtonClass()} flex items-center justify-center transition-colors`}
+          title={hasGame ? 'Invite to Game' : 'Create Game'}
+        >
+          {getInviteButtonContent()}
         </button>
         <button onClick={onRemove} className="w-20 bg-red-500 flex items-center justify-center">
           <Trash2 className="w-6 h-6" />
         </button>
       </div>
-      
+
       <div
         className="relative bg-dark-800 p-4 flex items-center gap-4 transition-transform"
         style={{ transform: `translateX(${translateX}px)` }}
