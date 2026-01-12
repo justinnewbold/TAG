@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -15,22 +16,76 @@ import * as Haptics from 'expo-haptics';
 import { useGameStore } from '../src/store/gameStore';
 import { Card } from '../src/components';
 import { colors } from '../src/theme/colors';
+import { notificationService, NotificationPreferences } from '../src/services/notifications';
 
 export default function SettingsScreen() {
-  const { user, logout } = useGameStore();
+  const { user, logout, settings, updateSettings } = useGameStore();
 
   // Settings state
+  const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState(true);
-  const [sound, setSound] = useState(true);
-  const [vibration, setVibration] = useState(true);
-  const [highAccuracyGPS, setHighAccuracyGPS] = useState(true);
-  const [showDistance, setShowDistance] = useState(true);
+  const [gameEvents, setGameEvents] = useState(true);
+  const [proximityAlerts, setProximityAlerts] = useState(true);
+  const [friendActivity, setFriendActivity] = useState(true);
+  const [sound, setSound] = useState(settings?.sound ?? true);
+  const [vibration, setVibration] = useState(settings?.vibration ?? true);
+  const [highAccuracyGPS, setHighAccuracyGPS] = useState(settings?.highAccuracyGPS ?? true);
+  const [showDistance, setShowDistance] = useState(settings?.showDistance ?? true);
 
-  const handleToggle = (setter: React.Dispatch<React.SetStateAction<boolean>>, value: boolean) => {
+  // Load notification preferences on mount
+  useEffect(() => {
+    loadNotificationPreferences();
+  }, []);
+
+  const loadNotificationPreferences = async () => {
+    try {
+      const prefs = await notificationService.getPreferences();
+      if (prefs) {
+        setNotifications(prefs.game_invites);
+        setGameEvents(prefs.game_events);
+        setProximityAlerts(prefs.proximity_alerts);
+        setFriendActivity(prefs.friend_activity);
+      }
+    } catch (error) {
+      console.error('Failed to load notification preferences:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggle = async (
+    setter: React.Dispatch<React.SetStateAction<boolean>>,
+    value: boolean,
+    prefKey?: keyof NotificationPreferences
+  ) => {
     setter(value);
     if (vibration) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+
+    // Save notification preference to server
+    if (prefKey) {
+      try {
+        await notificationService.updatePreferences({ [prefKey]: value });
+      } catch (error) {
+        console.error('Failed to update notification preference:', error);
+        // Revert on error
+        setter(!value);
+      }
+    }
+  };
+
+  const handleLocalSettingToggle = (
+    setter: React.Dispatch<React.SetStateAction<boolean>>,
+    key: string,
+    value: boolean
+  ) => {
+    setter(value);
+    if (vibration) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    // Save to local store
+    updateSettings?.({ [key]: value });
   };
 
   const handleLogout = () => {
@@ -138,14 +193,49 @@ export default function SettingsScreen() {
         {/* Notifications Section */}
         <Text style={styles.sectionTitle}>Notifications</Text>
         <Card style={styles.section}>
-          <SettingRow
-            icon="notifications"
-            iconColor={colors.neon.cyan}
-            title="Push Notifications"
-            subtitle="Game invites and updates"
-            value={notifications}
-            onValueChange={(v) => handleToggle(setNotifications, v)}
-          />
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={colors.neon.cyan} />
+            </View>
+          ) : (
+            <>
+              <SettingRow
+                icon="notifications"
+                iconColor={colors.neon.cyan}
+                title="Game Invites"
+                subtitle="When friends invite you to play"
+                value={notifications}
+                onValueChange={(v) => handleToggle(setNotifications, v, 'game_invites')}
+              />
+              <View style={styles.divider} />
+              <SettingRow
+                icon="game-controller"
+                iconColor={colors.neon.purple}
+                title="Game Events"
+                subtitle="Tags, game start/end"
+                value={gameEvents}
+                onValueChange={(v) => handleToggle(setGameEvents, v, 'game_events')}
+              />
+              <View style={styles.divider} />
+              <SettingRow
+                icon="warning"
+                iconColor={colors.neon.orange}
+                title="Proximity Alerts"
+                subtitle="When IT is nearby"
+                value={proximityAlerts}
+                onValueChange={(v) => handleToggle(setProximityAlerts, v, 'proximity_alerts')}
+              />
+              <View style={styles.divider} />
+              <SettingRow
+                icon="people"
+                iconColor={colors.success}
+                title="Friend Activity"
+                subtitle="Friend requests and status"
+                value={friendActivity}
+                onValueChange={(v) => handleToggle(setFriendActivity, v, 'friend_activity')}
+              />
+            </>
+          )}
         </Card>
 
         {/* Sound & Haptics */}
@@ -157,7 +247,7 @@ export default function SettingsScreen() {
             title="Sound Effects"
             subtitle="In-game sounds"
             value={sound}
-            onValueChange={(v) => handleToggle(setSound, v)}
+            onValueChange={(v) => handleLocalSettingToggle(setSound, 'sound', v)}
           />
           <View style={styles.divider} />
           <SettingRow
@@ -166,7 +256,7 @@ export default function SettingsScreen() {
             title="Vibration"
             subtitle="Haptic feedback"
             value={vibration}
-            onValueChange={(v) => handleToggle(setVibration, v)}
+            onValueChange={(v) => handleLocalSettingToggle(setVibration, 'vibration', v)}
           />
         </Card>
 
@@ -179,7 +269,7 @@ export default function SettingsScreen() {
             title="High Accuracy GPS"
             subtitle="Uses more battery"
             value={highAccuracyGPS}
-            onValueChange={(v) => handleToggle(setHighAccuracyGPS, v)}
+            onValueChange={(v) => handleLocalSettingToggle(setHighAccuracyGPS, 'highAccuracyGPS', v)}
           />
           <View style={styles.divider} />
           <SettingRow
@@ -188,7 +278,7 @@ export default function SettingsScreen() {
             title="Show Distance"
             subtitle="Display distance to players"
             value={showDistance}
-            onValueChange={(v) => handleToggle(setShowDistance, v)}
+            onValueChange={(v) => handleLocalSettingToggle(setShowDistance, 'showDistance', v)}
           />
         </Card>
 
@@ -277,6 +367,11 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 8,
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   accountRow: {
     flexDirection: 'row',
