@@ -134,6 +134,15 @@ class SocketService {
       });
     });
   }
+
+  // Game invite methods
+  inviteToGame(friendId: string, gameCode: string) {
+    this.emit('game:invite:send', { friendId, gameCode });
+  }
+
+  respondToInvite(inviteId: string, accept: boolean) {
+    this.emit('game:invite:respond', { inviteId, accept });
+  }
 }
 
 export const socketService = new SocketService();

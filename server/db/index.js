@@ -95,6 +95,59 @@ if (usePostgres) {
       CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
       CREATE INDEX IF NOT EXISTS idx_game_players_user ON game_players(user_id);
       CREATE INDEX IF NOT EXISTS idx_game_tags_game ON game_tags(game_id);
+
+      -- Push notification tokens table
+      CREATE TABLE IF NOT EXISTS push_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL,
+        platform TEXT NOT NULL CHECK (platform IN ('ios', 'android', 'web')),
+        device_id TEXT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        UNIQUE(user_id, token)
+      );
+      CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id);
+
+      -- User notification preferences table
+      CREATE TABLE IF NOT EXISTS notification_preferences (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        game_invites BOOLEAN DEFAULT TRUE,
+        game_events BOOLEAN DEFAULT TRUE,
+        proximity_alerts BOOLEAN DEFAULT TRUE,
+        friend_activity BOOLEAN DEFAULT TRUE,
+        achievements BOOLEAN DEFAULT TRUE,
+        quiet_hours_start INTEGER,
+        quiet_hours_end INTEGER,
+        updated_at BIGINT NOT NULL
+      );
+
+      -- Analytics events table
+      CREATE TABLE IF NOT EXISTS analytics_events (
+        id TEXT PRIMARY KEY,
+        event_name TEXT NOT NULL,
+        user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        session_id TEXT,
+        properties JSONB,
+        timestamp BIGINT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_analytics_event_name ON analytics_events(event_name);
+      CREATE INDEX IF NOT EXISTS idx_analytics_user ON analytics_events(user_id);
+      CREATE INDEX IF NOT EXISTS idx_analytics_timestamp ON analytics_events(timestamp);
+
+      -- Offline sync queue table
+      CREATE TABLE IF NOT EXISTS offline_sync_queue (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        action_type TEXT NOT NULL,
+        payload JSONB NOT NULL,
+        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+        retry_count INTEGER DEFAULT 0,
+        created_at BIGINT NOT NULL,
+        processed_at BIGINT
+      );
+      CREATE INDEX IF NOT EXISTS idx_sync_queue_user ON offline_sync_queue(user_id);
+      CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON offline_sync_queue(status);
     `);
     console.log('PostgreSQL schema initialized');
   };
@@ -504,6 +557,59 @@ if (usePostgres) {
     CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
     CREATE INDEX IF NOT EXISTS idx_game_players_user ON game_players(user_id);
     CREATE INDEX IF NOT EXISTS idx_game_tags_game ON game_tags(game_id);
+
+    -- Push notification tokens table
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      token TEXT NOT NULL,
+      platform TEXT NOT NULL CHECK (platform IN ('ios', 'android', 'web')),
+      device_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(user_id, token)
+    );
+    CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id);
+
+    -- User notification preferences table
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      game_invites INTEGER DEFAULT 1,
+      game_events INTEGER DEFAULT 1,
+      proximity_alerts INTEGER DEFAULT 1,
+      friend_activity INTEGER DEFAULT 1,
+      achievements INTEGER DEFAULT 1,
+      quiet_hours_start INTEGER,
+      quiet_hours_end INTEGER,
+      updated_at INTEGER NOT NULL
+    );
+
+    -- Analytics events table
+    CREATE TABLE IF NOT EXISTS analytics_events (
+      id TEXT PRIMARY KEY,
+      event_name TEXT NOT NULL,
+      user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      session_id TEXT,
+      properties TEXT,
+      timestamp INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_analytics_event_name ON analytics_events(event_name);
+    CREATE INDEX IF NOT EXISTS idx_analytics_user ON analytics_events(user_id);
+    CREATE INDEX IF NOT EXISTS idx_analytics_timestamp ON analytics_events(timestamp);
+
+    -- Offline sync queue table
+    CREATE TABLE IF NOT EXISTS offline_sync_queue (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      action_type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+      retry_count INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      processed_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_sync_queue_user ON offline_sync_queue(user_id);
+    CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON offline_sync_queue(status);
   `);
 
   // SQLite User operations (synchronous, wrapped in promises for consistent API)

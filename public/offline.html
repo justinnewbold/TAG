@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TAG! - Offline</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+
+    .container {
+      text-align: center;
+      padding: 40px 20px;
+      max-width: 400px;
+    }
+
+    .icon {
+      font-size: 80px;
+      margin-bottom: 24px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(0.95); }
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #00f5ff;
+    }
+
+    p {
+      font-size: 16px;
+      color: #9ca3af;
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 8px;
+      margin-bottom: 24px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      background: #f59e0b;
+      border-radius: 50%;
+      animation: blink 1.5s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .status-text {
+      color: #f59e0b;
+      font-weight: 500;
+    }
+
+    .retry-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      background: linear-gradient(135deg, #00f5ff 0%, #00d4ff 100%);
+      color: #0a0a0f;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .retry-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0, 245, 255, 0.3);
+    }
+
+    .retry-btn:active {
+      transform: translateY(0);
+    }
+
+    .tips {
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .tips h3 {
+      font-size: 14px;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+
+    .tips ul {
+      list-style: none;
+      text-align: left;
+    }
+
+    .tips li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: #9ca3af;
+      padding: 8px 0;
+    }
+
+    .tips li::before {
+      content: '•';
+      color: #00f5ff;
+    }
+
+    .cached-note {
+      margin-top: 24px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">📴</div>
+    <h1>You're Offline</h1>
+    <p>It looks like you've lost your internet connection. Don't worry - your actions will be saved and synced when you're back online.</p>
+
+    <div class="status">
+      <div class="status-dot"></div>
+      <span class="status-text">Waiting for connection...</span>
+    </div>
+
+    <button class="retry-btn" onclick="tryReconnect()">
+      🔄 Try Again
+    </button>
+
+    <div class="tips">
+      <h3>While you wait</h3>
+      <ul>
+        <li>Check your WiFi or mobile data connection</li>
+        <li>Move to an area with better signal</li>
+        <li>Your pending actions will sync automatically</li>
+      </ul>
+    </div>
+
+    <p class="cached-note">
+      Some cached data may still be available.
+      <a href="/" style="color: #00f5ff;">Try the app anyway →</a>
+    </p>
+  </div>
+
+  <script>
+    function tryReconnect() {
+      // Check if we're online
+      if (navigator.onLine) {
+        window.location.reload();
+      } else {
+        // Show feedback
+        const btn = document.querySelector('.retry-btn');
+        btn.textContent = '❌ Still offline...';
+        btn.style.background = '#374151';
+
+        setTimeout(() => {
+          btn.innerHTML = '🔄 Try Again';
+          btn.style.background = '';
+        }, 2000);
+      }
+    }
+
+    // Auto-reload when back online
+    window.addEventListener('online', () => {
+      const status = document.querySelector('.status');
+      status.innerHTML = `
+        <div class="status-dot" style="background: #10b981;"></div>
+        <span class="status-text" style="color: #10b981;">Connected! Reloading...</span>
+      `;
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    });
+
+    // Update status periodically
+    setInterval(() => {
+      if (navigator.onLine) {
+        window.location.reload();
+      }
+    }, 5000);
+  </script>
+</body>
+</html>

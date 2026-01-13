@@ -28,6 +28,8 @@ import poisRouter from './routes/pois.js';
 import offlineRouter from './routes/offline.js';
 import { tournamentRouter } from './routes/tournaments.js';
 import { gameModesRouter } from './routes/gameModes.js';
+import notificationsRouter from './routes/notifications.js';
+import advancedAnalyticsRouter from './routes/advancedAnalytics.js';
 import { GameManager } from './game/GameManager.js';
 import { setupSocketHandlers } from './socket/handlers.js';
 import { logger } from './utils/logger.js';
@@ -245,6 +247,8 @@ app.use('/api/pois', authenticateToken, poisRouter);
 app.use('/api/offline', authenticateToken, offlineRouter);
 app.use('/api/tournaments', authenticateToken, tournamentRouter);
 app.use('/api/game-modes', gameModesRouter); // No auth required for reading modes
+app.use('/api/notifications', authenticateToken, notificationsRouter);
+app.use('/api/analytics/v2', authenticateToken, advancedAnalyticsRouter);
 
 // Initialize additional database tables
 (async () => {

@@ -5,15 +5,35 @@ import { View, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { colors } from '../src/theme/colors';
+import { notificationService } from '../src/services/notifications';
+import { useGameStore } from '../src/store/gameStore';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const { user } = useGameStore();
+
   useEffect(() => {
     // Hide splash screen after app is ready
     SplashScreen.hideAsync();
   }, []);
+
+  // Initialize push notifications when user is logged in
+  useEffect(() => {
+    if (user) {
+      notificationService.initialize().then((token) => {
+        if (token) {
+          console.log('Push notifications initialized');
+        }
+      });
+    }
+
+    // Cleanup on unmount
+    return () => {
+      notificationService.cleanup();
+    };
+  }, [user]);
 
   return (
     <SafeAreaProvider>
@@ -34,6 +54,8 @@ export default function RootLayout() {
           <Stack.Screen name="game" />
           <Stack.Screen name="history" />
           <Stack.Screen name="stats" />
+          <Stack.Screen name="friends" />
+          <Stack.Screen name="settings" />
         </Stack>
       </View>
     </SafeAreaProvider>

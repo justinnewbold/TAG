@@ -465,8 +465,190 @@ class ARService {
       return this.boundaries.radius - centerDistance;
     }
 
-    // TODO: Support polygon boundaries
+    // Polygon boundary support
+    if (this.boundaries.type === 'polygon' && this.boundaries.points?.length >= 3) {
+      const points = this.boundaries.points;
+      const playerLat = this.playerPosition.lat;
+      const playerLng = this.playerPosition.lng;
+
+      // Check if player is inside the polygon
+      const isInside = this.isPointInPolygon(playerLat, playerLng, points);
+
+      // Calculate distance to nearest edge
+      const distanceToEdge = this.calculateDistanceToPolygonEdge(
+        playerLat, playerLng, points
+      );
+
+      // If inside, return positive distance; if outside, return negative
+      return isInside ? distanceToEdge : -distanceToEdge;
+    }
+
     return Infinity;
+  }
+
+  /**
+   * Check if a point is inside a polygon using ray casting algorithm
+   * @param {number} lat - Point latitude
+   * @param {number} lng - Point longitude
+   * @param {Array} polygon - Array of {lat, lng} points defining the polygon
+   * @returns {boolean} - True if point is inside polygon
+   */
+  isPointInPolygon(lat, lng, polygon) {
+    if (!polygon || polygon.length < 3) return false;
+
+    let inside = false;
+    const n = polygon.length;
+
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const xi = polygon[i].lng;
+      const yi = polygon[i].lat;
+      const xj = polygon[j].lng;
+      const yj = polygon[j].lat;
+
+      // Ray casting algorithm
+      const intersect = ((yi > lat) !== (yj > lat)) &&
+        (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+
+      if (intersect) {
+        inside = !inside;
+      }
+    }
+
+    return inside;
+  }
+
+  /**
+   * Calculate the shortest distance from a point to a polygon edge
+   * @param {number} lat - Point latitude
+   * @param {number} lng - Point longitude
+   * @param {Array} polygon - Array of {lat, lng} points defining the polygon
+   * @returns {number} - Distance in meters to nearest edge
+   */
+  calculateDistanceToPolygonEdge(lat, lng, polygon) {
+    if (!polygon || polygon.length < 2) return Infinity;
+
+    let minDistance = Infinity;
+    const n = polygon.length;
+
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const distance = this.distanceToLineSegment(
+        lat, lng,
+        polygon[i].lat, polygon[i].lng,
+        polygon[j].lat, polygon[j].lng
+      );
+
+      if (distance < minDistance) {
+        minDistance = distance;
+      }
+    }
+
+    return minDistance;
+  }
+
+  /**
+   * Calculate the shortest distance from a point to a line segment
+   * @param {number} px - Point latitude
+   * @param {number} py - Point longitude
+   * @param {number} x1 - Line start latitude
+   * @param {number} y1 - Line start longitude
+   * @param {number} x2 - Line end latitude
+   * @param {number} y2 - Line end longitude
+   * @returns {number} - Distance in meters
+   */
+  distanceToLineSegment(px, py, x1, y1, x2, y2) {
+    // Convert to approximate cartesian coordinates for the calculation
+    // Using a local approximation around the point
+    const cosLat = Math.cos(this.toRad(px));
+
+    // Convert points to local meters (approximate)
+    const scale = 111320; // meters per degree latitude
+    const pxM = px * scale;
+    const pyM = py * scale * cosLat;
+    const x1M = x1 * scale;
+    const y1M = y1 * scale * cosLat;
+    const x2M = x2 * scale;
+    const y2M = y2 * scale * cosLat;
+
+    // Vector from line start to end
+    const dx = x2M - x1M;
+    const dy = y2M - y1M;
+
+    // If the segment has zero length, return distance to the point
+    const segmentLengthSq = dx * dx + dy * dy;
+    if (segmentLengthSq === 0) {
+      return this.calculateDistance(px, py, x1, y1);
+    }
+
+    // Calculate projection parameter t
+    // t = ((P - A) · (B - A)) / |B - A|²
+    const t = Math.max(0, Math.min(1,
+      ((pxM - x1M) * dx + (pyM - y1M) * dy) / segmentLengthSq
+    ));
+
+    // Find the closest point on the segment
+    const closestX = x1M + t * dx;
+    const closestY = y1M + t * dy;
+
+    // Calculate distance from point to closest point on segment
+    const distX = pxM - closestX;
+    const distY = pyM - closestY;
+
+    return Math.sqrt(distX * distX + distY * distY);
+  }
+
+  /**
+   * Get the centroid of a polygon (for display purposes)
+   * @param {Array} polygon - Array of {lat, lng} points
+   * @returns {{lat: number, lng: number}} - Centroid point
+   */
+  getPolygonCentroid(polygon) {
+    if (!polygon || polygon.length === 0) return null;
+
+    let sumLat = 0;
+    let sumLng = 0;
+
+    for (const point of polygon) {
+      sumLat += point.lat;
+      sumLng += point.lng;
+    }
+
+    return {
+      lat: sumLat / polygon.length,
+      lng: sumLng / polygon.length,
+    };
+  }
+
+  /**
+   * Calculate the area of a polygon (in square meters)
+   * Uses the Shoelace formula with spherical correction
+   * @param {Array} polygon - Array of {lat, lng} points
+   * @returns {number} - Area in square meters
+   */
+  getPolygonArea(polygon) {
+    if (!polygon || polygon.length < 3) return 0;
+
+    const n = polygon.length;
+    let area = 0;
+
+    // Get centroid for local projection
+    const centroid = this.getPolygonCentroid(polygon);
+    const cosLat = Math.cos(this.toRad(centroid.lat));
+    const scale = 111320; // meters per degree
+
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+
+      // Convert to local meters
+      const x1 = (polygon[i].lng - centroid.lng) * scale * cosLat;
+      const y1 = (polygon[i].lat - centroid.lat) * scale;
+      const x2 = (polygon[j].lng - centroid.lng) * scale * cosLat;
+      const y2 = (polygon[j].lat - centroid.lat) * scale;
+
+      area += x1 * y2 - x2 * y1;
+    }
+
+    return Math.abs(area / 2);
   }
 
   /**

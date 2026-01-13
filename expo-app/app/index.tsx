@@ -48,12 +48,26 @@ export default function HomeScreen() {
             <Text style={styles.greeting}>Welcome back,</Text>
             <Text style={styles.username}>{user?.name}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.avatarButton}
-            onPress={() => router.push('/stats')}
-          >
-            <Text style={styles.avatar}>{user?.avatar || '👤'}</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => router.push('/friends')}
+            >
+              <Ionicons name="people" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => router.push('/settings')}
+            >
+              <Ionicons name="settings" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.avatarButton}
+              onPress={() => router.push('/stats')}
+            >
+              <Text style={styles.avatar}>{user?.avatar || '👤'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Logo */}
@@ -204,6 +218,19 @@ const styles = StyleSheet.create({
   },
   avatar: {
     fontSize: 24,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.dark[800],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoContainer: {
     alignItems: 'center',
