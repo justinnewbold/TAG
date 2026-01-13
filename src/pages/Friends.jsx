@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, UserPlus, Search, Users, Send, X, Trash2, Gamepad2, ChevronRight, Copy, Check, Clock, RefreshCw, Loader2, UserCheck, UserX } from 'lucide-react';
 import { useStore } from '../store';
 import { api } from '../services/api';
-import { socket } from '../services/socket';
+import { socketService } from '../services/socket';
 import BottomSheet from '../components/BottomSheet';
 
 function Friends() {
@@ -139,7 +139,7 @@ function Friends() {
     if (currentGame) {
       setInviteStatus(prev => ({ ...prev, [friendId]: 'sending' }));
 
-      socket.emit('game:invite:send', {
+      socketService.emit('game:invite:send', {
         friendId,
         gameCode: currentGame.code
       });
@@ -164,13 +164,13 @@ function Friends() {
         }, 3000);
       };
 
-      socket.on('game:invite:sent', handleSent);
-      socket.on('game:invite:error', handleError);
+      socketService.on('game:invite:sent', handleSent);
+      socketService.on('game:invite:error', handleError);
 
       // Cleanup listeners after a timeout
       setTimeout(() => {
-        socket.off('game:invite:sent', handleSent);
-        socket.off('game:invite:error', handleError);
+        socketService.off('game:invite:sent', handleSent);
+        socketService.off('game:invite:error', handleError);
       }, 5000);
     } else {
       navigate('/create');
