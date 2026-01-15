@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Circle, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Zap, Ghost, Shield, Radio, Snowflake, Gift } from 'lucide-react';
@@ -7,8 +7,15 @@ import { socketService } from '../services/socket';
 import { getDistance } from '../../shared/utils';
 import { POWERUP_TYPES } from '../../shared/constants';
 
-// Create powerup marker icons
-const createPowerupIcon = (powerup) => {
+// Icon cache for powerup markers
+const powerupIconCache = new Map();
+
+// Create powerup marker icons (cached)
+const createPowerupIcon = (powerupType) => {
+  if (powerupIconCache.has(powerupType)) {
+    return powerupIconCache.get(powerupType);
+  }
+
   const colors = {
     speed_boost: { bg: '#fbbf24', glow: '#f59e0b' },
     invisibility: { bg: '#a78bfa', glow: '#8b5cf6' },
@@ -16,10 +23,10 @@ const createPowerupIcon = (powerup) => {
     radar: { bg: '#34d399', glow: '#10b981' },
     freeze: { bg: '#67e8f9', glow: '#22d3ee' },
   };
-  
-  const { bg, glow } = colors[powerup.type] || { bg: '#fff', glow: '#fff' };
-  
-  return L.divIcon({
+
+  const { bg, glow } = colors[powerupType] || { bg: '#fff', glow: '#fff' };
+
+  const icon = L.divIcon({
     className: 'powerup-marker',
     html: `
       <div style="
@@ -35,7 +42,7 @@ const createPowerupIcon = (powerup) => {
         font-size: 20px;
         animation: float 2s ease-in-out infinite, glow 1.5s ease-in-out infinite alternate;
       ">
-        ${POWERUP_TYPES[powerup.type.toUpperCase()]?.icon || '🎁'}
+        ${POWERUP_TYPES[powerupType.toUpperCase()]?.icon || '🎁'}
       </div>
       <style>
         @keyframes float {
@@ -51,6 +58,9 @@ const createPowerupIcon = (powerup) => {
     iconSize: [40, 40],
     iconAnchor: [20, 20],
   });
+
+  powerupIconCache.set(powerupType, icon);
+  return icon;
 };
 
 // Collection radius in meters
@@ -61,6 +71,24 @@ export default function MapPowerups() {
   const [powerups, setPowerups] = useState([]);
   const [collectingId, setCollectingId] = useState(null);
   const map = useMap();
+
+  // Refs to avoid recreating interval on every location update
+  const userLocationRef = useRef(user?.location);
+  const powerupsRef = useRef(powerups);
+  const collectingIdRef = useRef(collectingId);
+
+  // Keep refs in sync
+  useEffect(() => {
+    userLocationRef.current = user?.location;
+  }, [user?.location]);
+
+  useEffect(() => {
+    powerupsRef.current = powerups;
+  }, [powerups]);
+
+  useEffect(() => {
+    collectingIdRef.current = collectingId;
+  }, [collectingId]);
 
   // Listen for powerup spawns from server
   useEffect(() => {
@@ -94,44 +122,20 @@ export default function MapPowerups() {
     };
   }, [user?.id]);
 
-  // Check if player is near any powerup
-  useEffect(() => {
-    if (!user?.location || !settings.enablePowerups || powerups.length === 0) return;
-
-    const checkCollection = () => {
-      for (const powerup of powerups) {
-        const distance = getDistance(
-          user.location.lat, user.location.lng,
-          powerup.lat, powerup.lng
-        );
-
-        if (distance <= COLLECTION_RADIUS && !collectingId) {
-          collectPowerup(powerup);
-          break;
-        }
-      }
-    };
-
-    const interval = setInterval(checkCollection, 500);
-    checkCollection();
-
-    return () => clearInterval(interval);
-  }, [user?.location, powerups, settings.enablePowerups, collectingId]);
-
-  // Collect a powerup
+  // Collect a powerup - defined before the effect that uses it
   const collectPowerup = useCallback((powerup) => {
-    if (collectingId) return;
-    
+    if (collectingIdRef.current) return;
+
     setCollectingId(powerup.id);
-    
+
     // Haptic feedback
     if ('vibrate' in navigator && settings.vibration) {
       navigator.vibrate([100, 50, 100]);
     }
-    
+
     // Emit collection to server
     socketService.emit('powerup:collect', { powerupId: powerup.id });
-    
+
     // Add to local inventory (optimistic)
     addPowerup({
       id: powerup.id,
@@ -139,10 +143,41 @@ export default function MapPowerups() {
       ...POWERUP_TYPES[powerup.type.toUpperCase()],
       collectedAt: Date.now(),
     });
-    
+
     // Clear collecting state after animation
     setTimeout(() => setCollectingId(null), 500);
-  }, [collectingId, settings.vibration, addPowerup]);
+  }, [settings.vibration, addPowerup]);
+
+  // Check if player is near any powerup
+  // Use refs to avoid recreating interval on every location/powerup change
+  useEffect(() => {
+    if (!settings.enablePowerups) return;
+
+    const checkCollection = () => {
+      const location = userLocationRef.current;
+      const currentPowerups = powerupsRef.current;
+
+      if (!location || currentPowerups.length === 0 || collectingIdRef.current) return;
+
+      for (const powerup of currentPowerups) {
+        const distance = getDistance(
+          location.lat, location.lng,
+          powerup.lat, powerup.lng
+        );
+
+        if (distance <= COLLECTION_RADIUS) {
+          collectPowerup(powerup);
+          break;
+        }
+      }
+    };
+
+    // Check every 1 second instead of 500ms - still responsive enough for walking pace
+    const interval = setInterval(checkCollection, 1000);
+    checkCollection();
+
+    return () => clearInterval(interval);
+  }, [settings.enablePowerups, collectPowerup]);
 
   if (!currentGame || !settings.enablePowerups) return null;
 
@@ -173,7 +208,7 @@ export default function MapPowerups() {
             {/* Powerup marker */}
             <Marker
               position={[powerup.lat, powerup.lng]}
-              icon={createPowerupIcon(powerup)}
+              icon={createPowerupIcon(powerup.type)}
               opacity={isCollecting ? 0.5 : 1}
             >
               <Popup>

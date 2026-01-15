@@ -59,7 +59,7 @@ class LocationBatcher {
   /**
    * Force flush any pending update
    */
-  forceFLush() {
+  forceFlush() {
     if (this.pendingLocation) {
       this.flush(this.pendingLocation);
       this.pendingLocation = null;
@@ -77,7 +77,7 @@ class LocationBatcher {
   setEnabled(enabled) {
     this.isEnabled = enabled;
     if (!enabled) {
-      this.forceFLush();
+      this.forceFlush();
     }
   }
 
