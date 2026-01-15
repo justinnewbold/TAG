@@ -3,6 +3,8 @@
  * Phase 1-12 database changes
  */
 
+import { logger } from './utils/logger.js';
+
 export const migrations = {
   // Phase 1: Add comprehensive indexes
   addIndexes: {
@@ -538,7 +540,7 @@ export const migrations = {
 };
 
 export async function runMigrations(db, isPostgres) {
-  console.log('Running database migrations...');
+  logger.info('Running database migrations...');
 
   try {
     if (isPostgres) {
@@ -550,9 +552,9 @@ export async function runMigrations(db, isPostgres) {
       db.exec(migrations.addIndexes.sqlite);
       db.exec(migrations.createNewTables.sqlite);
     }
-    console.log('Database migrations completed successfully');
+    logger.info('Database migrations completed successfully');
   } catch (error) {
-    console.error('Migration error:', error);
+    logger.error('Migration error:', error);
     throw error;
   }
 }

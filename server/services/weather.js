@@ -1,6 +1,8 @@
 // Weather Service - Fetches weather data for game location
 // Integrates with OpenWeatherMap API (free tier)
 
+import { logger } from '../utils/logger.js';
+
 const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
 const CACHE_DURATION_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -36,7 +38,7 @@ class WeatherService {
       );
 
       if (!response.ok) {
-        console.error('Weather API error:', response.status);
+        logger.error('Weather API error', { error: response.status });
         return this.getDefaultWeather();
       }
 
@@ -46,7 +48,7 @@ class WeatherService {
       this.cache.set(cacheKey, { data: weather, timestamp: Date.now() });
       return weather;
     } catch (error) {
-      console.error('Weather fetch error:', error);
+      logger.error('Weather fetch error', { error: error.message });
       return this.getDefaultWeather();
     }
   }

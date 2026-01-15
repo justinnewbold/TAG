@@ -1,6 +1,7 @@
 // Leaderboards, XP/Levels, Clans, Tournaments Database Module
 
 import { getDb, isPostgres } from './index.js';
+import { logger } from './utils/logger.js';
 
 class SocialDb {
   constructor() {
@@ -356,7 +357,7 @@ class SocialDb {
     }
     
     this.initialized = true;
-    console.log('Social/competitive tables initialized');
+    logger.info('Social/competitive tables initialized');
   }
 
   // ============ LEADERBOARD METHODS ============

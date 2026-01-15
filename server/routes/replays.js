@@ -1,6 +1,7 @@
 // Replay Routes - Game replay recording and playback
 import express from 'express';
 import { replayDb } from '../db/replays.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -15,7 +16,7 @@ router.get('/:replayId', async (req, res) => {
     const events = await replayDb.getReplayEvents(req.params.replayId);
     res.json({ replay, events });
   } catch (error) {
-    console.error('Get replay error:', error);
+    logger.error('Get replay error:', error);
     res.status(500).json({ error: 'Failed to fetch replay' });
   }
 });
@@ -26,7 +27,7 @@ router.get('/game/:gameId', async (req, res) => {
     const replays = await replayDb.getReplaysByGame(req.params.gameId);
     res.json({ replays });
   } catch (error) {
-    console.error('Get game replays error:', error);
+    logger.error('Get game replays error:', error);
     res.status(500).json({ error: 'Failed to fetch replays' });
   }
 });
@@ -40,7 +41,7 @@ router.get('/user/:userId?', async (req, res) => {
     const replays = await replayDb.getReplaysByPlayer(userId, limit);
     res.json({ replays });
   } catch (error) {
-    console.error('Get user replays error:', error);
+    logger.error('Get user replays error:', error);
     res.status(500).json({ error: 'Failed to fetch replays' });
   }
 });
@@ -51,7 +52,7 @@ router.get('/:replayId/events', async (req, res) => {
     const events = await replayDb.getReplayEvents(req.params.replayId);
     res.json({ events });
   } catch (error) {
-    console.error('Get replay events error:', error);
+    logger.error('Get replay events error:', error);
     res.status(500).json({ error: 'Failed to fetch events' });
   }
 });

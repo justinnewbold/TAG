@@ -3,6 +3,7 @@
 
 import { db, userDb } from './index.js';
 import { v4 as uuidv4 } from 'uuid';
+import { logger } from './utils/logger.js';
 
 const usePostgres = !!process.env.DATABASE_URL;
 
@@ -107,7 +108,7 @@ async function initAuthTables() {
       }
     }
   }
-  console.log('Auth tables initialized');
+  logger.info('Auth tables initialized');
 }
 
 // Run initialization

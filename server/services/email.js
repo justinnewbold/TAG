@@ -1,6 +1,8 @@
 // Email service using Resend (or SendGrid fallback)
 // Set RESEND_API_KEY or SENDGRID_API_KEY in environment
 
+import { logger } from '../utils/logger.js';
+
 let emailClient = null;
 let emailProvider = null;
 
@@ -11,10 +13,10 @@ export async function initEmail() {
       const { Resend } = await import('resend');
       emailClient = new Resend(process.env.RESEND_API_KEY);
       emailProvider = 'resend';
-      console.log('Email service initialized (Resend)');
+      logger.info('Email service initialized (Resend)');
       return true;
     } catch (error) {
-      console.log('Resend not available:', error.message);
+      logger.warn('Resend not available', { error: error.message });
     }
   }
 
@@ -24,14 +26,14 @@ export async function initEmail() {
       sgMail.default.setApiKey(process.env.SENDGRID_API_KEY);
       emailClient = sgMail.default;
       emailProvider = 'sendgrid';
-      console.log('Email service initialized (SendGrid)');
+      logger.info('Email service initialized (SendGrid)');
       return true;
     } catch (error) {
-      console.log('SendGrid not available:', error.message);
+      logger.warn('SendGrid not available', { error: error.message });
     }
   }
 
-  console.log('Email service not configured - set RESEND_API_KEY or SENDGRID_API_KEY');
+  logger.info('Email service not configured - set RESEND_API_KEY or SENDGRID_API_KEY');
   return false;
 }
 
@@ -140,8 +142,8 @@ export async function sendMagicLinkEmail(to, link, name) {
 // Generic send email function
 async function sendEmail(to, subject, html) {
   if (!emailClient) {
-    console.log('Email not configured, would send to:', to);
-    console.log('Subject:', subject);
+    logger.debug('Email not configured, would send to', { to });
+    logger.debug('Subject', { subject });
     return { success: false, error: 'Email service not configured' };
   }
 
@@ -156,7 +158,7 @@ async function sendEmail(to, subject, html) {
         html,
       });
       if (error) {
-        console.error('Resend error:', error);
+        logger.error('Resend error', { error: error.message });
         return { success: false, error: error.message };
       }
       return { success: true, id: data?.id };
@@ -174,7 +176,7 @@ async function sendEmail(to, subject, html) {
 
     return { success: false, error: 'Unknown email provider' };
   } catch (error) {
-    console.error('Email send error:', error);
+    logger.error('Email send error', { error: error.message });
     return { success: false, error: error.message };
   }
 }

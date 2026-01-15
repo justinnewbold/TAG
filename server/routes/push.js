@@ -1,5 +1,6 @@
 import express from 'express';
 import { pushService } from '../services/push.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -37,7 +38,7 @@ router.post('/subscribe', (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Push subscribe error:', error);
+    logger.error('Push subscribe error:', error);
     res.status(500).json({ error: 'Failed to subscribe' });
   }
 });
@@ -48,7 +49,7 @@ router.post('/unsubscribe', (req, res) => {
     pushService.unsubscribe(req.user.id);
     res.json({ success: true });
   } catch (error) {
-    console.error('Push unsubscribe error:', error);
+    logger.error('Push unsubscribe error:', error);
     res.status(500).json({ error: 'Failed to unsubscribe' });
   }
 });
@@ -68,7 +69,7 @@ router.post('/test', async (req, res) => {
 
     res.json({ success });
   } catch (error) {
-    console.error('Push test error:', error);
+    logger.error('Push test error:', error);
     res.status(500).json({ error: 'Failed to send test notification' });
   }
 });

@@ -1,5 +1,6 @@
 // Friends Database - Add to server/db/friends.js
 import { db } from './index.js';
+import { logger } from './utils/logger.js';
 
 const usePostgres = !!process.env.DATABASE_URL;
 
@@ -47,7 +48,7 @@ export async function initFriendsSchema() {
         current_game_id TEXT
       );
     `);
-    console.log('Friends schema initialized');
+    logger.info('Friends schema initialized');
   }
 }
 

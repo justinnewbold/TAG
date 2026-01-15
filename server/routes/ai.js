@@ -5,6 +5,7 @@
 import express from 'express';
 import { authenticateToken as authMiddleware } from '../auth.js';
 import aiService from '../services/ai.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -23,7 +24,7 @@ router.post('/recap', authMiddleware, async (req, res) => {
     const recap = await aiService.generateGameRecap(gameData);
     res.json({ recap });
   } catch (error) {
-    console.error('Recap generation error:', error);
+    logger.error('Recap generation error', { error: error.message });
     res.status(500).json({ error: 'Failed to generate recap' });
   }
 });
@@ -43,7 +44,7 @@ router.post('/trash-talk', authMiddleware, async (req, res) => {
     const result = await aiService.generateTrashTalk(context);
     res.json(result);
   } catch (error) {
-    console.error('Trash talk generation error:', error);
+    logger.error('Trash talk generation error', { error: error.message });
     res.status(500).json({ error: 'Failed to generate messages' });
   }
 });
@@ -63,7 +64,7 @@ router.post('/analyze-movement', authMiddleware, async (req, res) => {
     const analysis = aiService.analyzeMovement(locationHistory);
     res.json(analysis);
   } catch (error) {
-    console.error('Movement analysis error:', error);
+    logger.error('Movement analysis error', { error: error.message });
     res.status(500).json({ error: 'Failed to analyze movement' });
   }
 });
@@ -83,7 +84,7 @@ router.post('/commentary', authMiddleware, async (req, res) => {
     const commentary = await aiService.generateCommentary(event);
     res.json({ commentary });
   } catch (error) {
-    console.error('Commentary generation error:', error);
+    logger.error('Commentary generation error', { error: error.message });
     res.status(500).json({ error: 'Failed to generate commentary' });
   }
 });
@@ -109,7 +110,7 @@ router.get('/skill-rating/:playerId', authMiddleware, async (req, res) => {
     const rating = aiService.calculateSkillRating(playerStats);
     res.json(rating);
   } catch (error) {
-    console.error('Skill rating error:', error);
+    logger.error('Skill rating error', { error: error.message });
     res.status(500).json({ error: 'Failed to calculate rating' });
   }
 });
@@ -126,7 +127,7 @@ router.get('/strategy-tips', authMiddleware, async (req, res) => {
     const tips = await aiService.generateStrategyTips(playerStats, recentGames);
     res.json({ tips });
   } catch (error) {
-    console.error('Strategy tips error:', error);
+    logger.error('Strategy tips error', { error: error.message });
     res.status(500).json({ error: 'Failed to generate tips' });
   }
 });
@@ -146,7 +147,7 @@ router.post('/matchmaking', authMiddleware, async (req, res) => {
       message: 'Matchmaking integration pending',
     });
   } catch (error) {
-    console.error('Matchmaking error:', error);
+    logger.error('Matchmaking error', { error: error.message });
     res.status(500).json({ error: 'Matchmaking failed' });
   }
 });
@@ -169,7 +170,7 @@ router.post('/assistant', authMiddleware, async (req, res) => {
     const answer = await aiService.askAssistant(question);
     res.json({ answer });
   } catch (error) {
-    console.error('AI Assistant error:', error);
+    logger.error('AI Assistant error', { error: error.message });
     res.status(500).json({ error: 'Failed to get answer' });
   }
 });

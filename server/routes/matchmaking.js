@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -134,7 +135,7 @@ router.post('/join', async (req, res) => {
       estimatedWait: Math.round(60 / Math.max(activeSearches.size, 1)), // Rough estimate in seconds
     });
   } catch (error) {
-    console.error('Failed to join matchmaking:', error);
+    logger.error('Failed to join matchmaking', { error: error.message });
     res.status(500).json({ error: 'Failed to join queue' });
   }
 });
@@ -152,7 +153,7 @@ router.post('/leave', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Failed to leave matchmaking:', error);
+    logger.error('Failed to leave matchmaking', { error: error.message });
     res.status(500).json({ error: 'Failed to leave queue' });
   }
 });
@@ -178,7 +179,7 @@ router.get('/status', async (req, res) => {
       compatiblePlayers: compatible?.length || 0,
     });
   } catch (error) {
-    console.error('Failed to get queue status:', error);
+    logger.error('Failed to get queue status', { error: error.message });
     res.status(500).json({ error: 'Failed to get status' });
   }
 });
@@ -233,7 +234,7 @@ router.get('/poll', async (req, res) => {
       playersSearching: activeSearches.size,
     });
   } catch (error) {
-    console.error('Failed to poll for match:', error);
+    logger.error('Failed to poll for match', { error: error.message });
     res.status(500).json({ error: 'Failed to poll' });
   }
 });
@@ -294,7 +295,7 @@ router.post('/confirm/:matchId', async (req, res) => {
       required: match.players.length,
     });
   } catch (error) {
-    console.error('Failed to confirm match:', error);
+    logger.error('Failed to confirm match', { error: error.message });
     res.status(500).json({ error: 'Failed to confirm' });
   }
 });
@@ -317,7 +318,7 @@ router.get('/admin/stats', async (req, res) => {
       byMode: modeCount,
     });
   } catch (error) {
-    console.error('Failed to get admin stats:', error);
+    logger.error('Failed to get admin stats', { error: error.message });
     res.status(500).json({ error: 'Failed to get stats' });
   }
 });

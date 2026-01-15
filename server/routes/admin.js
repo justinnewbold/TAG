@@ -62,7 +62,7 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
 
     res.json(stats);
   } catch (error) {
-    console.error('Dashboard error:', error);
+    logger.error('Dashboard error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch dashboard' });
   }
 });
@@ -76,7 +76,7 @@ router.get('/reports', requireAdmin, async (req, res) => {
     const reports = await socialDb.getPendingReports(limit);
     res.json({ reports });
   } catch (error) {
-    console.error('Get reports error:', error);
+    logger.error('Get reports error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch reports' });
   }
 });
@@ -94,7 +94,7 @@ router.post('/reports/:reportId/resolve', requireAdmin, async (req, res) => {
     await socialDb.resolveReport(req.params.reportId, req.user.id, action);
     res.json({ success: true });
   } catch (error) {
-    console.error('Resolve report error:', error);
+    logger.error('Resolve report error', { error: error.message });
     res.status(500).json({ error: 'Failed to resolve report' });
   }
 });
@@ -112,7 +112,7 @@ router.get('/anticheat/flagged', requireAdmin, async (req, res) => {
     
     res.json({ flaggedPlayers: details, stats: antiCheat.getStats() });
   } catch (error) {
-    console.error('Get flagged error:', error);
+    logger.error('Get flagged error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch flagged players' });
   }
 });
@@ -123,7 +123,7 @@ router.post('/anticheat/unflag/:playerId', requireAdmin, async (req, res) => {
     antiCheat.unflagPlayer(req.params.playerId);
     res.json({ success: true });
   } catch (error) {
-    console.error('Unflag error:', error);
+    logger.error('Unflag error', { error: error.message });
     res.status(500).json({ error: 'Failed to unflag player' });
   }
 });
@@ -136,7 +136,7 @@ router.get('/anticheat/violations/:playerId', requireAdmin, async (req, res) => 
     
     res.json({ playerId: req.params.playerId, violations, isFlagged });
   } catch (error) {
-    console.error('Get violations error:', error);
+    logger.error('Get violations error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch violations' });
   }
 });
@@ -150,7 +150,7 @@ router.get('/games/active', requireAdmin, async (req, res) => {
     const games = gameManager?.getAllActiveGames?.() || [];
     res.json({ games, count: games.length });
   } catch (error) {
-    console.error('Get active games error:', error);
+    logger.error('Get active games error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch games' });
   }
 });
@@ -167,7 +167,7 @@ router.post('/games/:gameId/force-end', requireAdmin, async (req, res) => {
     
     res.json({ success: true });
   } catch (error) {
-    console.error('Force end game error:', error);
+    logger.error('Force end game error', { error: error.message });
     res.status(500).json({ error: 'Failed to end game' });
   }
 });
@@ -187,7 +187,7 @@ router.patch('/tournaments/:id/status', requireAdmin, async (req, res) => {
     // TODO: Implement tournament status update in socialDb
     res.json({ success: true, message: 'Tournament status updated' });
   } catch (error) {
-    console.error('Update tournament error:', error);
+    logger.error('Update tournament error', { error: error.message });
     res.status(500).json({ error: 'Failed to update tournament' });
   }
 });

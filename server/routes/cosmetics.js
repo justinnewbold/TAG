@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -62,7 +63,7 @@ router.get('/catalog', async (req, res) => {
   try {
     res.json(COSMETICS_CATALOG);
   } catch (error) {
-    console.error('Failed to get catalog:', error);
+    logger.error('Failed to get catalog', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch catalog' });
   }
 });
@@ -80,7 +81,7 @@ router.get('/user', async (req, res) => {
       coins,
     });
   } catch (error) {
-    console.error('Failed to get user cosmetics:', error);
+    logger.error('Failed to get user cosmetics', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch cosmetics' });
   }
 });
@@ -120,7 +121,7 @@ router.post('/:cosmeticId/purchase', async (req, res) => {
       remainingCoins: coins - cosmetic.price,
     });
   } catch (error) {
-    console.error('Failed to purchase cosmetic:', error);
+    logger.error('Failed to purchase cosmetic', { error: error.message });
     res.status(500).json({ error: 'Failed to purchase' });
   }
 });
@@ -148,7 +149,7 @@ router.post('/equip', async (req, res) => {
 
     res.json({ success: true, equipped: data.equipped });
   } catch (error) {
-    console.error('Failed to equip cosmetic:', error);
+    logger.error('Failed to equip cosmetic', { error: error.message });
     res.status(500).json({ error: 'Failed to equip' });
   }
 });
@@ -175,7 +176,7 @@ router.post('/:cosmeticId/unlock', async (req, res) => {
 
     res.json({ success: true, unlockedFrom: source });
   } catch (error) {
-    console.error('Failed to unlock cosmetic:', error);
+    logger.error('Failed to unlock cosmetic', { error: error.message });
     res.status(500).json({ error: 'Failed to unlock' });
   }
 });

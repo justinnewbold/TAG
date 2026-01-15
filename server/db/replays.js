@@ -2,6 +2,7 @@
 // Stores game events for replay functionality
 
 import { getDb, isPostgres } from './index.js';
+import { logger } from './utils/logger.js';
 
 class ReplayDb {
   constructor() {
@@ -72,7 +73,7 @@ class ReplayDb {
     }
     
     this.initialized = true;
-    console.log('Replay tables initialized');
+    logger.info('Replay tables initialized');
   }
 
   async createReplay(gameId, gameMode, playerCount, metadata = {}) {

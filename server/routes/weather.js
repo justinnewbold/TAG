@@ -1,6 +1,7 @@
 // Weather Routes - Game weather integration
 import express from 'express';
 import { weatherService } from '../services/weather.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ router.get('/', async (req, res) => {
     const weather = await weatherService.getWeather(latitude, longitude);
     res.json({ weather });
   } catch (error) {
-    console.error('Weather error:', error);
+    logger.error('Weather error:', error);
     res.status(500).json({ error: 'Failed to fetch weather' });
   }
 });
@@ -53,7 +54,7 @@ router.get('/daynight', (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Day/night error:', error);
+    logger.error('Day/night error:', error);
     res.status(500).json({ error: 'Failed to get day/night status' });
   }
 });
