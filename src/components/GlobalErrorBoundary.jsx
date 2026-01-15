@@ -42,11 +42,32 @@ class GlobalErrorBoundary extends React.Component {
   };
 
   handleGoHome = () => {
-    // Clear any potentially corrupted state
+    // Only clear game-specific state, preserve user preferences and auth
     try {
-      localStorage.removeItem('tag-game-storage');
+      // Clear only the potentially corrupted game state
+      const storage = localStorage.getItem('tag-game-storage');
+      if (storage) {
+        const parsed = JSON.parse(storage);
+        // Preserve user, settings, and other important data
+        // Only clear potentially corrupted game-related state
+        const preserved = {
+          state: {
+            user: parsed.state?.user,
+            settings: parsed.state?.settings,
+            // Clear these as they may be corrupted:
+            // currentGame, games, friends, etc.
+          },
+          version: parsed.version,
+        };
+        localStorage.setItem('tag-game-storage', JSON.stringify(preserved));
+      }
     } catch (e) {
-      // Ignore storage errors
+      // If parsing fails, the storage is corrupted - clear it
+      try {
+        localStorage.removeItem('tag-game-storage');
+      } catch (e2) {
+        // Ignore storage errors
+      }
     }
     window.location.href = '/';
   };

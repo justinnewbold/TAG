@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { runMigrations } from './migrations.js';
 dotenv.config();
 
 const usePostgres = !!process.env.DATABASE_URL;
@@ -150,6 +151,9 @@ if (usePostgres) {
       CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON offline_sync_queue(status);
     `);
     console.log('PostgreSQL schema initialized');
+
+    // Run additional migrations
+    await runMigrations(pool, true);
   };
 
   await initSchema();
@@ -848,6 +852,13 @@ if (usePostgres) {
       });
     }
   };
+
+  // Run additional migrations for SQLite
+  try {
+    await runMigrations(sqliteDb, false);
+  } catch (err) {
+    console.error('SQLite migration warning:', err.message);
+  }
 
   console.log('Using SQLite database');
 }

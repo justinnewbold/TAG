@@ -22,6 +22,8 @@ async function initAuthTables() {
         ALTER TABLE users ADD COLUMN IF NOT EXISTS supabase_id TEXT;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'anonymous';
         ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+        -- Role column for RBAC (user, moderator, admin)
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
       EXCEPTION WHEN others THEN NULL;
       END $$;
 
@@ -89,14 +91,15 @@ async function initAuthTables() {
     `);
 
     // Add columns if they don't exist (SQLite doesn't have IF NOT EXISTS for columns)
-    const columns = ['email', 'email_verified', 'phone', 'phone_verified', 'password_hash', 'google_id', 'apple_id', 'supabase_id', 'auth_provider', 'avatar_url'];
+    const columns = ['email', 'email_verified', 'phone', 'phone_verified', 'password_hash', 'google_id', 'apple_id', 'supabase_id', 'auth_provider', 'avatar_url', 'role'];
     const tableInfo = db.prepare('PRAGMA table_info(users)').all();
     const existingColumns = tableInfo.map(c => c.name);
 
     for (const col of columns) {
       if (!existingColumns.includes(col)) {
         try {
-          const type = col.includes('verified') ? 'INTEGER DEFAULT 0' : 'TEXT';
+          const type = col.includes('verified') ? 'INTEGER DEFAULT 0' :
+                       col === 'role' ? "TEXT DEFAULT 'user'" : 'TEXT';
           db.exec(`ALTER TABLE users ADD COLUMN ${col} ${type}`);
         } catch (e) {
           // Column might already exist
@@ -406,6 +409,84 @@ export const authDb = {
     }
 
     return userDb.getById(id);
+  },
+
+  // ============ ROLE MANAGEMENT (RBAC) ============
+
+  // Get user's role
+  async getUserRole(userId) {
+    if (usePostgres) {
+      const result = await db.query(`SELECT role FROM users WHERE id = $1`, [userId]);
+      return result.rows[0]?.role || 'user';
+    } else {
+      const row = db.prepare(`SELECT role FROM users WHERE id = ?`).get(userId);
+      return row?.role || 'user';
+    }
+  },
+
+  // Set user's role (admin only operation)
+  async setUserRole(userId, role) {
+    const validRoles = ['user', 'moderator', 'admin'];
+    if (!validRoles.includes(role)) {
+      throw new Error('Invalid role');
+    }
+
+    if (usePostgres) {
+      await db.query(`UPDATE users SET role = $1, updated_at = $2 WHERE id = $3`, [role, Date.now(), userId]);
+    } else {
+      db.prepare(`UPDATE users SET role = ?, updated_at = ? WHERE id = ?`).run(role, Date.now(), userId);
+    }
+  },
+
+  // Check if user has required role (checks hierarchy: admin > moderator > user)
+  async hasRole(userId, requiredRole) {
+    const roleHierarchy = { user: 0, moderator: 1, admin: 2 };
+    const userRole = await this.getUserRole(userId);
+    return roleHierarchy[userRole] >= roleHierarchy[requiredRole];
+  },
+
+  // Check if user is admin
+  async isAdmin(userId) {
+    return this.hasRole(userId, 'admin');
+  },
+
+  // Check if user is at least moderator
+  async isModerator(userId) {
+    return this.hasRole(userId, 'moderator');
+  },
+
+  // Get all admins (for system notifications, etc.)
+  async getAdmins() {
+    if (usePostgres) {
+      const result = await db.query(`SELECT id, name, email FROM users WHERE role = 'admin'`);
+      return result.rows;
+    } else {
+      return db.prepare(`SELECT id, name, email FROM users WHERE role = 'admin'`).all();
+    }
+  },
+
+  // Get all users with roles (for admin panel)
+  async getUsersWithRoles(limit = 100, offset = 0) {
+    if (usePostgres) {
+      const result = await db.query(`
+        SELECT id, name, avatar, email, role, created_at
+        FROM users
+        ORDER BY
+          CASE role WHEN 'admin' THEN 1 WHEN 'moderator' THEN 2 ELSE 3 END,
+          created_at DESC
+        LIMIT $1 OFFSET $2
+      `, [limit, offset]);
+      return result.rows;
+    } else {
+      return db.prepare(`
+        SELECT id, name, avatar, email, role, created_at
+        FROM users
+        ORDER BY
+          CASE role WHEN 'admin' THEN 1 WHEN 'moderator' THEN 2 ELSE 3 END,
+          created_at DESC
+        LIMIT ? OFFSET ?
+      `).all(limit, offset);
+    }
   },
 };
 

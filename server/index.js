@@ -66,10 +66,23 @@ const validateStartup = () => {
   const errors = [];
   const isProduction = process.env.NODE_ENV === 'production';
 
-  // Database check
+  // ===== CRITICAL (Errors in production) =====
+
+  // Database check - required in production
   if (!process.env.DATABASE_URL) {
-    warnings.push('DATABASE_URL not set - using SQLite for local development');
+    if (isProduction) {
+      errors.push('DATABASE_URL is required in production');
+    } else {
+      warnings.push('DATABASE_URL not set - using SQLite for local development');
+    }
   }
+
+  // CORS configuration in production
+  if (isProduction && !process.env.ALLOWED_ORIGINS && !process.env.CLIENT_URL) {
+    errors.push('ALLOWED_ORIGINS or CLIENT_URL must be set in production');
+  }
+
+  // ===== IMPORTANT (Warnings) =====
 
   // VAPID keys for push notifications
   if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
@@ -77,12 +90,15 @@ const validateStartup = () => {
   }
 
   // Check at least one auth method is available
-  const hasEmailAuth = process.env.SMTP_HOST && process.env.SMTP_USER;
+  const hasEmailAuth = process.env.RESEND_API_KEY || (process.env.SMTP_HOST && process.env.SMTP_USER);
   const hasSmsAuth = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN;
   const hasOAuth = process.env.GOOGLE_CLIENT_ID || process.env.APPLE_CLIENT_ID;
+  const hasSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY;
 
-  if (!hasEmailAuth && !hasSmsAuth && !hasOAuth && isProduction) {
-    warnings.push('No auth providers configured (email/SMS/OAuth) - only anonymous users allowed');
+  if (!hasEmailAuth && !hasSmsAuth && !hasOAuth && !hasSupabase) {
+    if (isProduction) {
+      warnings.push('No auth providers configured - only anonymous users allowed');
+    }
   }
 
   // Sentry for error tracking in production
@@ -90,14 +106,19 @@ const validateStartup = () => {
     warnings.push('SENTRY_DSN not set - error tracking disabled in production');
   }
 
-  // Log warnings and errors
+  // ===== OUTPUT =====
+
+  // Log warnings
   if (warnings.length > 0) {
+    logger.warn('Startup warnings detected', { warnings });
     console.log('\n⚠️  Startup Warnings:');
     warnings.forEach(w => console.log(`   - ${w}`));
   }
 
+  // Log and exit on errors
   if (errors.length > 0) {
-    console.error('\n❌ Startup Errors:');
+    logger.error('Startup validation failed', { errors });
+    console.error('\n❌ Startup Errors (FATAL):');
     errors.forEach(e => console.error(`   - ${e}`));
     process.exit(1);
   }
@@ -113,15 +134,28 @@ validateStartup();
 const app = express();
 const httpServer = createServer(app);
 
-// Define allowed origins for CORS
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'https://tag.newbold.cloud',
-  'https://tag-weld.vercel.app',
-  'https://tag-newbold-cloud.vercel.app',
-  process.env.CLIENT_URL,
-].filter(Boolean);
+// Define allowed origins for CORS (from environment or defaults for development)
+const getAllowedOrigins = () => {
+  // Production: use ALLOWED_ORIGINS env var (comma-separated list)
+  if (process.env.ALLOWED_ORIGINS) {
+    return process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean);
+  }
+
+  // Development defaults
+  return [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    process.env.CLIENT_URL,
+  ].filter(Boolean);
+};
+
+const allowedOrigins = getAllowedOrigins();
+
+// Allowed domain patterns (for dynamic subdomains like Vercel previews)
+const allowedDomainPatterns = (process.env.ALLOWED_DOMAIN_PATTERNS || '')
+  .split(',')
+  .map(p => p.trim())
+  .filter(Boolean);
 
 // CORS origin checker function
 const corsOriginChecker = (origin, callback) => {
@@ -129,14 +163,19 @@ const corsOriginChecker = (origin, callback) => {
   if (!origin) {
     return callback(null, true);
   }
-  
-  // Check if origin is in allowed list or matches Vercel preview pattern
-  if (allowedOrigins.includes(origin) || 
-      origin.endsWith('.vercel.app') || 
-      origin.endsWith('.newbold.cloud')) {
+
+  // Check if origin is in allowed list
+  if (allowedOrigins.includes(origin)) {
     return callback(null, true);
   }
-  
+
+  // Check domain patterns (e.g., '.vercel.app', '.yourdomain.com')
+  for (const pattern of allowedDomainPatterns) {
+    if (origin.endsWith(pattern)) {
+      return callback(null, true);
+    }
+  }
+
   callback(new Error('Not allowed by CORS'));
 };
 

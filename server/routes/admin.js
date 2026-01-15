@@ -1,17 +1,40 @@
 // Admin Routes - Dashboard, moderation, analytics
 import express from 'express';
 import { socialDb } from '../db/social.js';
+import { authDb } from '../db/auth.js';
 import { antiCheat } from '../services/antiCheat.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
-// Admin middleware - check if user is admin
-const requireAdmin = (req, res, next) => {
-  // For now, check a simple flag - in production, use proper role management
-  if (!req.user?.isAdmin) {
-    return res.status(403).json({ error: 'Admin access required' });
+// Admin middleware - check if user has admin role (database lookup)
+const requireAdmin = async (req, res, next) => {
+  try {
+    const isAdmin = await authDb.isAdmin(req.user?.id);
+    if (!isAdmin) {
+      logger.warn('Admin access denied', { userId: req.user?.id, path: req.path });
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+  } catch (error) {
+    logger.error('Admin check failed', { error: error.message });
+    return res.status(500).json({ error: 'Authorization check failed' });
   }
-  next();
+};
+
+// Moderator middleware - check if user has moderator or admin role
+const requireModerator = async (req, res, next) => {
+  try {
+    const isMod = await authDb.isModerator(req.user?.id);
+    if (!isMod) {
+      logger.warn('Moderator access denied', { userId: req.user?.id, path: req.path });
+      return res.status(403).json({ error: 'Moderator access required' });
+    }
+    next();
+  } catch (error) {
+    logger.error('Moderator check failed', { error: error.message });
+    return res.status(500).json({ error: 'Authorization check failed' });
+  }
 };
 
 // ============ DASHBOARD ============
@@ -191,13 +214,72 @@ router.post('/cleanup', requireAdmin, async (req, res) => {
   try {
     // Clean up various caches and old data
     antiCheat.cleanup();
-    
+
     // TODO: Add more cleanup operations
-    
+
     res.json({ success: true, message: 'Cleanup completed' });
   } catch (error) {
-    console.error('Cleanup error:', error);
+    logger.error('Cleanup error', { error: error.message });
     res.status(500).json({ error: 'Cleanup failed' });
+  }
+});
+
+// ============ ROLE MANAGEMENT ============
+
+// Get users with their roles (admin only)
+router.get('/users/roles', requireAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = parseInt(req.query.offset) || 0;
+
+    const users = await authDb.getUsersWithRoles(limit, offset);
+    res.json({ users, limit, offset });
+  } catch (error) {
+    logger.error('Get users roles error', { error: error.message });
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Update user role (admin only)
+router.patch('/users/:userId/role', requireAdmin, async (req, res) => {
+  try {
+    const { role } = req.body;
+    const { userId } = req.params;
+
+    // Prevent self-demotion (admins can't remove their own admin role)
+    if (userId === req.user.id && role !== 'admin') {
+      return res.status(400).json({ error: 'Cannot demote yourself' });
+    }
+
+    // Validate role
+    const validRoles = ['user', 'moderator', 'admin'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be: user, moderator, or admin' });
+    }
+
+    await authDb.setUserRole(userId, role);
+
+    // Log admin action
+    logger.info('User role updated', {
+      adminId: req.user.id,
+      targetUserId: userId,
+      newRole: role,
+    });
+
+    res.json({ success: true, userId, role });
+  } catch (error) {
+    logger.error('Update role error', { error: error.message, userId: req.params.userId });
+    res.status(500).json({ error: 'Failed to update role' });
+  }
+});
+
+// Get current user's role (for UI display)
+router.get('/me/role', async (req, res) => {
+  try {
+    const role = await authDb.getUserRole(req.user?.id);
+    res.json({ role });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get role', role: 'user' });
   }
 });
 

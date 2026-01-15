@@ -68,6 +68,7 @@ class LocationTracker {
   constructor() {
     this.history = new Map(); // playerId -> { lat, lng, timestamp }
     this.violations = new Map(); // playerId -> { count, lastViolation }
+    this.MAX_TRACKED_PLAYERS = 10000; // Prevent unbounded growth
   }
 
   update(playerId, location) {
@@ -94,6 +95,11 @@ class LocationTracker {
       }
     }
 
+    // Prevent unbounded growth - force cleanup if too many entries
+    if (this.history.size >= this.MAX_TRACKED_PLAYERS) {
+      this.cleanup();
+    }
+
     // Store current location for next check
     this.history.set(playerId, { ...location, timestamp: now });
 
@@ -118,22 +124,40 @@ class LocationTracker {
     this.violations.delete(playerId);
   }
 
-  // Cleanup old entries periodically (players inactive for 10+ minutes)
+  // Cleanup old entries periodically (players inactive for 5+ minutes)
   cleanup() {
     const now = Date.now();
-    const STALE_THRESHOLD = 10 * 60 * 1000; // 10 minutes
+    const STALE_THRESHOLD = 5 * 60 * 1000; // 5 minutes (reduced from 10)
+    let historyRemoved = 0;
+    let violationsRemoved = 0;
 
     for (const [playerId, data] of this.history) {
       if (now - data.timestamp > STALE_THRESHOLD) {
         this.history.delete(playerId);
+        historyRemoved++;
       }
     }
 
     for (const [playerId, data] of this.violations) {
       if (now - data.lastViolation > STALE_THRESHOLD) {
         this.violations.delete(playerId);
+        violationsRemoved++;
       }
     }
+
+    // Log cleanup stats for monitoring
+    if (historyRemoved > 0 || violationsRemoved > 0) {
+      console.log(`[LocationTracker] Cleanup: removed ${historyRemoved} history, ${violationsRemoved} violations. Current: ${this.history.size} tracked players`);
+    }
+  }
+
+  // Get stats for monitoring
+  getStats() {
+    return {
+      trackedPlayers: this.history.size,
+      playersWithViolations: this.violations.size,
+      maxCapacity: this.MAX_TRACKED_PLAYERS,
+    };
   }
 }
 
@@ -141,11 +165,11 @@ class LocationTracker {
 const rateLimiter = new RateLimiter();
 const locationTracker = new LocationTracker();
 
-// Cleanup rate limiter and location tracker every 5 minutes
+// Cleanup rate limiter and location tracker every 2 minutes
 setInterval(() => {
   rateLimiter.cleanup();
   locationTracker.cleanup();
-}, 300000);
+}, 120000);
 
 export function setupSocketHandlers(io, socket, gameManager) {
   const user = socket.user;
@@ -487,6 +511,17 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
   // Request current game state
   socket.on('game:sync', async () => {
+    // Rate limit sync requests to prevent abuse
+    const rateCheck = rateLimiter.check(user.id, 'game:sync', 30); // 30 syncs per minute
+    if (!rateCheck.allowed) {
+      socket.emit('error:rateLimit', {
+        event: 'game:sync',
+        message: 'Too many sync requests',
+        retryAfter: rateCheck.retryAfter,
+      });
+      return;
+    }
+
     const game = await gameManager.getPlayerGame(user.id);
     if (game) {
       socket.emit('game:state', { game });
