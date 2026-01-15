@@ -2,6 +2,7 @@ import { validate } from '../utils/validation.js';
 import { pushService } from '../services/push.js';
 import { getDistance, calculateSpeed, isValidSpeed } from '../shared/utils.js';
 import { ANTI_CHEAT, SOCKET_RATE_LIMITS } from '../shared/constants.js';
+import { enhancedFeatures } from '../game/EnhancedFeatures.js';
 
 // Rate limiter for socket events with retry-after support
 class RateLimiter {
@@ -650,5 +651,254 @@ export function setupSocketHandlers(io, socket, gameManager) {
         accepted: accept,
       });
     }
+  });
+
+  // ============================================
+  // Enhanced Features - Taunt & Ping System
+  // ============================================
+
+  // Send taunt to another player
+  socket.on('action:taunt', async ({ targetId, type = 'taunt' }) => {
+    const game = await gameManager.getPlayerGame(user.id);
+    if (!game) return;
+
+    const result = enhancedFeatures.processTaunt(user.id, targetId, game.id);
+
+    if (result.success) {
+      // Find target socket and send taunt
+      const targetSockets = await io.fetchSockets();
+      const targetSocket = targetSockets.find(s => s.user?.id === targetId);
+
+      if (targetSocket) {
+        targetSocket.emit('taunt:received', {
+          fromId: user.id,
+          fromName: user.name,
+          type,
+          timestamp: Date.now(),
+          vibrationPattern: [100, 50, 100, 50, 200],
+        });
+      }
+
+      socket.emit('action:result', { action: 'taunt', success: true });
+    } else {
+      socket.emit('action:result', {
+        action: 'taunt',
+        success: false,
+        error: result.error,
+        cooldownRemaining: result.remainingTime,
+      });
+    }
+  });
+
+  // Create decoy ping
+  socket.on('action:decoy', async ({ location }) => {
+    const game = await gameManager.getPlayerGame(user.id);
+    if (!game) return;
+
+    const decoy = enhancedFeatures.createDecoy(user.id, location, game.id);
+
+    // Broadcast decoy to all players (appears as fake player position)
+    io.to(`game:${game.id}`).emit('decoy:created', {
+      ...decoy,
+      creatorName: user.name,
+    });
+
+    socket.emit('action:result', { action: 'decoy', success: true, decoy });
+  });
+
+  // Send SOS alert
+  socket.on('action:sos', async ({ location, message }) => {
+    const game = await gameManager.getPlayerGame(user.id);
+    if (!game) return;
+
+    const sos = enhancedFeatures.createSOS(user.id, location, game.id);
+
+    // Broadcast to all allies (non-IT players)
+    const currentPlayer = game.players.find(p => p.id === user.id);
+
+    game.players
+      .filter(p => p.id !== user.id && !p.isIt)
+      .forEach(async (p) => {
+        const targetSockets = await io.fetchSockets();
+        const targetSocket = targetSockets.find(s => s.user?.id === p.id);
+
+        if (targetSocket) {
+          targetSocket.emit('sos:received', {
+            ...sos,
+            fromId: user.id,
+            fromName: user.name,
+            message: message || 'Help! Being chased!',
+          });
+        }
+      });
+
+    socket.emit('action:result', { action: 'sos', success: true, sos });
+  });
+
+  // ============================================
+  // Enhanced Features - Ambush Points
+  // ============================================
+
+  // Place ambush point
+  socket.on('ambush:place', async ({ location, name }) => {
+    const result = enhancedFeatures.placeAmbush(user.id, location, { name });
+
+    if (result.success) {
+      socket.emit('ambush:placed', result.ambush);
+    } else {
+      socket.emit('ambush:error', { error: result.error });
+    }
+  });
+
+  // Remove ambush point
+  socket.on('ambush:remove', ({ ambushId }) => {
+    const playerPoints = enhancedFeatures.ambushPoints.get(user.id) || [];
+    const index = playerPoints.findIndex(p => p.id === ambushId);
+
+    if (index !== -1) {
+      playerPoints.splice(index, 1);
+      enhancedFeatures.ambushPoints.set(user.id, playerPoints);
+      socket.emit('ambush:removed', { ambushId });
+    }
+  });
+
+  // ============================================
+  // Enhanced Features - Territory System
+  // ============================================
+
+  // Start territory claim
+  socket.on('territory:claim:start', ({ location, name }) => {
+    const result = enhancedFeatures.startTerritoryClaim(user.id, location, name);
+
+    if (result.error) {
+      socket.emit('territory:error', { error: result.error });
+    } else {
+      socket.emit('territory:claim:started', result);
+    }
+  });
+
+  // Complete territory claim
+  socket.on('territory:claim:complete', ({ claimId, location, name }) => {
+    const territory = enhancedFeatures.completeTerritoryClaim(user.id, claimId, location, name);
+    socket.emit('territory:claimed', territory);
+  });
+
+  // ============================================
+  // Enhanced Features - Ghost Trail & Showdown
+  // ============================================
+
+  // Enhanced location update with ghost trail recording
+  socket.on('location:enhanced', async (location) => {
+    const locationValidation = validate.location(location);
+    if (!locationValidation.valid) return;
+
+    const validLocation = { lat: locationValidation.lat, lng: locationValidation.lng };
+
+    // Record for ghost trail
+    enhancedFeatures.recordLocation(user.id, validLocation);
+
+    // Update momentum
+    enhancedFeatures.updateMomentum(user.id, validLocation);
+
+    // Check ambush triggers if this player is IT
+    const game = gameManager.getPlayerGameSync(user.id);
+    if (game && game.itPlayerId === user.id) {
+      const triggers = enhancedFeatures.checkAmbushTriggers(user.id, validLocation);
+
+      for (const trigger of triggers) {
+        // Notify the ambush owner
+        const ownerSockets = await io.fetchSockets();
+        const ownerSocket = ownerSockets.find(s => s.user?.id === trigger.playerId);
+
+        if (ownerSocket) {
+          ownerSocket.emit('ambush:triggered', {
+            ambush: trigger.ambush,
+            distance: trigger.distance,
+            timestamp: trigger.timestamp,
+          });
+        }
+      }
+
+      // Check territory warnings for all non-IT players
+      for (const player of game.players) {
+        if (player.id === user.id) continue;
+
+        const warnings = enhancedFeatures.checkTerritoryWarnings(player.id, validLocation);
+        if (warnings.length > 0) {
+          const targetSockets = await io.fetchSockets();
+          const targetSocket = targetSockets.find(s => s.user?.id === player.id);
+
+          if (targetSocket) {
+            targetSocket.emit('territory:warning', { warnings });
+          }
+        }
+      }
+    }
+
+    // Check for showdown with IT
+    if (game && game.status === 'active' && !game.players.find(p => p.id === user.id)?.isIt) {
+      const itPlayer = game.players.find(p => p.isIt);
+      if (itPlayer?.location) {
+        const distance = getDistance(
+          validLocation.lat, validLocation.lng,
+          itPlayer.location.lat, itPlayer.location.lng
+        );
+
+        const showdownResult = enhancedFeatures.checkShowdown(
+          game.itPlayerId,
+          user.id,
+          distance
+        );
+
+        if (showdownResult.started) {
+          // Notify both players
+          socket.emit('showdown:started', {
+            showdown: showdownResult.showdown,
+            isIt: false,
+          });
+
+          const itSockets = await io.fetchSockets();
+          const itSocket = itSockets.find(s => s.user?.id === game.itPlayerId);
+          if (itSocket) {
+            itSocket.emit('showdown:started', {
+              showdown: showdownResult.showdown,
+              isIt: true,
+              targetName: user.name,
+            });
+          }
+        } else if (showdownResult.ended) {
+          socket.emit('showdown:ended', { showdown: showdownResult.showdown });
+
+          const itSockets = await io.fetchSockets();
+          const itSocket = itSockets.find(s => s.user?.id === game.itPlayerId);
+          if (itSocket) {
+            itSocket.emit('showdown:ended', { showdown: showdownResult.showdown });
+          }
+        }
+      }
+    }
+  });
+
+  // Get delayed location (for IT viewing other players)
+  socket.on('location:delayed:get', ({ playerId }) => {
+    const delayed = enhancedFeatures.getDelayedLocation(playerId);
+    const trail = enhancedFeatures.getGhostTrail(playerId);
+
+    socket.emit('location:delayed', {
+      playerId,
+      location: delayed,
+      trail,
+    });
+  });
+
+  // Get momentum status
+  socket.on('momentum:get', () => {
+    const momentum = enhancedFeatures.momentum.get(user.id);
+    const multiplier = enhancedFeatures.getGPSMultiplier(user.id);
+
+    socket.emit('momentum:status', {
+      ...momentum,
+      gpsMultiplier: multiplier,
+    });
   });
 }
