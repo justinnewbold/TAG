@@ -47,6 +47,7 @@ import OnboardingTutorial from './components/OnboardingTutorial';
 import { GameErrorBoundary } from './components/ErrorBoundary';
 import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import ConnectionStatus from './components/ConnectionStatus';
+import OfflineIndicator from './components/OfflineIndicator';
 import AppRatingPrompt from './components/AppRatingPrompt';
 import { AIFloatingButton } from './components/AI';
 
@@ -191,6 +192,9 @@ function App() {
       <div className="min-h-screen bg-dark-900 text-white">
         {/* Connection Status Banner */}
         <ConnectionStatus />
+
+        {/* Offline Indicator */}
+        <OfflineIndicator />
 
         {/* Background gradient */}
         <div className="fixed inset-0 bg-gradient-to-br from-neon-purple/5 via-transparent to-neon-cyan/5 pointer-events-none" />

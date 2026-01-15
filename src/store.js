@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getDistance, generateId, generateGameCode } from '../shared/utils.js';
 import { GAME_MODES, ACHIEVEMENTS } from '../shared/constants.js';
+import { gameCache } from './services/gameCache.js';
 
 // Re-export for backward compatibility
 export { GAME_MODES, ACHIEVEMENTS };
@@ -718,6 +719,9 @@ export const useStore = create(
       syncGameState: (game) => set((state) => {
         if (!game) return { currentGame: null };
 
+        // Cache game for offline viewing
+        gameCache.cacheGame(game);
+
         // Update games list if this game exists
         const gameExists = state.games.some(g => g.id === game.id);
         const updatedGames = gameExists
@@ -729,6 +733,11 @@ export const useStore = create(
           games: updatedGames,
         };
       }),
+
+      // Get cached game when offline
+      getCachedGame: (gameId) => {
+        return gameCache.getCachedGame(gameId);
+      },
 
       handlePlayerJoined: ({ player, playerCount }) => set((state) => {
         if (!state.currentGame) return state;
