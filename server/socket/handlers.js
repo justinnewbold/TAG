@@ -3,6 +3,7 @@ import { pushService } from '../services/push.js';
 import { getDistance, calculateSpeed, isValidSpeed } from '../shared/utils.js';
 import { ANTI_CHEAT, SOCKET_RATE_LIMITS } from '../shared/constants.js';
 import { enhancedFeatures } from '../game/EnhancedFeatures.js';
+import { logger } from '../utils/logger.js';
 
 // Rate limiter for socket events with retry-after support
 class RateLimiter {
@@ -91,7 +92,7 @@ class LocationTracker {
         violations.lastViolation = now;
         this.violations.set(playerId, violations);
 
-        console.warn(`[AntiCheat] Player ${playerId}: ${cheatCheck.reason} (speed: ${speed.toFixed(1)} m/s, violations: ${violations.count})`);
+        logger.warn('AntiCheat violation detected', { playerId, reason: cheatCheck.reason, speed: speed.toFixed(1), violations: violations.count });
       }
     }
 
@@ -147,7 +148,7 @@ class LocationTracker {
 
     // Log cleanup stats for monitoring
     if (historyRemoved > 0 || violationsRemoved > 0) {
-      console.log(`[LocationTracker] Cleanup: removed ${historyRemoved} history, ${violationsRemoved} violations. Current: ${this.history.size} tracked players`);
+      logger.debug('LocationTracker cleanup completed', { historyRemoved, violationsRemoved, trackedPlayers: this.history.size });
     }
   }
 
@@ -180,10 +181,10 @@ export function setupSocketHandlers(io, socket, gameManager) {
       const currentGame = await gameManager.getPlayerGame(user.id);
       if (currentGame) {
         socket.join(`game:${currentGame.id}`);
-        console.log(`${user.name} rejoined game room: ${currentGame.code}`);
+        logger.debug('User rejoined game room', { userId: user.id, userName: user.name, gameCode: currentGame.code });
       }
     } catch (err) {
-      console.error(`Failed to rejoin game for ${user.name}:`, err.message);
+      logger.error('Failed to rejoin game', { userId: user.id, userName: user.name, error: err.message });
     }
   })();
 
@@ -192,7 +193,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
     const game = await gameManager.getGame(gameId);
     if (game && game.players.some(p => p.id === user.id)) {
       socket.join(`game:${gameId}`);
-      console.log(`${user.name} joined game room: ${game.code}`);
+      logger.debug('User joined game room', { userId: user.id, userName: user.name, gameCode: game.code });
 
       // Send current game state to the joining player
       socket.emit('game:state', { game });
@@ -202,7 +203,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
   // Leave game room
   socket.on('game:leave', (gameId) => {
     socket.leave(`game:${gameId}`);
-    console.log(`${user.name} left game room`);
+    logger.debug('User left game room', { userId: user.id, userName: user.name });
   });
 
   // Update player location (synchronous for performance - uses cache only)
@@ -537,7 +538,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
   // Handle disconnect
   socket.on('disconnect', async (reason) => {
-    console.log(`User disconnected: ${user.name} (${reason})`);
+    logger.info('User disconnected', { userId: user.id, userName: user.name, reason });
 
     // Clean up location tracker data for this player
     locationTracker.removePlayer(user.id);
@@ -630,7 +631,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
         message: 'Invite sent successfully',
       });
 
-      console.log(`${user.name} invited ${friendId} to game ${gameCode}`);
+      logger.info('Game invite sent', { fromUserId: user.id, fromUserName: user.name, toUserId: friendId, gameCode });
     } else {
       // Target user is offline - could store for later or send push notification
       pushService.sendToUser(friendId, {

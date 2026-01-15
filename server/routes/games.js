@@ -1,6 +1,7 @@
 import express from 'express';
 import { validate } from '../utils/validation.js';
 import { pushService } from '../services/push.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -20,7 +21,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ game });
   } catch (error) {
-    console.error('Create game error:', error);
+    logger.error('Create game error', { error: error.message });
     res.status(500).json({ error: 'Failed to create game' });
   }
 });
@@ -37,7 +38,7 @@ router.get('/current', async (req, res) => {
 
     res.json({ game });
   } catch (error) {
-    console.error('Get current game error:', error);
+    logger.error('Get current game error', { error: error.message });
     res.status(500).json({ error: 'Failed to get game' });
   }
 });
@@ -78,7 +79,7 @@ router.get('/code/:code', async (req, res) => {
 
     res.json({ game });
   } catch (error) {
-    console.error('Get game by code error:', error);
+    logger.error('Get game by code error', { error: error.message });
     res.status(500).json({ error: 'Failed to get game' });
   }
 });
@@ -109,7 +110,7 @@ router.get('/:id', async (req, res) => {
 
     res.json({ game });
   } catch (error) {
-    console.error('Get game error:', error);
+    logger.error('Get game error', { error: error.message });
     res.status(500).json({ error: 'Failed to get game' });
   }
 });
@@ -146,7 +147,7 @@ router.post('/join/:code', async (req, res) => {
 
     res.json({ game: result.game });
   } catch (error) {
-    console.error('Join game error:', error);
+    logger.error('Join game error', { error: error.message });
     res.status(500).json({ error: 'Failed to join game' });
   }
 });
@@ -176,7 +177,7 @@ router.post('/leave', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Leave game error:', error);
+    logger.error('Leave game error', { error: error.message });
     res.status(500).json({ error: 'Failed to leave game' });
   }
 });
@@ -221,7 +222,7 @@ router.post('/:id/start', async (req, res) => {
 
     res.json({ game: result.game });
   } catch (error) {
-    console.error('Start game error:', error);
+    logger.error('Start game error', { error: error.message });
     res.status(500).json({ error: 'Failed to start game' });
   }
 });
@@ -265,7 +266,7 @@ router.post('/:id/end', async (req, res) => {
       summary,
     });
   } catch (error) {
-    console.error('End game error:', error);
+    logger.error('End game error', { error: error.message });
     res.status(500).json({ error: 'Failed to end game' });
   }
 });
@@ -328,7 +329,7 @@ router.post('/:id/tag/:targetId', async (req, res) => {
       tagTime: result.tagTime,
     });
   } catch (error) {
-    console.error('Tag player error:', error);
+    logger.error('Tag player error', { error: error.message });
     res.status(500).json({ error: 'Failed to tag player' });
   }
 });
@@ -340,7 +341,7 @@ router.get('/public/list', async (req, res) => {
     const games = await gameManager.getPublicGames(20);
     res.json({ games });
   } catch (error) {
-    console.error('Get public games error:', error);
+    logger.error('Get public games error', { error: error.message });
     res.status(500).json({ error: 'Failed to get public games' });
   }
 });
@@ -380,7 +381,7 @@ router.post('/:id/players/:playerId/kick', async (req, res) => {
 
     res.json({ game: result.game });
   } catch (error) {
-    console.error('Kick player error:', error);
+    logger.error('Kick player error', { error: error.message });
     res.status(500).json({ error: 'Failed to kick player' });
   }
 });
@@ -420,7 +421,7 @@ router.post('/:id/players/:playerId/ban', async (req, res) => {
 
     res.json({ game: result.game });
   } catch (error) {
-    console.error('Ban player error:', error);
+    logger.error('Ban player error', { error: error.message });
     res.status(500).json({ error: 'Failed to ban player' });
   }
 });
@@ -460,7 +461,7 @@ router.patch('/:id/settings', async (req, res) => {
 
     res.json({ game: result.game });
   } catch (error) {
-    console.error('Update settings error:', error);
+    logger.error('Update settings error', { error: error.message });
     res.status(500).json({ error: 'Failed to update settings' });
   }
 });
@@ -505,7 +506,7 @@ router.post('/:id/players/:playerId/approve', async (req, res) => {
 
     res.json({ game: result.game });
   } catch (error) {
-    console.error('Approve player error:', error);
+    logger.error('Approve player error', { error: error.message });
     res.status(500).json({ error: 'Failed to approve player' });
   }
 });
@@ -544,7 +545,7 @@ router.post('/:id/players/:playerId/reject', async (req, res) => {
 
     res.json({ game: result.game });
   } catch (error) {
-    console.error('Reject player error:', error);
+    logger.error('Reject player error', { error: error.message });
     res.status(500).json({ error: 'Failed to reject player' });
   }
 });
@@ -603,7 +604,7 @@ router.post('/rematch', async (req, res) => {
 
     res.status(201).json({ game: newGame });
   } catch (error) {
-    console.error('Rematch error:', error);
+    logger.error('Rematch error', { error: error.message });
     res.status(500).json({ error: 'Failed to create rematch' });
   }
 });
@@ -616,7 +617,7 @@ router.get('/public', async (req, res) => {
     
     res.json({ games });
   } catch (error) {
-    console.error('Get public games error:', error);
+    logger.error('Get public games error', { error: error.message });
     res.status(500).json({ error: 'Failed to get public games' });
   }
 });
@@ -649,7 +650,7 @@ router.post('/spectate', async (req, res) => {
 
     res.json({ game: result.game });
   } catch (error) {
-    console.error('Spectate error:', error);
+    logger.error('Spectate error', { error: error.message });
     res.status(500).json({ error: 'Failed to spectate game' });
   }
 });

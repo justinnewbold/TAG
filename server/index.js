@@ -295,7 +295,7 @@ app.use('/api/analytics/v2', authenticateToken, advancedAnalyticsRouter);
     await replayDb.init();
     await socialDb.init();
   } catch (err) {
-    console.error('Failed to initialize social/replay tables:', err);
+    logger.error('Failed to initialize social/replay tables', { error: err.message });
   }
 })();
 
@@ -393,18 +393,27 @@ setTimeout(async () => {
 }, 5000);
 
 // Graceful shutdown
-const shutdown = async () => {
-  console.log('Shutting down gracefully...');
+const shutdown = async (signal) => {
+  logger.info('Shutdown initiated', { signal });
+
+  // Close socket connections gracefully
+  io.close(() => {
+    logger.info('Socket.io connections closed');
+  });
 
   // Flush any pending error reports
   await sentry.flush(2000);
 
   httpServer.close(() => {
-    console.log('Server closed');
+    logger.info('HTTP server closed');
     process.exit(0);
   });
+
   // Force close after 10 seconds
-  setTimeout(() => process.exit(1), 10000);
+  setTimeout(() => {
+    logger.warn('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
 };
 
 process.on('SIGTERM', shutdown);
