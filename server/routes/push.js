@@ -22,7 +22,7 @@ router.get('/vapid-public-key', (req, res) => {
 });
 
 // Subscribe to push notifications
-router.post('/subscribe', (req, res) => {
+router.post('/subscribe', async (req, res) => {
   try {
     const { subscription } = req.body;
 
@@ -30,7 +30,7 @@ router.post('/subscribe', (req, res) => {
       return res.status(400).json({ error: 'Invalid subscription' });
     }
 
-    const success = pushService.subscribe(req.user.id, subscription);
+    const success = await pushService.subscribe(req.user.id, subscription);
 
     if (!success) {
       return res.status(503).json({ error: 'Push notifications not available' });
@@ -44,9 +44,9 @@ router.post('/subscribe', (req, res) => {
 });
 
 // Unsubscribe from push notifications
-router.post('/unsubscribe', (req, res) => {
+router.post('/unsubscribe', async (req, res) => {
   try {
-    pushService.unsubscribe(req.user.id);
+    await pushService.unsubscribe(req.user.id);
     res.json({ success: true });
   } catch (error) {
     logger.error('Push unsubscribe error:', error);

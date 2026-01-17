@@ -7,8 +7,12 @@ const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@tag.game';
 
-// In-memory subscription store (should be moved to database for production)
-const subscriptions = new Map(); // userId -> subscription
+// In-memory cache for quick lookups (backed by database)
+const subscriptionCache = new Map(); // userId -> subscription
+
+// Database reference (set during init)
+let db = null;
+let isPostgres = false;
 
 // Initialize web-push if VAPID keys are configured
 let pushEnabled = false;
@@ -21,7 +25,127 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   logger.warn('Push notifications disabled - VAPID keys not configured');
 }
 
+// Initialize database connection for persistent storage
+async function initPushDatabase(database, postgres = false) {
+  db = database;
+  isPostgres = postgres;
+
+  // Create push_subscriptions table if it doesn't exist
+  const createTableSQL = isPostgres
+    ? `CREATE TABLE IF NOT EXISTS push_subscriptions (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        endpoint TEXT NOT NULL,
+        keys JSONB NOT NULL,
+        expiration_time BIGINT,
+        created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW()) * 1000,
+        updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW()) * 1000
+      );
+      CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON push_subscriptions(endpoint);`
+    : `CREATE TABLE IF NOT EXISTS push_subscriptions (
+        user_id TEXT PRIMARY KEY,
+        endpoint TEXT NOT NULL,
+        keys TEXT NOT NULL,
+        expiration_time INTEGER,
+        created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+        updated_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
+      );
+      CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON push_subscriptions(endpoint);`;
+
+  try {
+    if (isPostgres) {
+      await db.query(createTableSQL);
+    } else {
+      db.exec(createTableSQL);
+    }
+    logger.info('Push subscriptions table initialized');
+
+    // Load existing subscriptions into cache
+    await loadSubscriptionsToCache();
+  } catch (error) {
+    logger.error('Failed to initialize push subscriptions table:', error);
+  }
+}
+
+// Load subscriptions from database to cache
+async function loadSubscriptionsToCache() {
+  if (!db) return;
+
+  try {
+    const query = 'SELECT user_id, endpoint, keys FROM push_subscriptions';
+    let rows;
+
+    if (isPostgres) {
+      const result = await db.query(query);
+      rows = result.rows;
+    } else {
+      rows = db.prepare(query).all();
+    }
+
+    for (const row of rows) {
+      const keys = typeof row.keys === 'string' ? JSON.parse(row.keys) : row.keys;
+      subscriptionCache.set(row.user_id, {
+        endpoint: row.endpoint,
+        keys,
+      });
+    }
+
+    logger.info(`Loaded ${rows.length} push subscriptions to cache`);
+  } catch (error) {
+    logger.error('Failed to load push subscriptions to cache:', error);
+  }
+}
+
+// Save subscription to database
+async function saveSubscriptionToDb(userId, subscription) {
+  if (!db) return;
+
+  const now = Date.now();
+  const keys = JSON.stringify(subscription.keys);
+
+  try {
+    if (isPostgres) {
+      await db.query(
+        `INSERT INTO push_subscriptions (user_id, endpoint, keys, expiration_time, updated_at)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (user_id) DO UPDATE SET
+           endpoint = EXCLUDED.endpoint,
+           keys = EXCLUDED.keys,
+           expiration_time = EXCLUDED.expiration_time,
+           updated_at = EXCLUDED.updated_at`,
+        [userId, subscription.endpoint, keys, subscription.expirationTime || null, now]
+      );
+    } else {
+      db.prepare(
+        `INSERT OR REPLACE INTO push_subscriptions (user_id, endpoint, keys, expiration_time, updated_at)
+         VALUES (?, ?, ?, ?, ?)`
+      ).run(userId, subscription.endpoint, keys, subscription.expirationTime || null, now);
+    }
+  } catch (error) {
+    logger.error('Failed to save push subscription to database:', error);
+  }
+}
+
+// Remove subscription from database
+async function removeSubscriptionFromDb(userId) {
+  if (!db) return;
+
+  try {
+    if (isPostgres) {
+      await db.query('DELETE FROM push_subscriptions WHERE user_id = $1', [userId]);
+    } else {
+      db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(userId);
+    }
+  } catch (error) {
+    logger.error('Failed to remove push subscription from database:', error);
+  }
+}
+
 export const pushService = {
+  // Initialize database (call during server startup)
+  async init(database, postgres = false) {
+    await initPushDatabase(database, postgres);
+  },
+
   // Check if push is enabled
   isEnabled() {
     return pushEnabled;
@@ -32,18 +156,28 @@ export const pushService = {
     return VAPID_PUBLIC_KEY;
   },
 
-  // Save subscription for a user
-  subscribe(userId, subscription) {
+  // Save subscription for a user (with database persistence)
+  async subscribe(userId, subscription) {
     if (!pushEnabled) return false;
 
-    subscriptions.set(userId, subscription);
+    // Update cache
+    subscriptionCache.set(userId, subscription);
+
+    // Persist to database
+    await saveSubscriptionToDb(userId, subscription);
+
     logger.info('Push subscription added', { userId });
     return true;
   },
 
-  // Remove subscription for a user
-  unsubscribe(userId) {
-    subscriptions.delete(userId);
+  // Remove subscription for a user (with database persistence)
+  async unsubscribe(userId) {
+    // Update cache
+    subscriptionCache.delete(userId);
+
+    // Remove from database
+    await removeSubscriptionFromDb(userId);
+
     logger.info('Push subscription removed', { userId });
   },
 
@@ -51,7 +185,7 @@ export const pushService = {
   async sendToUser(userId, notification) {
     if (!pushEnabled) return false;
 
-    const subscription = subscriptions.get(userId);
+    const subscription = subscriptionCache.get(userId);
     if (!subscription) {
       return false;
     }
@@ -68,9 +202,10 @@ export const pushService = {
         error: error.message,
       });
 
-      // Remove invalid subscriptions
-      if (error.statusCode === 410) {
-        subscriptions.delete(userId);
+      // Remove invalid subscriptions (expired or unsubscribed)
+      if (error.statusCode === 410 || error.statusCode === 404) {
+        subscriptionCache.delete(userId);
+        await removeSubscriptionFromDb(userId);
       }
       return false;
     }
