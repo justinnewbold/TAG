@@ -44,6 +44,82 @@ export const migrations = {
     `
   },
 
+  // Phase 2: Performance indexes for hot paths
+  performanceIndexes: {
+    postgres: `
+      -- Active games lookup (most common query pattern)
+      CREATE INDEX IF NOT EXISTS idx_games_active ON games(status) WHERE status IN ('waiting', 'active');
+
+      -- Game code lookup (for join game)
+      CREATE INDEX IF NOT EXISTS idx_games_code ON games(code) WHERE code IS NOT NULL;
+
+      -- User stats for leaderboard queries (covering index)
+      CREATE INDEX IF NOT EXISTS idx_user_stats_tags_games ON user_stats(total_tags DESC, games_played DESC);
+      CREATE INDEX IF NOT EXISTS idx_user_stats_wins ON user_stats(games_won DESC);
+
+      -- Game players with status for active player lookup
+      CREATE INDEX IF NOT EXISTS idx_game_players_active ON game_players(game_id, is_it) WHERE left_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_game_players_user_active ON game_players(user_id, joined_at DESC);
+
+      -- Game tags for recent tags query
+      CREATE INDEX IF NOT EXISTS idx_game_tags_game_time ON game_tags(game_id, timestamp DESC);
+
+      -- Leaderboard ranking queries
+      CREATE INDEX IF NOT EXISTS idx_leaderboards_ranking ON leaderboards(stat_type, period, value DESC);
+
+      -- Notifications unread count
+      CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, created_at DESC) WHERE read = FALSE;
+
+      -- Friendships accepted
+      CREATE INDEX IF NOT EXISTS idx_friendships_accepted ON friendships(user_id) WHERE status = 'accepted';
+      CREATE INDEX IF NOT EXISTS idx_friendships_pending ON friendships(friend_id) WHERE status = 'pending';
+
+      -- Active bans check
+      CREATE INDEX IF NOT EXISTS idx_bans_active ON bans(user_id) WHERE permanent = TRUE OR expires_at > EXTRACT(EPOCH FROM NOW()) * 1000;
+
+      -- Matchmaking queue active
+      CREATE INDEX IF NOT EXISTS idx_matchmaking_active ON matchmaking_queue(skill_rating, joined_at) WHERE status = 'waiting';
+
+      -- Chat messages recent
+      CREATE INDEX IF NOT EXISTS idx_chat_recent ON chat_messages(game_id, created_at DESC);
+
+      -- Tournament active
+      CREATE INDEX IF NOT EXISTS idx_tournaments_active ON tournaments(status, start_time) WHERE status IN ('upcoming', 'active');
+
+      -- Season current
+      CREATE INDEX IF NOT EXISTS idx_seasons_current ON seasons(end_date) WHERE end_date > EXTRACT(EPOCH FROM NOW()) * 1000;
+
+      -- XP transactions for user history
+      CREATE INDEX IF NOT EXISTS idx_xp_user_recent ON xp_transactions(user_id, created_at DESC);
+
+      -- Clan members active
+      CREATE INDEX IF NOT EXISTS idx_clan_members_active ON clan_members(clan_id) WHERE left_at IS NULL;
+    `,
+    sqlite: `
+      -- Game code lookup (for join game)
+      CREATE INDEX IF NOT EXISTS idx_games_code ON games(code);
+
+      -- User stats for leaderboard queries
+      CREATE INDEX IF NOT EXISTS idx_user_stats_tags_games ON user_stats(total_tags DESC, games_played DESC);
+      CREATE INDEX IF NOT EXISTS idx_user_stats_wins ON user_stats(games_won DESC);
+
+      -- Game players with user for active player lookup
+      CREATE INDEX IF NOT EXISTS idx_game_players_user_active ON game_players(user_id, joined_at DESC);
+
+      -- Game tags for recent tags query
+      CREATE INDEX IF NOT EXISTS idx_game_tags_game_time ON game_tags(game_id, timestamp DESC);
+
+      -- Leaderboard ranking queries
+      CREATE INDEX IF NOT EXISTS idx_leaderboards_ranking ON leaderboards(stat_type, period, value DESC);
+
+      -- Chat messages recent
+      CREATE INDEX IF NOT EXISTS idx_chat_recent ON chat_messages(game_id, created_at DESC);
+
+      -- XP transactions for user history
+      CREATE INDEX IF NOT EXISTS idx_xp_user_recent ON xp_transactions(user_id, created_at DESC);
+    `
+  },
+
   // Phase 3-6: New tables for features
   createNewTables: {
     postgres: `
@@ -546,10 +622,12 @@ export async function runMigrations(db, isPostgres) {
     if (isPostgres) {
       // Run PostgreSQL migrations
       await db.query(migrations.addIndexes.postgres);
+      await db.query(migrations.performanceIndexes.postgres);
       await db.query(migrations.createNewTables.postgres);
     } else {
       // Run SQLite migrations
       db.exec(migrations.addIndexes.sqlite);
+      db.exec(migrations.performanceIndexes.sqlite);
       db.exec(migrations.createNewTables.sqlite);
     }
     logger.info('Database migrations completed successfully');
