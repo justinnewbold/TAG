@@ -9,6 +9,7 @@ import { email } from './services/email.js';
 import { sms } from './services/sms.js';
 import { oauth } from './services/oauth.js';
 import { sanitize } from './utils/validation.js';
+import { logger } from './utils/logger.js';
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ const REFRESH_TOKEN_EXPIRES_DAYS = 30;
 
 // Initialize services (async, but non-blocking - services check isConfigured before use)
 Promise.all([email.init(), sms.init()]).catch(err => {
-  console.error('Error initializing auth services:', err);
+  logger.error('Error initializing auth services', { error: err.message });
 });
 
 // ============ HELPERS ============
@@ -87,7 +88,7 @@ router.post('/register', async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    logger.error('Registration error', { error: error.message });
     // Include error details for debugging
     res.status(500).json({
       error: 'Registration failed',
@@ -154,7 +155,7 @@ router.post('/register/email', async (req, res) => {
       message: 'Verification email sent',
     });
   } catch (error) {
-    console.error('Email registration error:', error);
+    logger.error('Email registration error', { error: error.message });
     res.status(500).json({
       error: 'Registration failed',
       details: error.message,
@@ -194,7 +195,7 @@ router.post('/login/email', async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error('Email login error:', error);
+    logger.error('Email login error', { error: error.message });
     res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -250,7 +251,7 @@ router.post('/register/phone', async (req, res) => {
       userId: user.id,
     });
   } catch (error) {
-    console.error('Phone registration error:', error);
+    logger.error('Phone registration error', { error: error.message });
     res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -289,7 +290,7 @@ router.post('/verify/phone', async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error('Phone verification error:', error);
+    logger.error('Phone verification error', { error: error.message });
     res.status(500).json({ error: 'Verification failed' });
   }
 });
@@ -317,7 +318,7 @@ router.post('/verify/email', async (req, res) => {
       user: sanitizeUser(user),
     });
   } catch (error) {
-    console.error('Email verification error:', error);
+    logger.error('Email verification error', { error: error.message });
     res.status(500).json({ error: 'Verification failed' });
   }
 });
@@ -339,7 +340,7 @@ router.post('/resend-verification', authenticateToken, async (req, res) => {
 
     res.json({ message: 'Verification email sent' });
   } catch (error) {
-    console.error('Resend verification error:', error);
+    logger.error('Resend verification error', { error: error.message });
     res.status(500).json({ error: 'Failed to send verification' });
   }
 });
@@ -366,7 +367,7 @@ router.post('/forgot-password', async (req, res) => {
 
     res.json({ message: 'If email exists, reset code has been sent' });
   } catch (error) {
-    console.error('Forgot password error:', error);
+    logger.error('Forgot password error', { error: error.message });
     res.status(500).json({ error: 'Request failed' });
   }
 });
@@ -396,7 +397,7 @@ router.post('/reset-password', async (req, res) => {
 
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
-    console.error('Reset password error:', error);
+    logger.error('Reset password error', { error: error.message });
     res.status(500).json({ error: 'Password reset failed' });
   }
 });
@@ -467,7 +468,7 @@ router.get('/google/callback', async (req, res) => {
 
     res.redirect(redirectUrl.toString());
   } catch (error) {
-    console.error('Google callback error:', error);
+    logger.error('Google callback error', { error: error.message });
     res.redirect(`${process.env.CLIENT_URL || '/'}/auth/error?message=${encodeURIComponent(error.message)}`);
   }
 });
@@ -522,7 +523,7 @@ router.post('/google/token', async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error('Google token error:', error);
+    logger.error('Google token error', { error: error.message });
     res.status(401).json({ error: 'Invalid Google token' });
   }
 });
@@ -609,7 +610,7 @@ router.post('/apple/callback', async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error('Apple callback error:', error);
+    logger.error('Apple callback error', { error: error.message });
     if (req.headers.accept?.includes('text/html')) {
       return res.redirect(`${process.env.CLIENT_URL || '/'}/auth/error?message=${encodeURIComponent(error.message)}`);
     }
@@ -672,7 +673,7 @@ router.post('/apple/token', async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error('Apple token error:', error);
+    logger.error('Apple token error', { error: error.message });
     res.status(401).json({ error: 'Invalid Apple token' });
   }
 });
@@ -731,7 +732,7 @@ router.post('/refresh', async (req, res) => {
       refreshToken: newRefreshToken,
     });
   } catch (error) {
-    console.error('Token refresh error:', error);
+    logger.error('Token refresh error', { error: error.message });
     res.status(500).json({ error: 'Token refresh failed' });
   }
 });
@@ -764,7 +765,7 @@ router.post('/login', async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error', { error: error.message });
     res.status(401).json({ error: 'Invalid token' });
   }
 });
@@ -787,7 +788,7 @@ router.post('/logout', authenticateToken, async (req, res) => {
 
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
-    console.error('Logout error:', error);
+    logger.error('Logout error', { error: error.message });
     res.status(500).json({ error: 'Logout failed' });
   }
 });
@@ -817,7 +818,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
 
     res.json({ user: sanitizeUser(updatedUser) });
   } catch (error) {
-    console.error('Profile update error:', error);
+    logger.error('Profile update error', { error: error.message });
     res.status(500).json({ error: 'Profile update failed' });
   }
 });
@@ -832,7 +833,7 @@ router.get('/me', authenticateToken, async (req, res) => {
 
     res.json({ user: sanitizeUser(user) });
   } catch (error) {
-    console.error('Get user error:', error);
+    logger.error('Get user error', { error: error.message });
     res.status(500).json({ error: 'Failed to get user' });
   }
 });
@@ -917,7 +918,7 @@ router.post('/supabase', async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error('Supabase auth sync error:', error);
+    logger.error('Supabase auth sync error', { error: error.message });
     res.status(500).json({ error: 'Authentication failed' });
   }
 });

@@ -2,6 +2,8 @@ import { validate } from '../utils/validation.js';
 import { pushService } from '../services/push.js';
 import { getDistance, calculateSpeed, isValidSpeed } from '../shared/utils.js';
 import { ANTI_CHEAT, SOCKET_RATE_LIMITS } from '../shared/constants.js';
+import { enhancedFeatures } from '../game/EnhancedFeatures.js';
+import { logger } from '../utils/logger.js';
 
 // Rate limiter for socket events with retry-after support
 class RateLimiter {
@@ -67,6 +69,7 @@ class LocationTracker {
   constructor() {
     this.history = new Map(); // playerId -> { lat, lng, timestamp }
     this.violations = new Map(); // playerId -> { count, lastViolation }
+    this.MAX_TRACKED_PLAYERS = 10000; // Prevent unbounded growth
   }
 
   update(playerId, location) {
@@ -89,8 +92,13 @@ class LocationTracker {
         violations.lastViolation = now;
         this.violations.set(playerId, violations);
 
-        console.warn(`[AntiCheat] Player ${playerId}: ${cheatCheck.reason} (speed: ${speed.toFixed(1)} m/s, violations: ${violations.count})`);
+        logger.warn('AntiCheat violation detected', { playerId, reason: cheatCheck.reason, speed: speed.toFixed(1), violations: violations.count });
       }
+    }
+
+    // Prevent unbounded growth - force cleanup if too many entries
+    if (this.history.size >= this.MAX_TRACKED_PLAYERS) {
+      this.cleanup();
     }
 
     // Store current location for next check
@@ -117,22 +125,40 @@ class LocationTracker {
     this.violations.delete(playerId);
   }
 
-  // Cleanup old entries periodically (players inactive for 10+ minutes)
+  // Cleanup old entries periodically (players inactive for 5+ minutes)
   cleanup() {
     const now = Date.now();
-    const STALE_THRESHOLD = 10 * 60 * 1000; // 10 minutes
+    const STALE_THRESHOLD = 5 * 60 * 1000; // 5 minutes (reduced from 10)
+    let historyRemoved = 0;
+    let violationsRemoved = 0;
 
     for (const [playerId, data] of this.history) {
       if (now - data.timestamp > STALE_THRESHOLD) {
         this.history.delete(playerId);
+        historyRemoved++;
       }
     }
 
     for (const [playerId, data] of this.violations) {
       if (now - data.lastViolation > STALE_THRESHOLD) {
         this.violations.delete(playerId);
+        violationsRemoved++;
       }
     }
+
+    // Log cleanup stats for monitoring
+    if (historyRemoved > 0 || violationsRemoved > 0) {
+      logger.debug('LocationTracker cleanup completed', { historyRemoved, violationsRemoved, trackedPlayers: this.history.size });
+    }
+  }
+
+  // Get stats for monitoring
+  getStats() {
+    return {
+      trackedPlayers: this.history.size,
+      playersWithViolations: this.violations.size,
+      maxCapacity: this.MAX_TRACKED_PLAYERS,
+    };
   }
 }
 
@@ -140,11 +166,11 @@ class LocationTracker {
 const rateLimiter = new RateLimiter();
 const locationTracker = new LocationTracker();
 
-// Cleanup rate limiter and location tracker every 5 minutes
+// Cleanup rate limiter and location tracker every 2 minutes
 setInterval(() => {
   rateLimiter.cleanup();
   locationTracker.cleanup();
-}, 300000);
+}, 120000);
 
 export function setupSocketHandlers(io, socket, gameManager) {
   const user = socket.user;
@@ -155,10 +181,10 @@ export function setupSocketHandlers(io, socket, gameManager) {
       const currentGame = await gameManager.getPlayerGame(user.id);
       if (currentGame) {
         socket.join(`game:${currentGame.id}`);
-        console.log(`${user.name} rejoined game room: ${currentGame.code}`);
+        logger.debug('User rejoined game room', { userId: user.id, userName: user.name, gameCode: currentGame.code });
       }
     } catch (err) {
-      console.error(`Failed to rejoin game for ${user.name}:`, err.message);
+      logger.error('Failed to rejoin game', { userId: user.id, userName: user.name, error: err.message });
     }
   })();
 
@@ -167,7 +193,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
     const game = await gameManager.getGame(gameId);
     if (game && game.players.some(p => p.id === user.id)) {
       socket.join(`game:${gameId}`);
-      console.log(`${user.name} joined game room: ${game.code}`);
+      logger.debug('User joined game room', { userId: user.id, userName: user.name, gameCode: game.code });
 
       // Send current game state to the joining player
       socket.emit('game:state', { game });
@@ -177,7 +203,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
   // Leave game room
   socket.on('game:leave', (gameId) => {
     socket.leave(`game:${gameId}`);
-    console.log(`${user.name} left game room`);
+    logger.debug('User left game room', { userId: user.id, userName: user.name });
   });
 
   // Update player location (synchronous for performance - uses cache only)
@@ -486,6 +512,17 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
   // Request current game state
   socket.on('game:sync', async () => {
+    // Rate limit sync requests to prevent abuse
+    const rateCheck = rateLimiter.check(user.id, 'game:sync', 30); // 30 syncs per minute
+    if (!rateCheck.allowed) {
+      socket.emit('error:rateLimit', {
+        event: 'game:sync',
+        message: 'Too many sync requests',
+        retryAfter: rateCheck.retryAfter,
+      });
+      return;
+    }
+
     const game = await gameManager.getPlayerGame(user.id);
     if (game) {
       socket.emit('game:state', { game });
@@ -501,7 +538,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
 
   // Handle disconnect
   socket.on('disconnect', async (reason) => {
-    console.log(`User disconnected: ${user.name} (${reason})`);
+    logger.info('User disconnected', { userId: user.id, userName: user.name, reason });
 
     // Clean up location tracker data for this player
     locationTracker.removePlayer(user.id);
@@ -594,7 +631,7 @@ export function setupSocketHandlers(io, socket, gameManager) {
         message: 'Invite sent successfully',
       });
 
-      console.log(`${user.name} invited ${friendId} to game ${gameCode}`);
+      logger.info('Game invite sent', { fromUserId: user.id, fromUserName: user.name, toUserId: friendId, gameCode });
     } else {
       // Target user is offline - could store for later or send push notification
       pushService.sendToUser(friendId, {
@@ -650,5 +687,254 @@ export function setupSocketHandlers(io, socket, gameManager) {
         accepted: accept,
       });
     }
+  });
+
+  // ============================================
+  // Enhanced Features - Taunt & Ping System
+  // ============================================
+
+  // Send taunt to another player
+  socket.on('action:taunt', async ({ targetId, type = 'taunt' }) => {
+    const game = await gameManager.getPlayerGame(user.id);
+    if (!game) return;
+
+    const result = enhancedFeatures.processTaunt(user.id, targetId, game.id);
+
+    if (result.success) {
+      // Find target socket and send taunt
+      const targetSockets = await io.fetchSockets();
+      const targetSocket = targetSockets.find(s => s.user?.id === targetId);
+
+      if (targetSocket) {
+        targetSocket.emit('taunt:received', {
+          fromId: user.id,
+          fromName: user.name,
+          type,
+          timestamp: Date.now(),
+          vibrationPattern: [100, 50, 100, 50, 200],
+        });
+      }
+
+      socket.emit('action:result', { action: 'taunt', success: true });
+    } else {
+      socket.emit('action:result', {
+        action: 'taunt',
+        success: false,
+        error: result.error,
+        cooldownRemaining: result.remainingTime,
+      });
+    }
+  });
+
+  // Create decoy ping
+  socket.on('action:decoy', async ({ location }) => {
+    const game = await gameManager.getPlayerGame(user.id);
+    if (!game) return;
+
+    const decoy = enhancedFeatures.createDecoy(user.id, location, game.id);
+
+    // Broadcast decoy to all players (appears as fake player position)
+    io.to(`game:${game.id}`).emit('decoy:created', {
+      ...decoy,
+      creatorName: user.name,
+    });
+
+    socket.emit('action:result', { action: 'decoy', success: true, decoy });
+  });
+
+  // Send SOS alert
+  socket.on('action:sos', async ({ location, message }) => {
+    const game = await gameManager.getPlayerGame(user.id);
+    if (!game) return;
+
+    const sos = enhancedFeatures.createSOS(user.id, location, game.id);
+
+    // Broadcast to all allies (non-IT players)
+    const currentPlayer = game.players.find(p => p.id === user.id);
+
+    game.players
+      .filter(p => p.id !== user.id && !p.isIt)
+      .forEach(async (p) => {
+        const targetSockets = await io.fetchSockets();
+        const targetSocket = targetSockets.find(s => s.user?.id === p.id);
+
+        if (targetSocket) {
+          targetSocket.emit('sos:received', {
+            ...sos,
+            fromId: user.id,
+            fromName: user.name,
+            message: message || 'Help! Being chased!',
+          });
+        }
+      });
+
+    socket.emit('action:result', { action: 'sos', success: true, sos });
+  });
+
+  // ============================================
+  // Enhanced Features - Ambush Points
+  // ============================================
+
+  // Place ambush point
+  socket.on('ambush:place', async ({ location, name }) => {
+    const result = enhancedFeatures.placeAmbush(user.id, location, { name });
+
+    if (result.success) {
+      socket.emit('ambush:placed', result.ambush);
+    } else {
+      socket.emit('ambush:error', { error: result.error });
+    }
+  });
+
+  // Remove ambush point
+  socket.on('ambush:remove', ({ ambushId }) => {
+    const playerPoints = enhancedFeatures.ambushPoints.get(user.id) || [];
+    const index = playerPoints.findIndex(p => p.id === ambushId);
+
+    if (index !== -1) {
+      playerPoints.splice(index, 1);
+      enhancedFeatures.ambushPoints.set(user.id, playerPoints);
+      socket.emit('ambush:removed', { ambushId });
+    }
+  });
+
+  // ============================================
+  // Enhanced Features - Territory System
+  // ============================================
+
+  // Start territory claim
+  socket.on('territory:claim:start', ({ location, name }) => {
+    const result = enhancedFeatures.startTerritoryClaim(user.id, location, name);
+
+    if (result.error) {
+      socket.emit('territory:error', { error: result.error });
+    } else {
+      socket.emit('territory:claim:started', result);
+    }
+  });
+
+  // Complete territory claim
+  socket.on('territory:claim:complete', ({ claimId, location, name }) => {
+    const territory = enhancedFeatures.completeTerritoryClaim(user.id, claimId, location, name);
+    socket.emit('territory:claimed', territory);
+  });
+
+  // ============================================
+  // Enhanced Features - Ghost Trail & Showdown
+  // ============================================
+
+  // Enhanced location update with ghost trail recording
+  socket.on('location:enhanced', async (location) => {
+    const locationValidation = validate.location(location);
+    if (!locationValidation.valid) return;
+
+    const validLocation = { lat: locationValidation.lat, lng: locationValidation.lng };
+
+    // Record for ghost trail
+    enhancedFeatures.recordLocation(user.id, validLocation);
+
+    // Update momentum
+    enhancedFeatures.updateMomentum(user.id, validLocation);
+
+    // Check ambush triggers if this player is IT
+    const game = gameManager.getPlayerGameSync(user.id);
+    if (game && game.itPlayerId === user.id) {
+      const triggers = enhancedFeatures.checkAmbushTriggers(user.id, validLocation);
+
+      for (const trigger of triggers) {
+        // Notify the ambush owner
+        const ownerSockets = await io.fetchSockets();
+        const ownerSocket = ownerSockets.find(s => s.user?.id === trigger.playerId);
+
+        if (ownerSocket) {
+          ownerSocket.emit('ambush:triggered', {
+            ambush: trigger.ambush,
+            distance: trigger.distance,
+            timestamp: trigger.timestamp,
+          });
+        }
+      }
+
+      // Check territory warnings for all non-IT players
+      for (const player of game.players) {
+        if (player.id === user.id) continue;
+
+        const warnings = enhancedFeatures.checkTerritoryWarnings(player.id, validLocation);
+        if (warnings.length > 0) {
+          const targetSockets = await io.fetchSockets();
+          const targetSocket = targetSockets.find(s => s.user?.id === player.id);
+
+          if (targetSocket) {
+            targetSocket.emit('territory:warning', { warnings });
+          }
+        }
+      }
+    }
+
+    // Check for showdown with IT
+    if (game && game.status === 'active' && !game.players.find(p => p.id === user.id)?.isIt) {
+      const itPlayer = game.players.find(p => p.isIt);
+      if (itPlayer?.location) {
+        const distance = getDistance(
+          validLocation.lat, validLocation.lng,
+          itPlayer.location.lat, itPlayer.location.lng
+        );
+
+        const showdownResult = enhancedFeatures.checkShowdown(
+          game.itPlayerId,
+          user.id,
+          distance
+        );
+
+        if (showdownResult.started) {
+          // Notify both players
+          socket.emit('showdown:started', {
+            showdown: showdownResult.showdown,
+            isIt: false,
+          });
+
+          const itSockets = await io.fetchSockets();
+          const itSocket = itSockets.find(s => s.user?.id === game.itPlayerId);
+          if (itSocket) {
+            itSocket.emit('showdown:started', {
+              showdown: showdownResult.showdown,
+              isIt: true,
+              targetName: user.name,
+            });
+          }
+        } else if (showdownResult.ended) {
+          socket.emit('showdown:ended', { showdown: showdownResult.showdown });
+
+          const itSockets = await io.fetchSockets();
+          const itSocket = itSockets.find(s => s.user?.id === game.itPlayerId);
+          if (itSocket) {
+            itSocket.emit('showdown:ended', { showdown: showdownResult.showdown });
+          }
+        }
+      }
+    }
+  });
+
+  // Get delayed location (for IT viewing other players)
+  socket.on('location:delayed:get', ({ playerId }) => {
+    const delayed = enhancedFeatures.getDelayedLocation(playerId);
+    const trail = enhancedFeatures.getGhostTrail(playerId);
+
+    socket.emit('location:delayed', {
+      playerId,
+      location: delayed,
+      trail,
+    });
+  });
+
+  // Get momentum status
+  socket.on('momentum:get', () => {
+    const momentum = enhancedFeatures.momentum.get(user.id);
+    const multiplier = enhancedFeatures.getGPSMultiplier(user.id);
+
+    socket.emit('momentum:status', {
+      ...momentum,
+      gpsMultiplier: multiplier,
+    });
   });
 }

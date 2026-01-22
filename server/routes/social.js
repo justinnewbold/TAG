@@ -2,6 +2,7 @@
 import express from 'express';
 import { socialDb } from '../db/social.js';
 import { sanitize, validate } from '../utils/validation.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -25,7 +26,7 @@ router.get('/leaderboard/:type?', async (req, res) => {
       offset
     });
   } catch (error) {
-    console.error('Leaderboard error:', error);
+    logger.error('Leaderboard error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch leaderboard' });
   }
 });
@@ -45,7 +46,7 @@ router.get('/rank/:userId?', async (req, res) => {
     
     res.json({ ranks, stats: entry });
   } catch (error) {
-    console.error('Rank error:', error);
+    logger.error('Rank error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch rank' });
   }
 });
@@ -66,7 +67,7 @@ router.get('/xp', async (req, res) => {
       xpToNextLevel: xpForNextLevel - (entry.xp % 1000)
     });
   } catch (error) {
-    console.error('XP error:', error);
+    logger.error('XP error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch XP' });
   }
 });
@@ -100,7 +101,7 @@ router.post('/clans', async (req, res) => {
     if (error.message?.includes('UNIQUE constraint')) {
       return res.status(400).json({ error: 'Clan name or tag already taken' });
     }
-    console.error('Create clan error:', error);
+    logger.error('Create clan error', { error: error.message });
     res.status(500).json({ error: 'Failed to create clan' });
   }
 });
@@ -116,7 +117,7 @@ router.get('/clans/:clanId', async (req, res) => {
     const members = await socialDb.getClanMembers(req.params.clanId);
     res.json({ clan, members });
   } catch (error) {
-    console.error('Get clan error:', error);
+    logger.error('Get clan error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch clan' });
   }
 });
@@ -132,7 +133,7 @@ router.get('/my-clan', async (req, res) => {
     const members = await socialDb.getClanMembers(clan.id);
     res.json({ clan, members });
   } catch (error) {
-    console.error('Get my clan error:', error);
+    logger.error('Get my clan error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch clan' });
   }
 });
@@ -153,7 +154,7 @@ router.post('/clans/:clanId/join', async (req, res) => {
     await socialDb.joinClan(req.params.clanId, req.user.id);
     res.json({ success: true, clan });
   } catch (error) {
-    console.error('Join clan error:', error);
+    logger.error('Join clan error', { error: error.message });
     res.status(500).json({ error: 'Failed to join clan' });
   }
 });
@@ -173,7 +174,7 @@ router.post('/clans/:clanId/leave', async (req, res) => {
     await socialDb.leaveClan(req.params.clanId, req.user.id);
     res.json({ success: true });
   } catch (error) {
-    console.error('Leave clan error:', error);
+    logger.error('Leave clan error', { error: error.message });
     res.status(500).json({ error: 'Failed to leave clan' });
   }
 });
@@ -186,7 +187,7 @@ router.get('/tournaments', async (req, res) => {
     const tournaments = await socialDb.getUpcomingTournaments();
     res.json({ tournaments });
   } catch (error) {
-    console.error('Get tournaments error:', error);
+    logger.error('Get tournaments error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch tournaments' });
   }
 });
@@ -200,7 +201,7 @@ router.get('/tournaments/:id', async (req, res) => {
     }
     res.json({ tournament });
   } catch (error) {
-    console.error('Get tournament error:', error);
+    logger.error('Get tournament error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch tournament' });
   }
 });
@@ -228,7 +229,7 @@ router.post('/tournaments', async (req, res) => {
 
     res.status(201).json({ tournament });
   } catch (error) {
-    console.error('Create tournament error:', error);
+    logger.error('Create tournament error', { error: error.message });
     res.status(500).json({ error: 'Failed to create tournament' });
   }
 });
@@ -252,7 +253,7 @@ router.post('/tournaments/:id/register', async (req, res) => {
     if (error.message?.includes('UNIQUE constraint')) {
       return res.status(400).json({ error: 'Already registered' });
     }
-    console.error('Register tournament error:', error);
+    logger.error('Register tournament error', { error: error.message });
     res.status(500).json({ error: 'Failed to register' });
   }
 });
@@ -284,7 +285,7 @@ router.post('/reports', async (req, res) => {
 
     res.status(201).json({ success: true, reportId });
   } catch (error) {
-    console.error('Create report error:', error);
+    logger.error('Create report error', { error: error.message });
     res.status(500).json({ error: 'Failed to submit report' });
   }
 });
@@ -298,7 +299,7 @@ router.get('/chat/:gameId', async (req, res) => {
     const messages = await socialDb.getChatHistory(req.params.gameId, limit);
     res.json({ messages });
   } catch (error) {
-    console.error('Get chat error:', error);
+    logger.error('Get chat error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch chat history' });
   }
 });
@@ -332,7 +333,7 @@ router.get('/profile/:userId?', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get profile error:', error);
+    logger.error('Get profile error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });

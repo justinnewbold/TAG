@@ -4,6 +4,7 @@
  */
 
 import { POWERUP_TYPES } from '../shared/constants.js';
+import { logger } from '../utils/logger.js';
 
 // Generate unique ID
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -47,7 +48,7 @@ export class PowerupManager {
     // Schedule first spawn
     this.scheduleNextSpawn(game);
     
-    console.log(`[PowerupManager] Started spawning for game ${game.id}`);
+    logger.info(`[PowerupManager] Started spawning for game ${game.id}`);
   }
 
   // Stop spawning for a game
@@ -58,7 +59,7 @@ export class PowerupManager {
       this.spawnTimers.delete(gameId);
     }
     this.powerups.delete(gameId);
-    console.log(`[PowerupManager] Stopped spawning for game ${gameId}`);
+    logger.info(`[PowerupManager] Stopped spawning for game ${gameId}`);
   }
 
   // Schedule next spawn
@@ -122,7 +123,7 @@ export class PowerupManager {
       this.despawnPowerup(game.id, powerup.id);
     }, SPAWN_CONFIG.powerupLifetime);
     
-    console.log(`[PowerupManager] Spawned ${type} powerup at (${powerup.lat.toFixed(5)}, ${powerup.lng.toFixed(5)})`);
+    logger.info(`[PowerupManager] Spawned ${type} powerup at (${powerup.lat.toFixed(5)}, ${powerup.lng.toFixed(5)})`);
   }
 
   // Select random powerup type based on rarity weights
@@ -175,7 +176,7 @@ export class PowerupManager {
       });
     }
     
-    console.log(`[PowerupManager] Player ${playerId} collected ${powerup.type}`);
+    logger.info(`[PowerupManager] Player ${playerId} collected ${powerup.type}`);
     
     return { 
       success: true, 

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getDistance, generateId, generateGameCode } from '../shared/utils.js';
 import { GAME_MODES, ACHIEVEMENTS } from '../shared/constants.js';
+import { gameCache } from './services/gameCache.js';
 
 // Re-export for backward compatibility
 export { GAME_MODES, ACHIEVEMENTS };
@@ -718,6 +719,9 @@ export const useStore = create(
       syncGameState: (game) => set((state) => {
         if (!game) return { currentGame: null };
 
+        // Cache game for offline viewing
+        gameCache.cacheGame(game);
+
         // Update games list if this game exists
         const gameExists = state.games.some(g => g.id === game.id);
         const updatedGames = gameExists
@@ -729,6 +733,11 @@ export const useStore = create(
           games: updatedGames,
         };
       }),
+
+      // Get cached game when offline
+      getCachedGame: (gameId) => {
+        return gameCache.getCachedGame(gameId);
+      },
 
       handlePlayerJoined: ({ player, playerCount }) => set((state) => {
         if (!state.currentGame) return state;
@@ -772,16 +781,31 @@ export const useStore = create(
       handlePlayerLocation: ({ playerId, location, timestamp }) => set((state) => {
         if (!state.currentGame) return state;
 
-        const updatedGame = {
-          ...state.currentGame,
-          players: state.currentGame.players.map(p =>
-            p.id === playerId ? { ...p, location, lastUpdate: timestamp } : p
-          ),
-        };
+        // Find the player to update
+        const playerIndex = state.currentGame.players.findIndex(p => p.id === playerId);
+        if (playerIndex === -1) return state;
 
+        const player = state.currentGame.players[playerIndex];
+
+        // Skip update if location hasn't meaningfully changed (within 1 meter)
+        // This prevents unnecessary re-renders for micro-movements
+        if (player.location &&
+            Math.abs(player.location.lat - location.lat) < 0.00001 &&
+            Math.abs(player.location.lng - location.lng) < 0.00001) {
+          return state;
+        }
+
+        // Create new players array with only the changed player updated
+        const updatedPlayers = [...state.currentGame.players];
+        updatedPlayers[playerIndex] = { ...player, location, lastUpdate: timestamp };
+
+        // Only update currentGame - skip games array update for performance
+        // The games array sync is not critical for location updates
         return {
-          currentGame: updatedGame,
-          games: state.games.map(g => g.id === updatedGame.id ? updatedGame : g),
+          currentGame: {
+            ...state.currentGame,
+            players: updatedPlayers,
+          },
         };
       }),
 

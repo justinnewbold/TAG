@@ -3,6 +3,7 @@ import express from 'express';
 import { friendsDb } from '../db/friends.js';
 import { userDb } from '../db/index.js';
 import { sanitize } from '../utils/validation.js';
+import { logger } from '../utils/logger.js';
 import crypto from 'crypto';
 
 const router = express.Router();
@@ -27,7 +28,7 @@ router.get('/code', async (req, res) => {
     
     res.json({ code });
   } catch (error) {
-    console.error('Get friend code error:', error);
+    logger.error('Get friend code error', { error: error.message });
     res.status(500).json({ error: 'Failed to get friend code' });
   }
 });
@@ -39,7 +40,7 @@ router.post('/code/regenerate', async (req, res) => {
     await friendsDb.setFriendCode(req.user.id, code);
     res.json({ code });
   } catch (error) {
-    console.error('Regenerate friend code error:', error);
+    logger.error('Regenerate friend code error', { error: error.message });
     res.status(500).json({ error: 'Failed to regenerate friend code' });
   }
 });
@@ -103,7 +104,7 @@ router.post('/request', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Send friend request error:', error);
+    logger.error('Send friend request error', { error: error.message });
     res.status(500).json({ error: 'Failed to send friend request' });
   }
 });
@@ -154,7 +155,7 @@ router.post('/request/user/:userId', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Send friend request by ID error:', error);
+    logger.error('Send friend request by ID error', { error: error.message });
     res.status(500).json({ error: 'Failed to send friend request' });
   }
 });
@@ -169,7 +170,7 @@ router.get('/requests', async (req, res) => {
     
     res.json({ incoming, outgoing });
   } catch (error) {
-    console.error('Get friend requests error:', error);
+    logger.error('Get friend requests error', { error: error.message });
     res.status(500).json({ error: 'Failed to get friend requests' });
   }
 });
@@ -196,7 +197,7 @@ router.post('/requests/:requestId/accept', async (req, res) => {
       friend: { id: friend.id, name: friend.name, avatar: friend.avatar }
     });
   } catch (error) {
-    console.error('Accept friend request error:', error);
+    logger.error('Accept friend request error', { error: error.message });
     res.status(500).json({ error: 'Failed to accept friend request' });
   }
 });
@@ -218,7 +219,7 @@ router.post('/requests/:requestId/decline', async (req, res) => {
     
     res.json({ message: 'Friend request declined' });
   } catch (error) {
-    console.error('Decline friend request error:', error);
+    logger.error('Decline friend request error', { error: error.message });
     res.status(500).json({ error: 'Failed to decline friend request' });
   }
 });
@@ -240,7 +241,7 @@ router.delete('/requests/:requestId', async (req, res) => {
     
     res.json({ message: 'Friend request cancelled' });
   } catch (error) {
-    console.error('Cancel friend request error:', error);
+    logger.error('Cancel friend request error', { error: error.message });
     res.status(500).json({ error: 'Failed to cancel friend request' });
   }
 });
@@ -253,7 +254,7 @@ router.get('/', async (req, res) => {
     const friends = await friendsDb.getFriends(req.user.id);
     res.json({ friends });
   } catch (error) {
-    console.error('Get friends error:', error);
+    logger.error('Get friends error', { error: error.message });
     res.status(500).json({ error: 'Failed to get friends list' });
   }
 });
@@ -264,7 +265,7 @@ router.delete('/:friendId', async (req, res) => {
     await friendsDb.removeFriend(req.user.id, req.params.friendId);
     res.json({ message: 'Friend removed' });
   } catch (error) {
-    console.error('Remove friend error:', error);
+    logger.error('Remove friend error', { error: error.message });
     res.status(500).json({ error: 'Failed to remove friend' });
   }
 });
@@ -275,7 +276,7 @@ router.get('/online', async (req, res) => {
     const friends = await friendsDb.getFriendsWithOnlineStatus(req.user.id);
     res.json({ friends });
   } catch (error) {
-    console.error('Get online friends error:', error);
+    logger.error('Get online friends error', { error: error.message });
     res.status(500).json({ error: 'Failed to get online friends' });
   }
 });
@@ -292,7 +293,7 @@ router.get('/search', async (req, res) => {
     const users = await friendsDb.searchUsers(sanitize.string(q, 50), req.user.id);
     res.json({ users });
   } catch (error) {
-    console.error('Search users error:', error);
+    logger.error('Search users error', { error: error.message });
     res.status(500).json({ error: 'Failed to search users' });
   }
 });
@@ -303,7 +304,7 @@ router.get('/recent', async (req, res) => {
     const recentPlayers = await friendsDb.getRecentPlayers(req.user.id, 20);
     res.json({ recentPlayers });
   } catch (error) {
-    console.error('Get recent players error:', error);
+    logger.error('Get recent players error', { error: error.message });
     res.status(500).json({ error: 'Failed to get recent players' });
   }
 });

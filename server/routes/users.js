@@ -2,6 +2,7 @@ import express from 'express';
 import { userDb } from '../db/index.js';
 import { socialDb } from '../db/social.js';
 import { sanitize } from '../utils/validation.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -55,7 +56,7 @@ router.get('/me/profile', async (req, res) => {
       clan
     });
   } catch (error) {
-    console.error('Get profile error:', error);
+    logger.error('Get profile error:', error);
     res.status(500).json({ error: 'Failed to get profile' });
   }
 });
@@ -96,7 +97,7 @@ router.put('/me/profile', async (req, res) => {
     
     res.json({ success: true, ...updates });
   } catch (error) {
-    console.error('Update profile error:', error);
+    logger.error('Update profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });
@@ -155,7 +156,7 @@ router.get('/:userId/profile', async (req, res) => {
       clan
     });
   } catch (error) {
-    console.error('Get user profile error:', error);
+    logger.error('Get user profile error:', error);
     res.status(500).json({ error: 'Failed to get profile' });
   }
 });
@@ -180,7 +181,7 @@ router.get('/search', async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('Search users error:', error);
+    logger.error('Search users error:', error);
     res.status(500).json({ error: 'Failed to search users' });
   }
 });

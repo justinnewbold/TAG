@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -54,7 +55,7 @@ router.post('/event', async (req, res) => {
 
     res.json({ success: true, eventId: event.id });
   } catch (error) {
-    console.error('Failed to track event:', error);
+    logger.error('Failed to track event', { error: error.message });
     res.status(500).json({ error: 'Failed to track event' });
   }
 });
@@ -95,7 +96,7 @@ router.post('/events/batch', async (req, res) => {
 
     res.json({ success: true, tracked: tracked.length });
   } catch (error) {
-    console.error('Failed to track batch events:', error);
+    logger.error('Failed to track batch events', { error: error.message });
     res.status(500).json({ error: 'Failed to track events' });
   }
 });
@@ -118,7 +119,7 @@ router.post('/session/start', async (req, res) => {
 
     res.json({ success: true, sessionId: session.id });
   } catch (error) {
-    console.error('Failed to start session:', error);
+    logger.error('Failed to start session', { error: error.message });
     res.status(500).json({ error: 'Failed to start session' });
   }
 });
@@ -137,7 +138,7 @@ router.post('/session/end', async (req, res) => {
     session.duration = session.endTime - session.startTime;
 
     // In production, would persist session data
-    console.log('Session ended:', {
+    logger.info('Session ended', {
       userId,
       duration: session.duration,
       eventCount: session.events.length,
@@ -147,7 +148,7 @@ router.post('/session/end', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Failed to end session:', error);
+    logger.error('Failed to end session', { error: error.message });
     res.status(500).json({ error: 'Failed to end session' });
   }
 });
@@ -173,7 +174,7 @@ router.post('/performance', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Failed to track performance:', error);
+    logger.error('Failed to track performance', { error: error.message });
     res.status(500).json({ error: 'Failed to track performance' });
   }
 });
@@ -213,7 +214,7 @@ router.get('/summary', async (req, res) => {
       range,
     });
   } catch (error) {
-    console.error('Failed to get analytics summary:', error);
+    logger.error('Failed to get analytics summary', { error: error.message });
     res.status(500).json({ error: 'Failed to get summary' });
   }
 });
@@ -229,7 +230,7 @@ router.get('/user', async (req, res) => {
       session: sessionData.get(userId) || null,
     });
   } catch (error) {
-    console.error('Failed to get user analytics:', error);
+    logger.error('Failed to get user analytics', { error: error.message });
     res.status(500).json({ error: 'Failed to get analytics' });
   }
 });

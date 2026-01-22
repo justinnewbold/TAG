@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 import { api } from './api';
 import { useStore } from '../store';
+import { offlineQueue } from './offlineQueue.js';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
@@ -9,11 +10,162 @@ class SocketService {
     this.socket = null;
     this.listeners = new Map();
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
+    this.maxReconnectAttempts = 10; // Increased for better resilience
     this.connectionCallbacks = new Set();
     this.isConnecting = false;
     this.lastConnectAttempt = 0;
     this.minConnectInterval = 2000;
+
+    // Enhanced reconnection with exponential backoff
+    this.baseReconnectDelay = 1000;
+    this.maxReconnectDelay = 60000;
+    this.reconnectTimer = null;
+    this.pendingEmits = []; // Queue for emits during disconnection
+    this.lastGameState = null;
+    this.connectionQuality = 'unknown'; // good, fair, poor, offline
+    this.pingInterval = null;
+    this.lastPingTime = null;
+    this.avgLatency = 0;
+
+    // Network state monitoring
+    this._setupNetworkMonitoring();
+  }
+
+  _setupNetworkMonitoring() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => this._handleNetworkOnline());
+      window.addEventListener('offline', () => this._handleNetworkOffline());
+
+      // Visibility change - reconnect when app comes back to foreground
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this._handleVisibilityChange();
+        }
+      });
+    }
+  }
+
+  _handleNetworkOnline() {
+    if (import.meta.env.DEV) console.log('Socket: Network came online');
+    this.connectionQuality = 'unknown';
+    // Attempt immediate reconnection
+    if (!this.socket?.connected && !this.isConnecting) {
+      this._scheduleReconnect(0);
+    }
+  }
+
+  _handleNetworkOffline() {
+    if (import.meta.env.DEV) console.log('Socket: Network went offline');
+    this.connectionQuality = 'offline';
+    this.notifyConnectionChange('disconnected', 'Network offline');
+  }
+
+  _handleVisibilityChange() {
+    if (import.meta.env.DEV) console.log('Socket: App became visible');
+    // Check connection health when app returns to foreground
+    if (this.socket?.connected) {
+      this._checkConnectionHealth();
+    } else if (!this.isConnecting) {
+      this._scheduleReconnect(0);
+    }
+  }
+
+  async _checkConnectionHealth() {
+    const latency = await this.ping();
+    if (latency === -1) {
+      // Connection is dead, trigger reconnect
+      if (import.meta.env.DEV) console.log('Socket: Health check failed, reconnecting');
+      this.socket?.disconnect();
+      this._scheduleReconnect(0);
+    } else {
+      this._updateConnectionQuality(latency);
+    }
+  }
+
+  _updateConnectionQuality(latency) {
+    this.lastPingTime = Date.now();
+    this.avgLatency = this.avgLatency ? (this.avgLatency * 0.7 + latency * 0.3) : latency;
+
+    if (latency < 100) {
+      this.connectionQuality = 'good';
+    } else if (latency < 300) {
+      this.connectionQuality = 'fair';
+    } else {
+      this.connectionQuality = 'poor';
+    }
+  }
+
+  _calculateReconnectDelay() {
+    // Exponential backoff with jitter
+    const exponentialDelay = Math.min(
+      this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
+      this.maxReconnectDelay
+    );
+    // Add random jitter (±25%)
+    const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1);
+    return Math.round(exponentialDelay + jitter);
+  }
+
+  _scheduleReconnect(delay = null) {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+
+    const reconnectDelay = delay !== null ? delay : this._calculateReconnectDelay();
+
+    if (import.meta.env.DEV) {
+      console.log(`Socket: Scheduling reconnect in ${reconnectDelay}ms (attempt ${this.reconnectAttempts + 1})`);
+    }
+
+    this.reconnectTimer = setTimeout(() => {
+      if (!navigator.onLine) {
+        if (import.meta.env.DEV) console.log('Socket: Skipping reconnect - offline');
+        return;
+      }
+      this.connect();
+    }, reconnectDelay);
+  }
+
+  _startPingInterval() {
+    this._stopPingInterval();
+    this.pingInterval = setInterval(async () => {
+      if (this.socket?.connected) {
+        const latency = await this.ping();
+        if (latency !== -1) {
+          this._updateConnectionQuality(latency);
+        }
+      }
+    }, 30000); // Check every 30 seconds
+  }
+
+  _stopPingInterval() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
+  _flushPendingEmits() {
+    if (this.pendingEmits.length === 0) return;
+
+    if (import.meta.env.DEV) {
+      console.log(`Socket: Flushing ${this.pendingEmits.length} pending emits`);
+    }
+
+    const emits = [...this.pendingEmits];
+    this.pendingEmits = [];
+
+    emits.forEach(({ event, data }) => {
+      this.emit(event, data);
+    });
+  }
+
+  getConnectionQuality() {
+    return this.connectionQuality;
+  }
+
+  getAverageLatency() {
+    return Math.round(this.avgLatency);
   }
 
   onConnectionChange(callback) {
@@ -82,17 +234,41 @@ class SocketService {
       if (import.meta.env.DEV) console.log('Socket: Connected successfully');
       this.isConnecting = false;
       this.reconnectAttempts = 0;
+      this.connectionQuality = 'good';
       this.notifyConnectionChange('connected');
+
+      // Start monitoring connection health
+      this._startPingInterval();
+
+      // Flush any pending emits
+      this._flushPendingEmits();
+
+      // Sync offline queue
+      offlineQueue.sync(this).catch(err => {
+        if (import.meta.env.DEV) console.error('Socket: Failed to sync offline queue', err);
+      });
+
+      // Request game state sync
       this.emit('reconnect:game');
     });
 
     this.socket.on('disconnect', (reason) => {
       if (import.meta.env.DEV) console.log('Socket: Disconnected -', reason);
       this.isConnecting = false;
+      this._stopPingInterval();
       this.notifyConnectionChange('disconnected', reason);
-      
+
+      // Handle different disconnect reasons
       if (reason === 'io server disconnect') {
-        if (import.meta.env.DEV) console.log('Socket: Server initiated disconnect, not reconnecting');
+        if (import.meta.env.DEV) console.log('Socket: Server initiated disconnect, not auto-reconnecting');
+        // Server kicked us - don't auto-reconnect
+      } else if (reason === 'io client disconnect') {
+        // We disconnected intentionally - don't auto-reconnect
+      } else {
+        // Network issue or transport close - schedule reconnect
+        if (navigator.onLine) {
+          this._scheduleReconnect();
+        }
       }
     });
 
@@ -264,21 +440,51 @@ class SocketService {
   disconnect() {
     if (import.meta.env.DEV) console.log('Socket: Disconnecting');
     this.isConnecting = false;
+
+    // Clear timers
+    this._stopPingInterval();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
     if (this.socket) {
       this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
     }
     this.listeners.clear();
+    this.pendingEmits = [];
     this.notifyConnectionChange('disconnected');
   }
 
-  emit(event, data) {
+  emit(event, data, options = {}) {
+    const { queueIfOffline = true, critical = false } = options;
+
     if (this.socket?.connected) {
       this.socket.emit(event, data);
-    } else if (import.meta.env.DEV) {
+      return true;
+    }
+
+    // Queue critical events for replay when reconnected
+    if (queueIfOffline && critical) {
+      if (import.meta.env.DEV) {
+        console.log('Socket: Queuing emit for when connected:', event);
+      }
+      this.pendingEmits.push({ event, data, timestamp: Date.now() });
+      return false;
+    }
+
+    // For location updates, use the offline queue
+    if (event === 'location:update' && queueIfOffline) {
+      offlineQueue.queueLocationUpdate(data);
+      return false;
+    }
+
+    if (import.meta.env.DEV) {
       console.warn('Socket: Not connected, cannot emit:', event);
     }
+    return false;
   }
 
   on(event, callback) {

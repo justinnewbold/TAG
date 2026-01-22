@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { gameDb, userDb } from '../db/index.js';
 import { getDistance, generateGameCode } from '../shared/utils.js';
 import { GAME_MODES, GAME_LIMITS } from '../shared/constants.js';
+import { logger } from '../utils/logger.js';
 
 // Re-export for backward compatibility
 export { GAME_MODES };
@@ -59,17 +60,17 @@ export class GameManager {
       if (activeGames && activeGames.length > 0) {
         for (const game of activeGames) {
           this._cacheGame(game);
-          console.log(`Restored game: ${game.code} (${game.status}) with ${game.players.length} players`);
+          logger.debug('Restored game from database', { gameCode: game.code, status: game.status, playerCount: game.players.length });
         }
-        console.log(`GameManager: Restored ${activeGames.length} active games from database`);
+        logger.info('GameManager restored active games', { count: activeGames.length });
       } else {
-        console.log('GameManager: No active games to restore');
+        logger.info('GameManager initialized with no active games to restore');
       }
     } catch (err) {
-      console.error('GameManager: Failed to load active games from database:', err.message);
+      logger.error('GameManager failed to load active games', { error: err.message });
       // Continue anyway - games will be created fresh
     }
-    console.log('GameManager initialized with database persistence');
+    logger.info('GameManager initialized with database persistence');
   }
 
   _cacheGame(game) {
@@ -1341,7 +1342,7 @@ export class GameManager {
           }
         }
 
-        console.log(`[InactiveBot] Booted ${playerInfo.name} from "${game.settings?.gameName}" (inactive ${playerInfo.inactiveFor}min, anonymous: ${playerInfo.isAnonymous})`);
+        logger.info('InactiveBot booted player', { playerName: playerInfo.name, gameName: game.settings?.gameName, inactiveFor: playerInfo.inactiveFor, isAnonymous: playerInfo.isAnonymous });
       }
 
       // If no players left, end the game
@@ -1349,15 +1350,15 @@ export class GameManager {
         game.status = 'ended';
         game.endedAt = now;
         game.endReason = 'all_players_inactive';
-        
+
         if (io) {
           io.to(`game:${gameId}`).emit('game:ended', {
             reason: 'All players were inactive',
             endedAt: now
           });
         }
-        
-        console.log(`[InactiveBot] Game "${game.settings?.gameName}" ended - all players inactive`);
+
+        logger.info('InactiveBot ended game - all players inactive', { gameName: game.settings?.gameName, gameId });
       }
     }
 

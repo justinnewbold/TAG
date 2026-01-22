@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
+import React, { useEffect, useState, useRef, lazy, Suspense, useMemo, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -8,6 +8,7 @@ import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import GameEndSummary from '../components/GameEndSummary';
 import { useSwipe } from '../hooks/useGestures';
+import { getLocationBatcher } from '../utils/locationBatcher';
 
 // Lazy load new feature components
 const SafetyControls = lazy(() => import('../components/SafetyControls'));
@@ -20,9 +21,17 @@ const QuickActionMenu = lazy(() => import('../components/QuickActionMenu'));
 const SmartQuickChat = lazy(() => import('../components/AI/SmartQuickChat'));
 const AICommentator = lazy(() => import('../components/AI/AICommentator'));
 
-// Custom marker icons
+// Memoized icon cache to prevent recreating icons on every render
+const iconCache = new Map();
+
 const createIcon = (color, isIt = false, emoji = '📍') => {
-  return L.divIcon({
+  const cacheKey = `${color}-${isIt}-${emoji}`;
+
+  if (iconCache.has(cacheKey)) {
+    return iconCache.get(cacheKey);
+  }
+
+  const icon = L.divIcon({
     className: 'custom-marker',
     html: `
       <div style="
@@ -44,6 +53,9 @@ const createIcon = (color, isIt = false, emoji = '📍') => {
     iconSize: [isIt ? 44 : 36, isIt ? 44 : 36],
     iconAnchor: [isIt ? 22 : 18, isIt ? 22 : 18],
   });
+
+  iconCache.set(cacheKey, icon);
+  return icon;
 };
 
 function MapController({ center }) {
@@ -126,10 +138,33 @@ function ActiveGame() {
     };
   }, []);
 
-  // Send location updates via socket
+  // Send location updates via socket with batching (reduces from ~10/sec to 1/3sec)
+  useEffect(() => {
+    if (currentGame?.status !== 'active') return;
+
+    // Initialize location batcher with socket emission
+    const batcher = getLocationBatcher({
+      minInterval: 3000, // Max 1 update per 3 seconds
+      onFlush: (location) => {
+        socketService.updateLocation(location);
+      },
+    });
+
+    // Add current location if available
+    if (user?.location) {
+      batcher.add(user.location);
+    }
+
+    return () => {
+      batcher.forceFlush(); // Send any pending on unmount
+    };
+  }, [currentGame?.status]);
+
+  // Track location changes and add to batcher
   useEffect(() => {
     if (user?.location && currentGame?.status === 'active') {
-      socketService.updateLocation(user.location);
+      const batcher = getLocationBatcher();
+      batcher.add(user.location);
     }
   }, [user?.location, currentGame?.status]);
 
@@ -254,7 +289,8 @@ function ActiveGame() {
   const isHidingPhase = currentGame.status === 'hiding';
   const hideTimeLeft = currentGame.hidePhaseEndAt ? Math.max(0, currentGame.hidePhaseEndAt - Date.now()) : 0;
   
-  const getDistance = (lat1, lng1, lat2, lng2) => {
+  // Memoized distance calculation to avoid recalculation on every render
+  const getDistanceMemo = useCallback((lat1, lng1, lat2, lng2) => {
     const R = 6371e3;
     const φ1 = (lat1 * Math.PI) / 180;
     const φ2 = (lat2 * Math.PI) / 180;
@@ -265,24 +301,28 @@ function ActiveGame() {
               Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
-  };
-  
-  const getNearestTaggable = () => {
+  }, []);
+
+  // Legacy getDistance for inline usage
+  const getDistance = getDistanceMemo;
+
+  // Memoized nearest taggable player calculation - only recalculates when dependencies change
+  const { player: nearestPlayer, distance: nearestDistance } = useMemo(() => {
     if (!user?.location) return { player: null, distance: Infinity };
-    
+
     // Determine which players can be tagged based on game mode
     const canTagPlayer = (player) => {
       if (!player.location) return false;
       if (player.isEliminated) return false;
-      
+
       switch (gameMode) {
         case 'teamTag':
           return player.team !== playerTeam && !player.isEliminated;
         case 'infection':
-          return !player.isIt; // Can only tag non-infected
+          return !player.isIt;
         case 'freezeTag':
-          if (isIt) return !player.isFrozen && !player.isIt; // IT freezes unfrozen players
-          return player.isFrozen && !player.isIt; // Non-IT unfreezes frozen teammates
+          if (isIt) return !player.isFrozen && !player.isIt;
+          return player.isFrozen && !player.isIt;
         case 'manhunt':
           return isIt && !player.isEliminated;
         case 'hotPotato':
@@ -292,13 +332,13 @@ function ActiveGame() {
           return isIt;
       }
     };
-    
+
     let nearest = null;
     let nearestDist = Infinity;
-    
+
     otherPlayers.forEach((player) => {
       if (canTagPlayer(player)) {
-        const dist = getDistance(
+        const dist = getDistanceMemo(
           user.location.lat, user.location.lng,
           player.location.lat, player.location.lng
         );
@@ -308,11 +348,17 @@ function ActiveGame() {
         }
       }
     });
-    
+
     return { player: nearest, distance: nearestDist };
-  };
-  
-  const { player: nearestPlayer, distance: nearestDistance } = getNearestTaggable();
+  }, [
+    user?.location?.lat,
+    user?.location?.lng,
+    otherPlayers,
+    gameMode,
+    playerTeam,
+    isIt,
+    getDistanceMemo,
+  ]);
   const inTagRange = isIt && nearestPlayer && nearestDistance <= (currentGame.settings?.tagRadius || 20);
   
   // Check if tagging is allowed

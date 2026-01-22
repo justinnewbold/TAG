@@ -1,5 +1,6 @@
 import express from 'express';
 import { pushService } from '../services/push.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -21,7 +22,7 @@ router.get('/vapid-public-key', (req, res) => {
 });
 
 // Subscribe to push notifications
-router.post('/subscribe', (req, res) => {
+router.post('/subscribe', async (req, res) => {
   try {
     const { subscription } = req.body;
 
@@ -29,7 +30,7 @@ router.post('/subscribe', (req, res) => {
       return res.status(400).json({ error: 'Invalid subscription' });
     }
 
-    const success = pushService.subscribe(req.user.id, subscription);
+    const success = await pushService.subscribe(req.user.id, subscription);
 
     if (!success) {
       return res.status(503).json({ error: 'Push notifications not available' });
@@ -37,18 +38,18 @@ router.post('/subscribe', (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Push subscribe error:', error);
+    logger.error('Push subscribe error:', error);
     res.status(500).json({ error: 'Failed to subscribe' });
   }
 });
 
 // Unsubscribe from push notifications
-router.post('/unsubscribe', (req, res) => {
+router.post('/unsubscribe', async (req, res) => {
   try {
-    pushService.unsubscribe(req.user.id);
+    await pushService.unsubscribe(req.user.id);
     res.json({ success: true });
   } catch (error) {
-    console.error('Push unsubscribe error:', error);
+    logger.error('Push unsubscribe error:', error);
     res.status(500).json({ error: 'Failed to unsubscribe' });
   }
 });
@@ -68,7 +69,7 @@ router.post('/test', async (req, res) => {
 
     res.json({ success });
   } catch (error) {
-    console.error('Push test error:', error);
+    logger.error('Push test error:', error);
     res.status(500).json({ error: 'Failed to send test notification' });
   }
 });

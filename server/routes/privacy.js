@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -54,7 +55,7 @@ router.get('/privacy', async (req, res) => {
     const settings = getUserSettings(req.user.id);
     res.json(settings);
   } catch (error) {
-    console.error('Failed to get privacy settings:', error);
+    logger.error('Failed to get privacy settings', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch settings' });
   }
 });
@@ -79,7 +80,7 @@ router.put('/privacy', async (req, res) => {
 
     res.json({ success: true, settings: newSettings });
   } catch (error) {
-    console.error('Failed to update privacy settings:', error);
+    logger.error('Failed to update privacy settings', { error: error.message });
     res.status(500).json({ error: 'Failed to update settings' });
   }
 });
@@ -90,7 +91,7 @@ router.get('/blocked', async (req, res) => {
     const blocked = getUserBlocked(req.user.id);
     res.json({ blocked });
   } catch (error) {
-    console.error('Failed to get blocked users:', error);
+    logger.error('Failed to get blocked users', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch blocked users' });
   }
 });
@@ -121,7 +122,7 @@ router.post('/users/:userId/block', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Failed to block user:', error);
+    logger.error('Failed to block user', { error: error.message });
     res.status(500).json({ error: 'Failed to block user' });
   }
 });
@@ -144,7 +145,7 @@ router.delete('/users/:userId/block', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Failed to unblock user:', error);
+    logger.error('Failed to unblock user', { error: error.message });
     res.status(500).json({ error: 'Failed to unblock user' });
   }
 });
@@ -159,7 +160,7 @@ router.post('/users/:userId/report', async (req, res) => {
     }
 
     // In production, would save to database
-    console.log('User report:', {
+    logger.info('User report', {
       reporter: req.user.id,
       reported: req.params.userId,
       reason,
@@ -169,7 +170,7 @@ router.post('/users/:userId/report', async (req, res) => {
 
     res.json({ success: true, message: 'Report submitted' });
   } catch (error) {
-    console.error('Failed to submit report:', error);
+    logger.error('Failed to submit report', { error: error.message });
     res.status(500).json({ error: 'Failed to submit report' });
   }
 });
@@ -206,7 +207,7 @@ router.post('/data-export', async (req, res) => {
       estimatedCompletion: request.estimatedCompletion,
     });
   } catch (error) {
-    console.error('Failed to request data export:', error);
+    logger.error('Failed to request data export', { error: error.message });
     res.status(500).json({ error: 'Failed to request export' });
   }
 });
@@ -225,7 +226,7 @@ router.get('/data-export/status', async (req, res) => {
       ...request,
     });
   } catch (error) {
-    console.error('Failed to get export status:', error);
+    logger.error('Failed to get export status', { error: error.message });
     res.status(500).json({ error: 'Failed to get status' });
   }
 });
@@ -262,7 +263,7 @@ router.post('/delete-account', async (req, res) => {
       cancelInfo: 'Contact support within 30 days to cancel',
     });
   } catch (error) {
-    console.error('Failed to request deletion:', error);
+    logger.error('Failed to request deletion', { error: error.message });
     res.status(500).json({ error: 'Failed to request deletion' });
   }
 });
@@ -271,11 +272,11 @@ router.post('/delete-account', async (req, res) => {
 router.delete('/location-history', async (req, res) => {
   try {
     // In production, would clear location data from database
-    console.log('Clearing location history for user:', req.user.id);
+    logger.info('Clearing location history for user', { userId: req.user.id });
 
     res.json({ success: true, message: 'Location history cleared' });
   } catch (error) {
-    console.error('Failed to clear location history:', error);
+    logger.error('Failed to clear location history', { error: error.message });
     res.status(500).json({ error: 'Failed to clear history' });
   }
 });

@@ -1,4 +1,6 @@
 import dotenv from 'dotenv';
+import { runMigrations } from './migrations.js';
+import { logger } from './utils/logger.js';
 dotenv.config();
 
 const usePostgres = !!process.env.DATABASE_URL;
@@ -149,7 +151,10 @@ if (usePostgres) {
       CREATE INDEX IF NOT EXISTS idx_sync_queue_user ON offline_sync_queue(user_id);
       CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON offline_sync_queue(status);
     `);
-    console.log('PostgreSQL schema initialized');
+    logger.info('PostgreSQL schema initialized');
+
+    // Run additional migrations
+    await runMigrations(pool, true);
   };
 
   await initSchema();
@@ -326,7 +331,7 @@ if (usePostgres) {
       try {
         settings = JSON.parse(row.settings);
       } catch (e) {
-        console.error(`Failed to parse settings for game ${row.id}:`, e.message);
+        logger.error(`Failed to parse settings for game ${row.id}:`, e.message);
       }
 
       return {
@@ -433,7 +438,7 @@ if (usePostgres) {
         try {
           settings = JSON.parse(row.settings);
         } catch (e) {
-          console.error(`Failed to parse settings for game ${row.id}:`, e.message);
+          logger.error(`Failed to parse settings for game ${row.id}:`, e.message);
         }
         return {
           id: row.id,
@@ -452,7 +457,7 @@ if (usePostgres) {
     }
   };
 
-  console.log('Using PostgreSQL database');
+  logger.info('Using PostgreSQL database');
 
 } else {
   // SQLite mode (local development)
@@ -460,8 +465,8 @@ if (usePostgres) {
   try {
     Database = (await import('better-sqlite3')).default;
   } catch (e) {
-    console.error('better-sqlite3 is not available. Set DATABASE_URL for PostgreSQL or install better-sqlite3 for local development.');
-    console.error('Error:', e.message);
+    logger.error('better-sqlite3 is not available. Set DATABASE_URL for PostgreSQL or install better-sqlite3 for local development.');
+    logger.error('Error:', e.message);
     process.exit(1);
   }
   const path = await import('path');
@@ -748,7 +753,7 @@ if (usePostgres) {
       try {
         settings = JSON.parse(row.settings);
       } catch (e) {
-        console.error(`Failed to parse settings for game ${row.id}:`, e.message);
+        logger.error(`Failed to parse settings for game ${row.id}:`, e.message);
       }
 
       return {
@@ -849,7 +854,14 @@ if (usePostgres) {
     }
   };
 
-  console.log('Using SQLite database');
+  // Run additional migrations for SQLite
+  try {
+    await runMigrations(sqliteDb, false);
+  } catch (err) {
+    logger.error('SQLite migration warning:', err.message);
+  }
+
+  logger.info('Using SQLite database');
 }
 
 // Helper functions for other db modules

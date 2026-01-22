@@ -1,6 +1,8 @@
 // SMS service using Twilio
 // Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER in environment
 
+import { logger } from '../utils/logger.js';
+
 let twilioClient = null;
 let fromNumber = null;
 
@@ -11,17 +13,17 @@ export async function initSMS() {
   fromNumber = process.env.TWILIO_PHONE_NUMBER;
 
   if (!accountSid || !authToken || !fromNumber) {
-    console.log('SMS service not configured - set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER');
+    logger.info('SMS service not configured - set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER');
     return false;
   }
 
   try {
     const twilio = await import('twilio');
     twilioClient = twilio.default(accountSid, authToken);
-    console.log('SMS service initialized (Twilio)');
+    logger.info('SMS service initialized (Twilio)');
     return true;
   } catch (error) {
-    console.log('Twilio not available:', error.message);
+    logger.warn('Twilio not available', { error: error.message });
     return false;
   }
 }
@@ -47,8 +49,8 @@ export async function sendLoginAlertSMS(to, location) {
 // Generic send SMS function
 async function sendSMS(to, body) {
   if (!twilioClient) {
-    console.log('SMS not configured, would send to:', to);
-    console.log('Message:', body);
+    logger.debug('SMS not configured, would send to', { to });
+    logger.debug('Message', { body });
     return { success: false, error: 'SMS service not configured' };
   }
 
@@ -64,7 +66,7 @@ async function sendSMS(to, body) {
 
     return { success: true, sid: message.sid };
   } catch (error) {
-    console.error('SMS send error:', error);
+    logger.error('SMS send error', { error: error.message });
     return { success: false, error: error.message };
   }
 }

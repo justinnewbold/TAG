@@ -1,5 +1,6 @@
 import express from 'express';
 import { powerupService, POWERUPS } from '../services/powerups.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -87,7 +88,7 @@ router.post('/activate', async (req, res) => {
       cooldowns: powerupService.getCooldowns(req.user.id)
     });
   } catch (error) {
-    console.error('Activate power-up error:', error);
+    logger.error('Activate power-up error:', error);
     res.status(500).json({ error: 'Failed to activate power-up' });
   }
 });
@@ -115,7 +116,7 @@ router.post('/grant', async (req, res) => {
       reason
     });
   } catch (error) {
-    console.error('Grant power-up error:', error);
+    logger.error('Grant power-up error:', error);
     res.status(500).json({ error: 'Failed to grant power-up' });
   }
 });

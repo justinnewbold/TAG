@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -67,7 +68,7 @@ router.get('/', async (req, res) => {
     const challenges = getTodaysChallenges();
     res.json(challenges);
   } catch (error) {
-    console.error('Failed to get challenges:', error);
+    logger.error('Failed to get challenges:', error);
     res.status(500).json({ error: 'Failed to fetch challenges' });
   }
 });
@@ -80,7 +81,7 @@ router.get('/progress', async (req, res) => {
 
     res.json(progress);
   } catch (error) {
-    console.error('Failed to get progress:', error);
+    logger.error('Failed to get progress:', error);
     res.status(500).json({ error: 'Failed to fetch progress' });
   }
 });
@@ -122,7 +123,7 @@ router.put('/progress', async (req, res) => {
 
     res.json({ updated, progress });
   } catch (error) {
-    console.error('Failed to update progress:', error);
+    logger.error('Failed to update progress:', error);
     res.status(500).json({ error: 'Failed to update progress' });
   }
 });
@@ -165,7 +166,7 @@ router.post('/:challengeId/claim', async (req, res) => {
       reward: challenge.reward,
     });
   } catch (error) {
-    console.error('Failed to claim reward:', error);
+    logger.error('Failed to claim reward:', error);
     res.status(500).json({ error: 'Failed to claim reward' });
   }
 });

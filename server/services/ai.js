@@ -4,6 +4,7 @@
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { logger } from '../utils/logger.js';
 
 // Initialize Gemini client
 const genAI = process.env.GEMINI_API_KEY 
@@ -68,7 +69,7 @@ Respond with just the recap, no preamble.`;
     const response = await result.response;
     return response.text();
   } catch (error) {
-    console.error('AI recap generation failed:', error);
+    logger.error('AI recap generation failed', { error: error.message });
     return generateBasicRecap(gameData);
   }
 }
@@ -138,7 +139,7 @@ Format: one message per line, no numbers or bullets.`;
       generated: true
     };
   } catch (error) {
-    console.error('AI trash talk generation failed:', error);
+    logger.error('AI trash talk generation failed', { error: error.message });
     return {
       messages: options.slice(0, 5),
       generated: false
@@ -470,7 +471,7 @@ Give actionable advice. No intro, just the tip.`;
         });
       }
     } catch (error) {
-      console.error('AI strategy tip failed:', error);
+      logger.error('AI strategy tip failed', { error: error.message });
     }
   }
 
@@ -659,7 +660,7 @@ Answer this player's question:`;
       const response = await result.response;
       return response.text();
     } catch (error) {
-      console.error('AI Assistant error:', error);
+      logger.error('AI Assistant error', { error: error.message });
       // Fall through to use knowledge base
     }
   }
