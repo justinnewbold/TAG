@@ -30,12 +30,20 @@ import { tournamentRouter } from './routes/tournaments.js';
 import { gameModesRouter } from './routes/gameModes.js';
 import notificationsRouter from './routes/notifications.js';
 import advancedAnalyticsRouter from './routes/advancedAnalytics.js';
+import bountiesRouter from './routes/bounties.js';
+import contractsRouter from './routes/contracts.js';
+import homeBasesRouter from './routes/homeBases.js';
+import killFeedRouter from './routes/killFeed.js';
+import nemesisRouter from './routes/nemesis.js';
+import prestigeRouter from './routes/prestige.js';
+import turfWarsRouter from './routes/turfWars.js';
 import { GameManager } from './game/GameManager.js';
 import { setupSocketHandlers } from './socket/handlers.js';
 import { logger } from './utils/logger.js';
 import { sentry } from './services/sentry.js';
 import { replayDb } from './db/replays.js';
 import { socialDb } from './db/social.js';
+import { db, isPostgres } from './db/index.js';
 
 dotenv.config();
 
@@ -190,9 +198,11 @@ const io = new Server(httpServer, {
 // Initialize game manager
 const gameManager = new GameManager();
 
-// Make gameManager and io available to routes
+// Make gameManager, io, and db available to routes
 app.set('gameManager', gameManager);
 app.set('io', io);
+app.set('db', db);
+app.set('isPostgres', isPostgres());
 
 // Trust proxy for rate limiting behind reverse proxy
 app.set('trust proxy', 1);
@@ -288,6 +298,13 @@ app.use('/api/tournaments', authenticateToken, tournamentRouter);
 app.use('/api/game-modes', gameModesRouter); // No auth required for reading modes
 app.use('/api/notifications', authenticateToken, notificationsRouter);
 app.use('/api/analytics/v2', authenticateToken, advancedAnalyticsRouter);
+app.use('/api/bounties', authenticateToken, bountiesRouter);
+app.use('/api/contracts', authenticateToken, contractsRouter);
+app.use('/api/home-bases', authenticateToken, homeBasesRouter);
+app.use('/api/kill-feed', authenticateToken, killFeedRouter);
+app.use('/api/nemesis', authenticateToken, nemesisRouter);
+app.use('/api/prestige', authenticateToken, prestigeRouter);
+app.use('/api/turf-wars', authenticateToken, turfWarsRouter);
 
 // Initialize additional database tables
 (async () => {

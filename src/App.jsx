@@ -27,6 +27,12 @@ const PublicGames = lazy(() => import('./pages/PublicGames'));
 const PlayerProfile = lazy(() => import('./pages/PlayerProfile'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const CustomGameModeBuilder = lazy(() => import('./pages/CustomGameModeBuilder'));
+const BountyBoard = lazy(() => import('./pages/BountyBoard'));
+const Contracts = lazy(() => import('./pages/Contracts'));
+const HomeBase = lazy(() => import('./pages/HomeBase'));
+const Nemesis = lazy(() => import('./pages/Nemesis'));
+const Prestige = lazy(() => import('./pages/Prestige'));
+const TurfWars = lazy(() => import('./pages/TurfWars'));
 
 // Auth pages - always accessible
 const Landing = lazy(() => import('./pages/Landing'));
@@ -242,6 +248,12 @@ function App() {
             <Route path="/profile/:userId" element={<ProtectedRoute><GameErrorBoundary><PlayerProfile /></GameErrorBoundary></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><GameErrorBoundary><AdminDashboard /></GameErrorBoundary></ProtectedRoute>} />
             <Route path="/custom-mode" element={<ProtectedRoute><GameErrorBoundary><CustomGameModeBuilder /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/bounties" element={<ProtectedRoute><GameErrorBoundary><BountyBoard /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/contracts" element={<ProtectedRoute><GameErrorBoundary><Contracts /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/home-base" element={<ProtectedRoute><GameErrorBoundary><HomeBase /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/nemesis" element={<ProtectedRoute><GameErrorBoundary><Nemesis /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/prestige" element={<ProtectedRoute><GameErrorBoundary><Prestige /></GameErrorBoundary></ProtectedRoute>} />
+            <Route path="/turf-wars" element={<ProtectedRoute><GameErrorBoundary><TurfWars /></GameErrorBoundary></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

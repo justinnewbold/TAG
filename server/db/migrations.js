@@ -612,6 +612,206 @@ export const migrations = {
 
       CREATE INDEX IF NOT EXISTS idx_rate_limits_user_action ON rate_limits(user_id, action_type);
     `
+  },
+
+  // New feature tables: Bounties, Turf Wars, Nemesis, Contracts, Home Bases, Prestige
+  createFeatureTables: {
+    postgres: `
+      -- Bounties system
+      CREATE TABLE IF NOT EXISTS bounties (
+        id TEXT PRIMARY KEY,
+        placer_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        target_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        amount INTEGER NOT NULL,
+        reason TEXT,
+        status TEXT DEFAULT 'active',
+        claimed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        claimed_at BIGINT,
+        created_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_bounties_target ON bounties(target_id, status);
+      CREATE INDEX IF NOT EXISTS idx_bounties_placer ON bounties(placer_id, status);
+      CREATE INDEX IF NOT EXISTS idx_bounties_status ON bounties(status, expires_at);
+
+      -- Turf Wars zones
+      CREATE TABLE IF NOT EXISTS turf_zones (
+        id TEXT PRIMARY KEY,
+        lat DOUBLE PRECISION NOT NULL,
+        lng DOUBLE PRECISION NOT NULL,
+        owner_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        clan_id TEXT,
+        status TEXT DEFAULT 'unclaimed',
+        level INTEGER DEFAULT 1,
+        capture_count INTEGER DEFAULT 0,
+        created_at BIGINT NOT NULL,
+        last_captured_at BIGINT,
+        last_visited_at BIGINT
+      );
+      CREATE INDEX IF NOT EXISTS idx_turf_zones_location ON turf_zones(lat, lng);
+      CREATE INDEX IF NOT EXISTS idx_turf_zones_owner ON turf_zones(owner_id);
+      CREATE INDEX IF NOT EXISTS idx_turf_zones_clan ON turf_zones(clan_id);
+
+      -- Nemesis records
+      CREATE TABLE IF NOT EXISTS nemesis_records (
+        player_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        opponent_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        player_tags INTEGER DEFAULT 0,
+        opponent_tags INTEGER DEFAULT 0,
+        total_encounters INTEGER DEFAULT 0,
+        last_encounter_at BIGINT,
+        created_at BIGINT,
+        PRIMARY KEY (player_id, opponent_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_nemesis_player ON nemesis_records(player_id, total_encounters DESC);
+      CREATE INDEX IF NOT EXISTS idx_nemesis_opponent ON nemesis_records(opponent_id, total_encounters DESC);
+
+      -- Contract completions
+      CREATE TABLE IF NOT EXISTS contract_completions (
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        contract_id TEXT NOT NULL,
+        progress INTEGER DEFAULT 0,
+        completed_at BIGINT,
+        expires_at BIGINT,
+        PRIMARY KEY (user_id, contract_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_contract_completions_user ON contract_completions(user_id, expires_at);
+
+      -- Home bases
+      CREATE TABLE IF NOT EXISTS home_bases (
+        id TEXT PRIMARY KEY,
+        user_id TEXT UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        lat DOUBLE PRECISION NOT NULL,
+        lng DOUBLE PRECISION NOT NULL,
+        name TEXT DEFAULT 'My Base',
+        level INTEGER DEFAULT 1,
+        upgrades JSONB DEFAULT '{}',
+        claimed_at BIGINT,
+        created_at BIGINT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_home_bases_user ON home_bases(user_id);
+      CREATE INDEX IF NOT EXISTS idx_home_bases_location ON home_bases(lat, lng);
+
+      -- Base visitors
+      CREATE TABLE IF NOT EXISTS base_visitors (
+        id TEXT PRIMARY KEY,
+        base_id TEXT REFERENCES home_bases(id) ON DELETE CASCADE,
+        visitor_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        visited_at BIGINT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_base_visitors_base ON base_visitors(base_id, visited_at DESC);
+
+      -- Prestige records
+      CREATE TABLE IF NOT EXISTS prestige_records (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        prestige_level INTEGER DEFAULT 0,
+        current_level INTEGER DEFAULT 1,
+        current_xp INTEGER DEFAULT 0,
+        lifetime_xp BIGINT DEFAULT 0,
+        total_prestiges INTEGER DEFAULT 0,
+        last_prestige_at BIGINT,
+        created_at BIGINT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_prestige_level ON prestige_records(prestige_level DESC, current_level DESC);
+    `,
+    sqlite: `
+      -- Bounties system
+      CREATE TABLE IF NOT EXISTS bounties (
+        id TEXT PRIMARY KEY,
+        placer_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        target_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        amount INTEGER NOT NULL,
+        reason TEXT,
+        status TEXT DEFAULT 'active',
+        claimed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        claimed_at INTEGER,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_bounties_target ON bounties(target_id, status);
+      CREATE INDEX IF NOT EXISTS idx_bounties_placer ON bounties(placer_id, status);
+      CREATE INDEX IF NOT EXISTS idx_bounties_status ON bounties(status, expires_at);
+
+      -- Turf Wars zones
+      CREATE TABLE IF NOT EXISTS turf_zones (
+        id TEXT PRIMARY KEY,
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        owner_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        clan_id TEXT,
+        status TEXT DEFAULT 'unclaimed',
+        level INTEGER DEFAULT 1,
+        capture_count INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        last_captured_at INTEGER,
+        last_visited_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_turf_zones_location ON turf_zones(lat, lng);
+      CREATE INDEX IF NOT EXISTS idx_turf_zones_owner ON turf_zones(owner_id);
+      CREATE INDEX IF NOT EXISTS idx_turf_zones_clan ON turf_zones(clan_id);
+
+      -- Nemesis records
+      CREATE TABLE IF NOT EXISTS nemesis_records (
+        player_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        opponent_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        player_tags INTEGER DEFAULT 0,
+        opponent_tags INTEGER DEFAULT 0,
+        total_encounters INTEGER DEFAULT 0,
+        last_encounter_at INTEGER,
+        created_at INTEGER,
+        PRIMARY KEY (player_id, opponent_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_nemesis_player ON nemesis_records(player_id);
+      CREATE INDEX IF NOT EXISTS idx_nemesis_opponent ON nemesis_records(opponent_id);
+
+      -- Contract completions
+      CREATE TABLE IF NOT EXISTS contract_completions (
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        contract_id TEXT NOT NULL,
+        progress INTEGER DEFAULT 0,
+        completed_at INTEGER,
+        expires_at INTEGER,
+        PRIMARY KEY (user_id, contract_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_contract_completions_user ON contract_completions(user_id);
+
+      -- Home bases
+      CREATE TABLE IF NOT EXISTS home_bases (
+        id TEXT PRIMARY KEY,
+        user_id TEXT UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        name TEXT DEFAULT 'My Base',
+        level INTEGER DEFAULT 1,
+        upgrades TEXT DEFAULT '{}',
+        claimed_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_home_bases_user ON home_bases(user_id);
+      CREATE INDEX IF NOT EXISTS idx_home_bases_location ON home_bases(lat, lng);
+
+      -- Base visitors
+      CREATE TABLE IF NOT EXISTS base_visitors (
+        id TEXT PRIMARY KEY,
+        base_id TEXT REFERENCES home_bases(id) ON DELETE CASCADE,
+        visitor_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        visited_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_base_visitors_base ON base_visitors(base_id);
+
+      -- Prestige records
+      CREATE TABLE IF NOT EXISTS prestige_records (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        prestige_level INTEGER DEFAULT 0,
+        current_level INTEGER DEFAULT 1,
+        current_xp INTEGER DEFAULT 0,
+        lifetime_xp INTEGER DEFAULT 0,
+        total_prestiges INTEGER DEFAULT 0,
+        last_prestige_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_prestige_level ON prestige_records(prestige_level DESC, current_level DESC);
+    `
   }
 };
 
@@ -624,11 +824,13 @@ export async function runMigrations(db, isPostgres) {
       await db.query(migrations.addIndexes.postgres);
       await db.query(migrations.performanceIndexes.postgres);
       await db.query(migrations.createNewTables.postgres);
+      await db.query(migrations.createFeatureTables.postgres);
     } else {
       // Run SQLite migrations
       db.exec(migrations.addIndexes.sqlite);
       db.exec(migrations.performanceIndexes.sqlite);
       db.exec(migrations.createNewTables.sqlite);
+      db.exec(migrations.createFeatureTables.sqlite);
     }
     logger.info('Database migrations completed successfully');
   } catch (error) {
