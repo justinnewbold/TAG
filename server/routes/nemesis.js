@@ -67,7 +67,7 @@ router.get('/', async (req, res) => {
         title: title.name,
         titleColor: title.color,
         lastEncounter: r.last_encounter_at,
-        winRate: myTags / (myTags + theirTags),
+        winRate: (myTags + theirTags) > 0 ? myTags / (myTags + theirTags) : 0.5,
       };
     });
 
@@ -102,12 +102,19 @@ router.post('/encounter', async (req, res) => {
       );
 
       if (existing.rows.length > 0) {
-        const tagField = taggerIsPlayer ? 'player_tags' : 'opponent_tags';
-        await db.query(`
-          UPDATE nemesis_records SET ${tagField} = ${tagField} + 1,
-          total_encounters = total_encounters + 1, last_encounter_at = $1
-          WHERE player_id = $2 AND opponent_id = $3
-        `, [now, playerId, opponentId]);
+        if (taggerIsPlayer) {
+          await db.query(`
+            UPDATE nemesis_records SET player_tags = player_tags + 1,
+            total_encounters = total_encounters + 1, last_encounter_at = $1
+            WHERE player_id = $2 AND opponent_id = $3
+          `, [now, playerId, opponentId]);
+        } else {
+          await db.query(`
+            UPDATE nemesis_records SET opponent_tags = opponent_tags + 1,
+            total_encounters = total_encounters + 1, last_encounter_at = $1
+            WHERE player_id = $2 AND opponent_id = $3
+          `, [now, playerId, opponentId]);
+        }
       } else {
         await db.query(`
           INSERT INTO nemesis_records (player_id, opponent_id, player_tags, opponent_tags, total_encounters, last_encounter_at, created_at)
@@ -120,12 +127,19 @@ router.post('/encounter', async (req, res) => {
       ).get(playerId, opponentId);
 
       if (existing) {
-        const tagField = taggerIsPlayer ? 'player_tags' : 'opponent_tags';
-        db.prepare(`
-          UPDATE nemesis_records SET ${tagField} = ${tagField} + 1,
-          total_encounters = total_encounters + 1, last_encounter_at = ?
-          WHERE player_id = ? AND opponent_id = ?
-        `).run(now, playerId, opponentId);
+        if (taggerIsPlayer) {
+          db.prepare(`
+            UPDATE nemesis_records SET player_tags = player_tags + 1,
+            total_encounters = total_encounters + 1, last_encounter_at = ?
+            WHERE player_id = ? AND opponent_id = ?
+          `).run(now, playerId, opponentId);
+        } else {
+          db.prepare(`
+            UPDATE nemesis_records SET opponent_tags = opponent_tags + 1,
+            total_encounters = total_encounters + 1, last_encounter_at = ?
+            WHERE player_id = ? AND opponent_id = ?
+          `).run(now, playerId, opponentId);
+        }
       } else {
         db.prepare(`
           INSERT INTO nemesis_records (player_id, opponent_id, player_tags, opponent_tags, total_encounters, last_encounter_at, created_at)

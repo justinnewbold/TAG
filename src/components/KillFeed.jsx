@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Target, Zap, DollarSign, Flag, Star, Swords, Trophy, Shield, Crown } from 'lucide-react';
 import { socketService } from '../services/socket';
 import { killFeedService } from '../services/killFeedService';

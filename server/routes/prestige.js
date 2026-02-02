@@ -30,8 +30,8 @@ router.get('/', async (req, res) => {
       };
     }
 
-    const prestigeName = PRESTIGE_CONFIG.PRESTIGE_NAMES[prestige.prestige_level] || 'Unranked';
-    const prestigeColor = PRESTIGE_CONFIG.PRESTIGE_COLORS[prestige.prestige_level] || 'gray-400';
+    const prestigeName = prestige.prestige_level > 0 ? PRESTIGE_CONFIG.PRESTIGE_NAMES[prestige.prestige_level - 1] : 'Unranked';
+    const prestigeColor = prestige.prestige_level > 0 ? PRESTIGE_CONFIG.PRESTIGE_COLORS[prestige.prestige_level - 1] : 'gray-400';
     const xpMultiplier = 1 + (prestige.prestige_level * PRESTIGE_CONFIG.XP_MULTIPLIER_PER_PRESTIGE);
     const canPrestige = prestige.current_level >= PRESTIGE_CONFIG.MAX_LEVEL && prestige.prestige_level < PRESTIGE_CONFIG.MAX_PRESTIGE;
     const nextReward = canPrestige ? PRESTIGE_CONFIG.REWARDS[prestige.prestige_level + 1] : null;

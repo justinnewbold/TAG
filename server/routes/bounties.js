@@ -42,6 +42,47 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get leaderboard of bounty hunters (must be above /target/:userId to avoid param matching)
+router.get('/leaderboard', async (req, res) => {
+  try {
+    const db = req.app.get('db');
+    const isPostgres = req.app.get('isPostgres');
+
+    let leaders;
+    if (isPostgres) {
+      const result = await db.query(`
+        SELECT claimed_by as user_id, u.name, u.avatar,
+               COUNT(*) as bounties_claimed,
+               SUM(amount) as total_earned
+        FROM bounties b
+        JOIN users u ON b.claimed_by = u.id
+        WHERE b.status = 'claimed'
+        GROUP BY claimed_by, u.name, u.avatar
+        ORDER BY total_earned DESC
+        LIMIT 25
+      `);
+      leaders = result.rows;
+    } else {
+      leaders = db.prepare(`
+        SELECT claimed_by as user_id, u.name, u.avatar,
+               COUNT(*) as bounties_claimed,
+               SUM(amount) as total_earned
+        FROM bounties b
+        JOIN users u ON b.claimed_by = u.id
+        WHERE b.status = 'claimed'
+        GROUP BY claimed_by
+        ORDER BY total_earned DESC
+        LIMIT 25
+      `).all();
+    }
+
+    res.json({ leaders });
+  } catch (error) {
+    logger.error('Get bounty leaderboard error', { error: error.message });
+    res.status(500).json({ error: 'Failed to get leaderboard' });
+  }
+});
+
 // Get bounties on a specific player
 router.get('/target/:userId', async (req, res) => {
   try {
@@ -218,47 +259,6 @@ router.delete('/:bountyId', async (req, res) => {
   } catch (error) {
     logger.error('Cancel bounty error', { error: error.message });
     res.status(500).json({ error: 'Failed to cancel bounty' });
-  }
-});
-
-// Get leaderboard of bounty hunters
-router.get('/leaderboard', async (req, res) => {
-  try {
-    const db = req.app.get('db');
-    const isPostgres = req.app.get('isPostgres');
-
-    let leaders;
-    if (isPostgres) {
-      const result = await db.query(`
-        SELECT claimed_by as user_id, u.name, u.avatar,
-               COUNT(*) as bounties_claimed,
-               SUM(amount) as total_earned
-        FROM bounties b
-        JOIN users u ON b.claimed_by = u.id
-        WHERE b.status = 'claimed'
-        GROUP BY claimed_by, u.name, u.avatar
-        ORDER BY total_earned DESC
-        LIMIT 25
-      `);
-      leaders = result.rows;
-    } else {
-      leaders = db.prepare(`
-        SELECT claimed_by as user_id, u.name, u.avatar,
-               COUNT(*) as bounties_claimed,
-               SUM(amount) as total_earned
-        FROM bounties b
-        JOIN users u ON b.claimed_by = u.id
-        WHERE b.status = 'claimed'
-        GROUP BY claimed_by
-        ORDER BY total_earned DESC
-        LIMIT 25
-      `).all();
-    }
-
-    res.json({ leaders });
-  } catch (error) {
-    logger.error('Get bounty leaderboard error', { error: error.message });
-    res.status(500).json({ error: 'Failed to get leaderboard' });
   }
 });
 

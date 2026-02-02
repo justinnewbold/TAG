@@ -293,8 +293,8 @@ function Prestige() {
               </div>
             ) : (
               leaders.map((leader, index) => {
-                const pColor = PRESTIGE_CONFIG.PRESTIGE_COLORS[leader.prestige_level] || 'gray-400';
-                const pName = PRESTIGE_CONFIG.PRESTIGE_NAMES[leader.prestige_level] || 'None';
+                const pColor = leader.prestige_level > 0 ? PRESTIGE_CONFIG.PRESTIGE_COLORS[leader.prestige_level - 1] : 'gray-400';
+                const pName = leader.prestige_level > 0 ? PRESTIGE_CONFIG.PRESTIGE_NAMES[leader.prestige_level - 1] : 'None';
                 return (
                   <div
                     key={leader.user_id}

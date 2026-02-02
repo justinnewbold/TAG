@@ -87,7 +87,7 @@ router.get('/:userId', async (req, res) => {
       if (isPostgres) {
         await db.query(`
           INSERT INTO base_visitors (id, base_id, visitor_id, visited_at)
-          VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING
+          VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING
         `, [visitId, base.id, req.user.id, now]);
       } else {
         try {
