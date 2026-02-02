@@ -16,6 +16,7 @@ const GameChat = lazy(() => import('../components/GameChat'));
 const PowerupInventory = lazy(() => import('../components/PowerupInventory'));
 const SpectatorMode = lazy(() => import('../components/SpectatorMode'));
 const QuickActionMenu = lazy(() => import('../components/QuickActionMenu'));
+const KillFeed = lazy(() => import('../components/KillFeed'));
 
 // AI Components
 const SmartQuickChat = lazy(() => import('../components/AI/SmartQuickChat'));
@@ -1023,6 +1024,11 @@ function ActiveGame() {
       
       {/* Game End Summary */}
       
+      {/* Kill Feed - real-time event overlay */}
+      <Suspense fallback={null}>
+        <KillFeed gameId={currentGame?.id} />
+      </Suspense>
+
       {/* AI Commentator - shows game events */}
       <Suspense fallback={null}>
         <AICommentator event={commentaryEvent} />

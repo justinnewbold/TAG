@@ -137,6 +137,24 @@ export const GAME_MODES = {
       eliminationWarningTime: 60000, // 1 minute warning before elimination
     },
   },
+  // Heist Mode
+  heist: {
+    id: 'heist',
+    name: 'Heist',
+    description: 'Guards protect the vault while runners plan the perfect heist. Steal the loot and extract!',
+    icon: '🏦',
+    color: 'emerald-500',
+    minPlayers: 4,
+    features: ['Guard vs Runner teams', 'Vault capture zone', 'Extraction points', 'Respawning guards', 'Role-based gameplay'],
+    settings: {
+      vaultRadius: 30,
+      extractionRadius: 25,
+      heistDuration: 600000,
+      captureTime: 10000,
+      extractionTime: 5000,
+      guardRespawnTime: 30000,
+    },
+  },
   // NEW: Global Battle Royale variant
   globalBattleRoyale: {
     id: 'globalBattleRoyale',
@@ -276,6 +294,76 @@ export const ACHIEVEMENTS = {
     description: 'Make 10 tags using Bluetooth proximity',
     icon: '📶',
     requirement: (stats) => stats.bluetoothTags >= 10,
+  },
+  // Bounty achievements
+  bountyHunter: {
+    id: 'bountyHunter',
+    name: 'Bounty Hunter',
+    description: 'Collect 5 bounties',
+    icon: '💰',
+    requirement: (stats) => stats.bountiesClaimed >= 5,
+  },
+  mostWanted: {
+    id: 'mostWanted',
+    name: 'Most Wanted',
+    description: 'Have 3 active bounties on you at the same time',
+    icon: '🎯',
+    requirement: (stats) => stats.maxSimultaneousBounties >= 3,
+  },
+  // Heist achievements
+  masterThief: {
+    id: 'masterThief',
+    name: 'Master Thief',
+    description: 'Successfully extract in 3 heist games',
+    icon: '🏦',
+    requirement: (stats) => stats.heistExtractions >= 3,
+  },
+  // Turf War achievements
+  turfLord: {
+    id: 'turfLord',
+    name: 'Turf Lord',
+    description: 'Control 10 turf zones at once',
+    icon: '🏰',
+    requirement: (stats) => stats.maxTurfZones >= 10,
+  },
+  // Nemesis achievements
+  rivalrySettled: {
+    id: 'rivalrySettled',
+    name: 'Rivalry Settled',
+    description: 'Tag your Nemesis 10 times',
+    icon: '⚔️',
+    requirement: (stats) => stats.nemesisTagCount >= 10,
+  },
+  // Contract achievements
+  contractKiller: {
+    id: 'contractKiller',
+    name: 'Contract Killer',
+    description: 'Complete 20 contracts',
+    icon: '📋',
+    requirement: (stats) => stats.contractsCompleted >= 20,
+  },
+  // Base achievements
+  fortressBuilder: {
+    id: 'fortressBuilder',
+    name: 'Fortress Builder',
+    description: 'Upgrade your home base to level 5',
+    icon: '🏗️',
+    requirement: (stats) => stats.homeBaseLevel >= 5,
+  },
+  // Prestige achievements
+  prestigeOne: {
+    id: 'prestigeOne',
+    name: 'Reborn',
+    description: 'Prestige for the first time',
+    icon: '🌟',
+    requirement: (stats) => stats.prestigeLevel >= 1,
+  },
+  prestigeMax: {
+    id: 'prestigeMax',
+    name: 'Immortal',
+    description: 'Reach maximum prestige',
+    icon: '👼',
+    requirement: (stats) => stats.prestigeLevel >= 10,
   },
 };
 
@@ -513,5 +601,206 @@ export const CHECKIN_STATES = {
   RESPONDED: 'responded',     // Player checked in
   MISSED: 'missed',           // Player missed check-in
   GRACE: 'grace',             // Using grace period
+};
+
+// ============================================================
+// BOUNTY SYSTEM
+// ============================================================
+export const BOUNTY_CONFIG = {
+  MIN_AMOUNT: 50,              // Minimum bounty in coins
+  MAX_AMOUNT: 10000,           // Maximum bounty in coins
+  PLATFORM_CUT: 0.10,         // 10% platform fee
+  EXPIRY_HOURS: 48,            // Bounties expire after 48 hours
+  MAX_ACTIVE_BOUNTIES: 5,      // Max bounties a player can place at once
+  BONUS_MULTIPLIER: 1.5,       // Bonus multiplier for high-value bounties (5000+)
+  STREAK_BONUS: 0.25,          // 25% bonus per consecutive bounty collected
+  MAX_STREAK_BONUS: 2.0,       // Cap at 200% bonus
+};
+
+export const BOUNTY_STATUS = {
+  ACTIVE: 'active',
+  CLAIMED: 'claimed',
+  EXPIRED: 'expired',
+  CANCELLED: 'cancelled',
+};
+
+// ============================================================
+// HEIST MODE
+// ============================================================
+export const HEIST_CONFIG = {
+  VAULT_RADIUS: 30,            // meters - vault zone radius
+  EXTRACTION_RADIUS: 25,       // meters - extraction zone radius
+  HEIST_DURATION: 600000,      // 10 minutes default
+  CAPTURE_TIME: 10000,         // 10 seconds to capture vault
+  EXTRACTION_TIME: 5000,       // 5 seconds to extract
+  GUARD_RESPAWN_TIME: 30000,   // 30 seconds respawn for guards
+  PHASES: {
+    PLANNING: 'planning',      // Teams see map, plan routes
+    ACTIVE: 'active',          // Heist in progress
+    EXTRACTING: 'extracting',  // Runner has the loot
+    ENDED: 'ended',
+  },
+  ROLES: {
+    GUARD: 'guard',
+    RUNNER: 'runner',
+    LOOKOUT: 'lookout',
+  },
+};
+
+// ============================================================
+// TURF WARS
+// ============================================================
+export const TURF_CONFIG = {
+  ZONE_SIZE: 200,              // meters - each turf zone radius
+  CAPTURE_TIME: 60000,         // 60 seconds to capture a zone
+  DEFEND_BONUS: 1.5,           // 1.5x XP for defending your turf
+  MAX_ZONES_PER_CLAN: 50,      // Max zones a clan can hold
+  DECAY_HOURS: 72,             // Zones decay if not visited in 72 hours
+  CAPTURE_COOLDOWN: 1800000,   // 30 min cooldown after zone changes hands
+  INCOME_PER_ZONE: 10,         // Coins per zone per hour
+  INCOME_INTERVAL: 3600000,    // Income paid every hour
+  ZONE_LEVELS: {
+    OUTPOST: { level: 1, name: 'Outpost', captureTime: 60000, income: 10 },
+    STRONGHOLD: { level: 2, name: 'Stronghold', captureTime: 120000, income: 25 },
+    FORTRESS: { level: 3, name: 'Fortress', captureTime: 180000, income: 50 },
+    CITADEL: { level: 4, name: 'Citadel', captureTime: 300000, income: 100 },
+  },
+};
+
+export const TURF_STATUS = {
+  UNCLAIMED: 'unclaimed',
+  CLAIMED: 'claimed',
+  CONTESTED: 'contested',
+  FORTIFIED: 'fortified',
+};
+
+// ============================================================
+// NEMESIS SYSTEM
+// ============================================================
+export const NEMESIS_CONFIG = {
+  MIN_ENCOUNTERS: 3,           // Minimum tags between two players to trigger nemesis
+  NEMESIS_BONUS_XP: 50,        // Bonus XP for tagging your nemesis
+  RIVALRY_DECAY_DAYS: 30,      // Rivalries decay after 30 days of no encounters
+  MAX_NEMESES: 3,              // Track top 3 nemeses
+  TITLES: {
+    RIVAL: { min: 3, name: 'Rival', color: 'yellow-400' },
+    NEMESIS: { min: 7, name: 'Nemesis', color: 'orange-500' },
+    ARCHENEMY: { min: 15, name: 'Arch-Enemy', color: 'red-500' },
+  },
+};
+
+// ============================================================
+// CONTRACTS / HIT LIST
+// ============================================================
+export const CONTRACT_CONFIG = {
+  MAX_ACTIVE_CONTRACTS: 3,     // Max contracts at once
+  REFRESH_INTERVAL: 86400000,  // New contracts every 24 hours
+  DIFFICULTIES: {
+    EASY: { name: 'Easy', xpReward: 100, coinReward: 50, color: 'green-400' },
+    MEDIUM: { name: 'Medium', xpReward: 250, coinReward: 150, color: 'yellow-400' },
+    HARD: { name: 'Hard', xpReward: 500, coinReward: 350, color: 'orange-500' },
+    LEGENDARY: { name: 'Legendary', xpReward: 1000, coinReward: 750, color: 'purple-500' },
+  },
+  TYPES: {
+    TAG_PLAYER: 'tag_player',           // Tag a specific player
+    TAG_COUNT: 'tag_count',             // Tag N players in one game
+    SURVIVE_TIME: 'survive_time',       // Survive for N minutes
+    WIN_STREAK: 'win_streak',           // Win N games in a row
+    TAG_BOUNTY: 'tag_bounty',           // Tag someone with a bounty
+    SPEED_TAG: 'speed_tag',             // Tag within N seconds of becoming IT
+    ZONE_CONTROL: 'zone_control',       // Control turf zones
+    HEIST_COMPLETE: 'heist_complete',   // Complete a heist
+  },
+};
+
+// ============================================================
+// HOME BASE
+// ============================================================
+export const HOME_BASE_CONFIG = {
+  SAFE_ZONE_RADIUS: 15,       // meters - default safe zone radius
+  MAX_LEVEL: 10,
+  CLAIM_COOLDOWN: 604800000,   // Can relocate once per week
+  VISITOR_LOG_MAX: 50,         // Track last 50 visitors
+  UPGRADES: {
+    SAFE_ZONE: {
+      id: 'safe_zone',
+      name: 'Safe Zone',
+      description: 'Expand your base safe zone radius',
+      levels: [15, 20, 30, 40, 50, 65, 80, 100, 125, 150],
+      costs: [0, 100, 250, 500, 1000, 2000, 4000, 7500, 12000, 20000],
+    },
+    RADAR_TOWER: {
+      id: 'radar_tower',
+      name: 'Radar Tower',
+      description: 'See nearby players approaching your base',
+      levels: [0, 50, 100, 150, 200, 300, 400, 500, 650, 800],
+      costs: [200, 400, 800, 1500, 3000, 5000, 8000, 12000, 18000, 25000],
+    },
+    TRAP_LAYER: {
+      id: 'trap_layer',
+      name: 'Trap Network',
+      description: 'Auto-place traps around your base',
+      levels: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5],
+      costs: [500, 1000, 2000, 3500, 5000, 8000, 12000, 16000, 22000, 30000],
+    },
+    INCOME: {
+      id: 'income',
+      name: 'Coin Generator',
+      description: 'Passively earn coins over time',
+      levels: [0, 5, 10, 20, 35, 50, 75, 100, 150, 200],
+      costs: [300, 600, 1200, 2500, 5000, 8000, 12000, 18000, 25000, 35000],
+    },
+  },
+};
+
+// ============================================================
+// PRESTIGE SYSTEM
+// ============================================================
+export const PRESTIGE_CONFIG = {
+  MAX_LEVEL: 100,              // Level required to prestige
+  MAX_PRESTIGE: 10,            // Maximum prestige level
+  PRESTIGE_NAMES: [
+    'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond',
+    'Master', 'Grandmaster', 'Legend', 'Mythic', 'Immortal',
+  ],
+  PRESTIGE_COLORS: [
+    'amber-600', 'gray-300', 'yellow-400', 'cyan-300', 'blue-400',
+    'purple-500', 'red-500', 'orange-400', 'pink-400', 'white',
+  ],
+  XP_MULTIPLIER_PER_PRESTIGE: 0.10, // +10% XP per prestige level
+  REWARDS: {
+    1: { coins: 5000, title: 'Veteran', cosmetic: 'prestige_trail_bronze' },
+    2: { coins: 7500, title: 'Elite', cosmetic: 'prestige_trail_silver' },
+    3: { coins: 10000, title: 'Master', cosmetic: 'prestige_trail_gold' },
+    4: { coins: 15000, title: 'Grandmaster', cosmetic: 'prestige_aura_platinum' },
+    5: { coins: 20000, title: 'Diamond Hand', cosmetic: 'prestige_aura_diamond' },
+    6: { coins: 30000, title: 'Overlord', cosmetic: 'prestige_effect_master' },
+    7: { coins: 40000, title: 'Warlord', cosmetic: 'prestige_effect_grandmaster' },
+    8: { coins: 50000, title: 'Legend', cosmetic: 'prestige_crown_legend' },
+    9: { coins: 75000, title: 'Mythic Being', cosmetic: 'prestige_wings_mythic' },
+    10: { coins: 100000, title: 'Immortal One', cosmetic: 'prestige_halo_immortal' },
+  },
+};
+
+// ============================================================
+// KILL FEED / LIVE ACTIVITY
+// ============================================================
+export const KILL_FEED_CONFIG = {
+  MAX_ENTRIES: 50,             // Max entries to keep in feed
+  DISPLAY_COUNT: 5,            // Show last 5 in overlay
+  FADE_TIME: 8000,             // Each entry fades after 8 seconds
+  EVENT_TYPES: {
+    TAG: 'tag',
+    ELIMINATION: 'elimination',
+    BOUNTY_CLAIMED: 'bounty_claimed',
+    ZONE_CAPTURED: 'zone_captured',
+    HEIST_COMPLETE: 'heist_complete',
+    CONTRACT_COMPLETE: 'contract_complete',
+    PRESTIGE: 'prestige',
+    ACHIEVEMENT: 'achievement',
+    POWERUP_USED: 'powerup_used',
+    BASE_RAIDED: 'base_raided',
+    NEMESIS_TAG: 'nemesis_tag',
+  },
 };
 

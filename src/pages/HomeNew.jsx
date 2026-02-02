@@ -69,6 +69,60 @@ function Home() {
       gradient: 'from-green-500/20 to-emerald-500/20',
       borderColor: 'border-green-500/30'
     },
+    {
+      id: 'bounties',
+      icon: '💰',
+      title: 'Bounty Board',
+      desc: 'Hunt for rewards',
+      path: '/bounties',
+      gradient: 'from-amber-500/20 to-yellow-500/20',
+      borderColor: 'border-amber-500/30'
+    },
+    {
+      id: 'contracts',
+      icon: '📋',
+      title: 'Contracts',
+      desc: 'Daily missions',
+      path: '/contracts',
+      gradient: 'from-cyan-500/20 to-blue-500/20',
+      borderColor: 'border-cyan-500/30'
+    },
+    {
+      id: 'turf-wars',
+      icon: '🏴',
+      title: 'Turf Wars',
+      desc: 'Claim territory',
+      path: '/turf-wars',
+      gradient: 'from-red-500/20 to-orange-500/20',
+      borderColor: 'border-red-500/30'
+    },
+    {
+      id: 'nemesis',
+      icon: '⚔️',
+      title: 'Nemesis',
+      desc: 'Your rivalries',
+      path: '/nemesis',
+      gradient: 'from-orange-500/20 to-red-500/20',
+      borderColor: 'border-orange-500/30'
+    },
+    {
+      id: 'home-base',
+      icon: '🏠',
+      title: 'Home Base',
+      desc: 'Build & upgrade',
+      path: '/home-base',
+      gradient: 'from-emerald-500/20 to-teal-500/20',
+      borderColor: 'border-emerald-500/30'
+    },
+    {
+      id: 'prestige',
+      icon: '🌟',
+      title: 'Prestige',
+      desc: 'Ascend & reset',
+      path: '/prestige',
+      gradient: 'from-purple-500/20 to-pink-500/20',
+      borderColor: 'border-purple-500/30'
+    },
   ];
 
   return (
