@@ -871,6 +871,9 @@ export function useTournaments(userId) {
     setIsLoading(true);
     try {
       const response = await fetch('/api/tournaments');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
       setTournaments(data.tournaments || []);
     } catch (err) {
@@ -882,9 +885,12 @@ export function useTournaments(userId) {
 
   const joinTournament = useCallback(async (tournamentId) => {
     try {
-      await fetch(`/api/tournaments/${tournamentId}/join`, {
+      const response = await fetch(`/api/tournaments/${tournamentId}/join`, {
         method: 'POST',
       });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       loadTournaments();
     } catch (err) {
       console.error('Failed to join tournament:', err);
@@ -893,9 +899,12 @@ export function useTournaments(userId) {
 
   const leaveTournament = useCallback(async (tournamentId) => {
     try {
-      await fetch(`/api/tournaments/${tournamentId}/leave`, {
+      const response = await fetch(`/api/tournaments/${tournamentId}/leave`, {
         method: 'POST',
       });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       loadTournaments();
     } catch (err) {
       console.error('Failed to leave tournament:', err);

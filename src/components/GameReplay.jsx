@@ -779,6 +779,9 @@ export function useSavedReplays(userId) {
     try {
       // In real implementation, fetch from backend
       const response = await fetch(`/api/replays?userId=${userId}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
       setReplays(data.replays || []);
     } catch (err) {
@@ -790,7 +793,10 @@ export function useSavedReplays(userId) {
 
   const deleteReplay = useCallback(async (replayId) => {
     try {
-      await fetch(`/api/replays/${replayId}`, { method: 'DELETE' });
+      const response = await fetch(`/api/replays/${replayId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       setReplays((prev) => prev.filter((r) => r.id !== replayId));
     } catch (err) {
       console.error('Failed to delete replay:', err);

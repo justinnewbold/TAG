@@ -79,10 +79,13 @@ export default function SpectatorMode({ gameId, onExit }) {
     const fetchGameData = async () => {
       try {
         const res = await fetch(`/api/games/${gameId}/spectate`);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
         const data = await res.json();
         setGameData(data.game);
-        setPlayers(data.players);
-        setSpectatorCount(data.spectatorCount);
+        setPlayers(data.players || []);
+        setSpectatorCount(data.spectatorCount || 0);
       } catch (err) {
         console.error('Failed to fetch game data:', err);
       }
