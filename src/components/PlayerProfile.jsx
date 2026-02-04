@@ -728,6 +728,9 @@ export function usePlayerProfile(userId) {
 
     try {
       const response = await fetch(`/api/players/${userId}/profile`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
 
       setProfile(data.profile);
@@ -753,6 +756,9 @@ export function usePlayerProfile(userId) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
       setProfile(data.profile);
     } catch (err) {

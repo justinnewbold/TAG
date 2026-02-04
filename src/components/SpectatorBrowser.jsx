@@ -21,6 +21,9 @@ export default function SpectatorBrowser({ onJoinSpectate }) {
   const fetchLiveGames = async () => {
     try {
       const res = await fetch(`/api/games/live?filter=${filter}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       const data = await res.json();
       setGames(data.games || []);
     } catch (err) {

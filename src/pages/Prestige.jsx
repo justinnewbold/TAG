@@ -70,6 +70,21 @@ function Prestige() {
   const currentPrestigeName = prestige?.prestigeName || 'Unranked';
   const currentPrestigeColor = prestige?.prestigeColor || 'gray-400';
 
+  // Static class mappings for Tailwind (dynamic classes don't work)
+  const colorStyles = {
+    'gray-400': { bg: 'bg-gray-400/20', border: 'border-gray-400/30', text: 'text-gray-400' },
+    'green-400': { bg: 'bg-green-400/20', border: 'border-green-400/30', text: 'text-green-400' },
+    'blue-400': { bg: 'bg-blue-400/20', border: 'border-blue-400/30', text: 'text-blue-400' },
+    'purple-400': { bg: 'bg-purple-400/20', border: 'border-purple-400/30', text: 'text-purple-400' },
+    'yellow-400': { bg: 'bg-yellow-400/20', border: 'border-yellow-400/30', text: 'text-yellow-400' },
+    'orange-400': { bg: 'bg-orange-400/20', border: 'border-orange-400/30', text: 'text-orange-400' },
+    'red-400': { bg: 'bg-red-400/20', border: 'border-red-400/30', text: 'text-red-400' },
+    'pink-400': { bg: 'bg-pink-400/20', border: 'border-pink-400/30', text: 'text-pink-400' },
+    'cyan-400': { bg: 'bg-cyan-400/20', border: 'border-cyan-400/30', text: 'text-cyan-400' },
+    'amber-400': { bg: 'bg-amber-400/20', border: 'border-amber-400/30', text: 'text-amber-400' },
+  };
+  const prestigeStyles = colorStyles[currentPrestigeColor] || colorStyles['gray-400'];
+
   return (
     <div className="min-h-screen bg-dark-900 pb-24">
       {/* Header */}
@@ -82,8 +97,8 @@ function Prestige() {
             <p className="text-white/50 text-sm mt-0.5">Reset. Ascend. Dominate.</p>
           </div>
           {prestige && (
-            <div className={`bg-${currentPrestigeColor}/20 border border-${currentPrestigeColor}/30 rounded-xl px-3 py-1.5`}>
-              <span className={`text-${currentPrestigeColor} font-bold text-sm`}>
+            <div className={`${prestigeStyles.bg} ${prestigeStyles.border} border rounded-xl px-3 py-1.5`}>
+              <span className={`${prestigeStyles.text} font-bold text-sm`}>
                 {currentPrestigeName} {prestige.prestige_level > 0 ? `P${prestige.prestige_level}` : ''}
               </span>
             </div>
@@ -124,7 +139,7 @@ function Prestige() {
             {/* Level Display */}
             <div className="bg-gradient-to-br from-dark-800 to-dark-900 border border-white/10 rounded-2xl p-6 text-center">
               <div className="relative inline-block">
-                <div className={`w-24 h-24 rounded-full bg-${currentPrestigeColor}/20 border-4 border-${currentPrestigeColor}/40 flex items-center justify-center mx-auto mb-3`}>
+                <div className={`w-24 h-24 rounded-full ${prestigeStyles.bg} border-4 ${prestigeStyles.border} flex items-center justify-center mx-auto mb-3`}>
                   <span className="text-3xl font-bold text-white">{prestige.current_level}</span>
                 </div>
                 {prestige.prestige_level > 0 && (
@@ -134,7 +149,7 @@ function Prestige() {
                 )}
               </div>
 
-              <h2 className={`text-${currentPrestigeColor} text-xl font-bold`}>{currentPrestigeName}</h2>
+              <h2 className={`${prestigeStyles.text} text-xl font-bold`}>{currentPrestigeName}</h2>
               <p className="text-white/40 text-sm">Level {prestige.current_level} / {PRESTIGE_CONFIG.MAX_LEVEL}</p>
 
               {/* XP Bar */}
@@ -248,24 +263,25 @@ function Prestige() {
               const isCurrent = prestigeLevel === (prestige?.prestige_level || 0) + 1;
               const color = PRESTIGE_CONFIG.PRESTIGE_COLORS[prestigeLevel - 1];
               const name = PRESTIGE_CONFIG.PRESTIGE_NAMES[prestigeLevel - 1];
+              const rewardStyles = colorStyles[color] || colorStyles['gray-400'];
 
               return (
                 <div
                   key={level}
                   className={`bg-dark-800 border rounded-2xl p-4 transition-all ${
                     isUnlocked ? 'border-green-500/30 bg-green-500/5' :
-                    isCurrent ? `border-${color}/30 bg-${color}/5` :
+                    isCurrent ? `${rewardStyles.border} ${rewardStyles.bg}` :
                     'border-white/10 opacity-60'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                      isUnlocked ? 'bg-green-500/20' : `bg-${color}/20`
+                      isUnlocked ? 'bg-green-500/20' : rewardStyles.bg
                     }`}>
                       <span className="text-2xl font-bold text-white">P{prestigeLevel}</span>
                     </div>
                     <div className="flex-1">
-                      <h4 className={`font-bold text-sm ${isUnlocked ? 'text-green-400' : `text-${color}`}`}>
+                      <h4 className={`font-bold text-sm ${isUnlocked ? 'text-green-400' : rewardStyles.text}`}>
                         {name}
                       </h4>
                       <div className="flex items-center gap-3 mt-1">
@@ -295,6 +311,7 @@ function Prestige() {
               leaders.map((leader, index) => {
                 const pColor = leader.prestige_level > 0 ? PRESTIGE_CONFIG.PRESTIGE_COLORS[leader.prestige_level - 1] : 'gray-400';
                 const pName = leader.prestige_level > 0 ? PRESTIGE_CONFIG.PRESTIGE_NAMES[leader.prestige_level - 1] : 'None';
+                const leaderStyles = colorStyles[pColor] || colorStyles['gray-400'];
                 return (
                   <div
                     key={leader.user_id}
@@ -313,7 +330,7 @@ function Prestige() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-medium text-sm truncate">{leader.name}</p>
-                      <p className={`text-${pColor} text-xs`}>
+                      <p className={`${leaderStyles.text} text-xs`}>
                         {pName} P{leader.prestige_level} - Lv.{leader.current_level}
                       </p>
                     </div>

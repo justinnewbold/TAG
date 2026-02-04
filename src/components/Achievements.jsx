@@ -703,6 +703,9 @@ export function useAchievements(socket, userId) {
     const loadAchievements = async () => {
       try {
         const response = await fetch(`/api/users/${userId}/achievements`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         const data = await response.json();
         setUnlockedAchievements(data.achievements || []);
         setUserStats(data.stats || {});

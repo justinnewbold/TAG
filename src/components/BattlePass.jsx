@@ -567,6 +567,9 @@ export function useBattlePass(userId) {
     setIsLoading(true);
     try {
       const response = await fetch(`/api/battlepass/current`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
 
       setSeasonData(data.season);
@@ -581,11 +584,14 @@ export function useBattlePass(userId) {
 
   const claimReward = useCallback(async (reward, tier) => {
     try {
-      await fetch('/api/battlepass/claim', {
+      const response = await fetch('/api/battlepass/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rewardId: reward.id, tierLevel: tier.level }),
       });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       loadBattlePass();
     } catch (err) {
       console.error('Failed to claim reward:', err);
@@ -594,7 +600,10 @@ export function useBattlePass(userId) {
 
   const purchasePremium = useCallback(async () => {
     try {
-      await fetch('/api/battlepass/purchase-premium', { method: 'POST' });
+      const response = await fetch('/api/battlepass/purchase-premium', { method: 'POST' });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       setIsPremium(true);
     } catch (err) {
       console.error('Failed to purchase premium:', err);

@@ -784,6 +784,9 @@ export function useEvents(userId) {
     setIsLoading(true);
     try {
       const response = await fetch('/api/events');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
       setEvents(data.events || []);
       setCurrentEvent(data.events?.[0] || null);

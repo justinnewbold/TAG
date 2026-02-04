@@ -35,6 +35,9 @@ export default function BountySystem({ gameId, players, currentUserId, onBountyP
   const fetchBounties = async () => {
     try {
       const res = await fetch(`/api/games/${gameId}/bounties`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       const data = await res.json();
       setActiveBounties(data.bounties || []);
     } catch (err) {

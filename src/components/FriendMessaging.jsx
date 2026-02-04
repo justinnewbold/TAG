@@ -491,6 +491,9 @@ export default function FriendMessaging({
   const loadConversations = useCallback(async () => {
     try {
       const response = await fetch(`/api/messages/conversations`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
       setConversations(data.conversations || []);
     } catch (err) {
@@ -502,6 +505,9 @@ export default function FriendMessaging({
   const loadMessages = useCallback(async (conversationId) => {
     try {
       const response = await fetch(`/api/messages/conversations/${conversationId}/messages`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
       setMessages(data.messages || []);
     } catch (err) {
@@ -628,6 +634,9 @@ export default function FriendMessaging({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId: friendId }),
       });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
       setConversations((prev) => [data.conversation, ...prev]);
       selectConversation(data.conversation);

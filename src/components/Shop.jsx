@@ -765,6 +765,9 @@ export function useShop(userId) {
   const loadBalances = useCallback(async () => {
     try {
       const response = await fetch(`/api/users/${userId}/balances`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
       setBalances(data.balances || { coins: 0, gems: 0 });
     } catch (err) {
@@ -775,6 +778,9 @@ export function useShop(userId) {
   const loadOwnedItems = useCallback(async () => {
     try {
       const response = await fetch(`/api/users/${userId}/inventory`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
       setOwnedItems(new Set(data.items?.map((i) => i.id) || []));
     } catch (err) {

@@ -791,6 +791,10 @@ export function useStatsDashboard(userId) {
         fetch(`/api/players/${userId}/matches`),
       ]);
 
+      if (!statsRes.ok || !historyRes.ok) {
+        throw new Error(`HTTP error: stats=${statsRes.status}, history=${historyRes.status}`);
+      }
+
       const statsData = await statsRes.json();
       const historyData = await historyRes.json();
 
