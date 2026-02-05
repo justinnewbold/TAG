@@ -54,7 +54,11 @@ export default function GameHighlights({ gameData, highlights = [] }) {
         console.log('Share cancelled');
       }
     } else {
-      navigator.clipboard.writeText(text);
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
     }
   };
 

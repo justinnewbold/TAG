@@ -33,11 +33,19 @@ export default function GameRecap({ gameData, onClose }) {
           text: shareText,
         });
       } catch (error) {
-        // User cancelled or error
-        navigator.clipboard.writeText(shareText);
+        // User cancelled or error - fallback to clipboard
+        try {
+          await navigator.clipboard.writeText(shareText);
+        } catch (err) {
+          console.error('Failed to copy:', err);
+        }
       }
     } else {
-      navigator.clipboard.writeText(shareText);
+      try {
+        await navigator.clipboard.writeText(shareText);
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
     }
   };
 

@@ -93,10 +93,14 @@ function Clans() {
     }
   };
 
-  const copyInviteCode = () => {
+  const copyInviteCode = async () => {
     if (myClan?.invite_code) {
-      navigator.clipboard.writeText(myClan.invite_code);
-      alert('Invite code copied!');
+      try {
+        await navigator.clipboard.writeText(myClan.invite_code);
+        alert('Invite code copied!');
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
     }
   };
 

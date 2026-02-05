@@ -3,7 +3,7 @@
  * Detailed charts, trends, and performance analytics
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   BarChart2,
   TrendingUp,
@@ -782,6 +782,7 @@ export function useStatsDashboard(userId) {
   const [stats, setStats] = useState(null);
   const [matchHistory, setMatchHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const isMountedRef = useRef(true);
 
   const loadStats = useCallback(async () => {
     setIsLoading(true);
@@ -798,17 +799,25 @@ export function useStatsDashboard(userId) {
       const statsData = await statsRes.json();
       const historyData = await historyRes.json();
 
-      setStats(statsData.stats);
-      setMatchHistory(historyData.matches || []);
+      if (isMountedRef.current) {
+        setStats(statsData.stats);
+        setMatchHistory(historyData.matches || []);
+      }
     } catch (err) {
       console.error('Failed to load stats:', err);
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [userId]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     if (userId) loadStats();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [userId, loadStats]);
 
   return {

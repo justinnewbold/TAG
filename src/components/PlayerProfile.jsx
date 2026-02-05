@@ -401,11 +401,15 @@ export default function PlayerProfile({
   }, []);
 
   // Copy profile link
-  const copyProfileLink = useCallback(() => {
+  const copyProfileLink = useCallback(async () => {
     const link = `https://taggame.app/player/${profile?.id}`;
-    navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+    }
   }, [profile?.id]);
 
   // Handle profile update

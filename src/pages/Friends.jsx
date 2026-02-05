@@ -28,16 +28,21 @@ function Friends() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('friends'); // 'friends', 'requests', 'recent'
   const [swipedFriend, setSwipedFriend] = useState(null);
-  
+  const isMountedRef = useRef(true);
+
   // Load data
   useEffect(() => {
+    isMountedRef.current = true;
     loadData();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
-  
+
   const loadData = async () => {
     setIsLoading(true);
     setError('');
-    
+
     try {
       const [friendsRes, requestsRes, codeRes, recentRes] = await Promise.all([
         api.request('/friends'),
@@ -45,24 +50,34 @@ function Friends() {
         api.request('/friends/code'),
         api.request('/friends/recent')
       ]);
-      
-      setFriends(friendsRes.friends || []);
-      setIncomingRequests(requestsRes.incoming || []);
-      setOutgoingRequests(requestsRes.outgoing || []);
-      setMyFriendCode(codeRes.code || '');
-      setRecentPlayers(recentRes.recentPlayers || []);
+
+      if (isMountedRef.current) {
+        setFriends(friendsRes.friends || []);
+        setIncomingRequests(requestsRes.incoming || []);
+        setOutgoingRequests(requestsRes.outgoing || []);
+        setMyFriendCode(codeRes.code || '');
+        setRecentPlayers(recentRes.recentPlayers || []);
+      }
     } catch (err) {
-      setError('Failed to load friends');
+      if (isMountedRef.current) {
+        setError('Failed to load friends');
+      }
       console.error(err);
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   };
   
-  const handleCopyCode = () => {
-    navigator.clipboard?.writeText(myFriendCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard?.writeText(myFriendCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+    }
   };
   
   const handleAddFriend = async () => {

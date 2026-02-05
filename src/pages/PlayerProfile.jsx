@@ -60,16 +60,24 @@ function PlayerProfile() {
     }
   };
 
-  const shareProfile = () => {
+  const shareProfile = async () => {
     const url = `${window.location.origin}/profile/${profile.id}`;
     if (navigator.share) {
-      navigator.share({
-        title: `${profile.name}'s TAG Profile`,
-        url: url
-      });
+      try {
+        await navigator.share({
+          title: `${profile.name}'s TAG Profile`,
+          url: url
+        });
+      } catch (e) {
+        // User cancelled
+      }
     } else {
-      navigator.clipboard.writeText(url);
-      alert('Profile link copied!');
+      try {
+        await navigator.clipboard.writeText(url);
+        alert('Profile link copied!');
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
     }
   };
 

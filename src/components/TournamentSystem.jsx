@@ -3,7 +3,7 @@
  * Organized competitive play with brackets, scheduling, and rankings
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Trophy,
   Users,
@@ -866,6 +866,7 @@ export function useTournaments(userId) {
   const [tournaments, setTournaments] = useState([]);
   const [myTournaments, setMyTournaments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const isMountedRef = useRef(true);
 
   const loadTournaments = useCallback(async () => {
     setIsLoading(true);
@@ -875,11 +876,15 @@ export function useTournaments(userId) {
         throw new Error(`HTTP ${response.status}`);
       }
       const data = await response.json();
-      setTournaments(data.tournaments || []);
+      if (isMountedRef.current) {
+        setTournaments(data.tournaments || []);
+      }
     } catch (err) {
       console.error('Failed to load tournaments:', err);
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -912,7 +917,11 @@ export function useTournaments(userId) {
   }, [loadTournaments]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     loadTournaments();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [loadTournaments]);
 
   return {
