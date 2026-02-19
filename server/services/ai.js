@@ -11,11 +11,11 @@ const genAI = process.env.GEMINI_API_KEY
   ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
   : null;
 
-// Get model - using Gemini 2.0 Flash for speed, or Pro for quality
+// Get model - using Gemini 2.5 Flash for speed, or Pro for quality
 const getModel = (useFlash = true) => {
   if (!genAI) return null;
   return genAI.getGenerativeModel({ 
-    model: useFlash ? 'gemini-2.0-flash-exp' : 'gemini-1.5-pro'
+    model: useFlash ? 'gemini-2.5-flash' : 'gemini-1.5-pro'
   });
 };
 
