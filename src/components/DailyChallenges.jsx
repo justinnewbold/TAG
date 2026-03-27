@@ -102,8 +102,8 @@ export default function DailyChallenges({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-gradient-to-br from-dark-800 to-dark-900 rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden shadow-2xl border border-white/10">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-gradient-to-br from-dark-800 to-dark-900 rounded-2xl w-full max-w-md max-h-[90dvh] overflow-hidden shadow-2xl border border-white/10">
         {/* Header */}
         <div className="relative p-4 border-b border-white/10 bg-gradient-to-r from-neon-purple/20 to-neon-cyan/20">
           <button 

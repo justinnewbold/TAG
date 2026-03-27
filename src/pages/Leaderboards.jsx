@@ -261,11 +261,13 @@ function Leaderboards() {
                   </div>
                   <Avatar user={player} size="lg" />
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium truncate">
-                      {player.name}
-                      {isUser && <span className="text-neon-cyan ml-2">(You)</span>}
-                    </h3>
-                    <p className="text-xs text-white/40">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <h3 className="font-medium truncate min-w-0">{player.name}</h3>
+                      {isUser && (
+                        <span className="flex-shrink-0 text-xs text-neon-cyan font-semibold">You</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-white/40 truncate">
                       {player.gamesPlayed} games • {player.wins} wins
                     </p>
                   </div>

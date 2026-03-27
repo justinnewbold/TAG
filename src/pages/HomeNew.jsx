@@ -189,7 +189,8 @@ function Home() {
         )}
 
         {/* Quick Stats - Horizontal scroll on small screens */}
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-1 -mx-4 px-4">
+        <div className="relative -mx-4 scroll-x-indicator mb-4">
+        <div className="flex gap-2 pb-1 overflow-x-auto px-4 scroll-x-indicator-inner">
           {[
             { icon: Trophy, value: stats.gamesWon, label: 'Wins', color: 'text-neon-cyan', bg: 'bg-neon-cyan/10', path: '/stats' },
             { icon: Target, value: stats.totalTags, label: 'Tags', color: 'text-neon-purple', bg: 'bg-neon-purple/10', path: '/stats' },
@@ -207,6 +208,7 @@ function Home() {
             </button>
           ))}
         </div>
+        </div>
 
         {/* Features Carousel - Horizontal scroll */}
         <section className="mb-4">
@@ -220,7 +222,8 @@ function Home() {
             </button>
           </div>
 
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x">
+          <div className="relative -mx-4 scroll-x-indicator">
+          <div className="flex gap-3 overflow-x-auto pb-2 px-4 snap-x">
             {features.map((feature) => (
               <button
                 key={feature.id}
@@ -232,6 +235,7 @@ function Home() {
                 <p className="text-xs text-white/50 mt-0.5">{feature.desc}</p>
               </button>
             ))}
+          </div>
           </div>
         </section>
 
@@ -271,16 +275,18 @@ function Home() {
         {/* Game Modes Preview */}
         <section className="mb-4">
           <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-3">Game Modes</h2>
-          <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
-            {Object.values(GAME_MODES).slice(0, 5).map((mode) => (
-              <div
-                key={mode.id}
-                className="flex-shrink-0 w-24 p-3 rounded-xl bg-white/5 text-center"
-              >
-                <span className="text-2xl block mb-1">{mode.icon}</span>
-                <p className="text-xs font-medium truncate">{mode.name}</p>
-              </div>
-            ))}
+          <div className="relative -mx-4 scroll-x-indicator">
+            <div className="flex gap-2 overflow-x-auto pb-2 px-4">
+              {Object.values(GAME_MODES).slice(0, 5).map((mode) => (
+                <div
+                  key={mode.id}
+                  className="flex-shrink-0 w-24 p-3 rounded-xl bg-white/5 text-center"
+                >
+                  <span className="text-2xl block mb-1">{mode.icon}</span>
+                  <p className="text-xs font-medium truncate">{mode.name}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 

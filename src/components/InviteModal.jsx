@@ -82,7 +82,7 @@ function InviteModal({ gameCode, onClose }) {
   };
   
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
       <div className="card-glow w-full max-w-md animate-slide-up max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b border-white/10">
           <h2 className="text-xl font-display font-bold">Invite Friends</h2>
