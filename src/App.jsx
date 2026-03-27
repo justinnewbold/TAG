@@ -56,6 +56,7 @@ import ConnectionStatus from './components/ConnectionStatus';
 import OfflineIndicator from './components/OfflineIndicator';
 import AppRatingPrompt from './components/AppRatingPrompt';
 import { AIFloatingButton } from './components/AI';
+import { useKeyboardHeight } from './hooks/useKeyboardHeight';
 
 // Loading fallback for lazy loaded pages
 function PageLoader() {
@@ -86,6 +87,9 @@ function App() {
   const { user, currentGame, setUser, syncGameState, settings, updateSettings } = useStore();
   const [isInitializing, setIsInitializing] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Track virtual keyboard height and expose as CSS variable for keyboard-aware layouts
+  useKeyboardHeight();
 
   // Try to re-authenticate with existing token on app load
   useEffect(() => {

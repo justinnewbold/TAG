@@ -67,8 +67,8 @@ export default function OnboardingTutorial({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-dark-900/95 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="fixed inset-0 z-50 bg-dark-900/95 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+      <div className="w-full max-w-md max-h-[90dvh] overflow-y-auto">
         {/* Skip button */}
         <button
           onClick={handleSkip}

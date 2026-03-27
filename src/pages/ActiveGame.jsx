@@ -511,7 +511,7 @@ function ActiveGame() {
       )}
       
       {/* Collapsible Header HUD */}
-      <div className={`relative z-10 bg-dark-900/95 backdrop-blur-md transition-all duration-300 ${hudExpanded ? '' : ''}`}>
+      <div className="relative z-10 bg-dark-900/95 backdrop-blur-md transition-all duration-300 hud-landscape-compact">
         {/* Minimal Header - Always visible */}
         <div className="p-3 flex items-center justify-between">
           {/* Left: Essential info */}

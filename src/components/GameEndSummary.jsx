@@ -190,8 +190,8 @@ function GameEndSummary({ game, onClose }) {
   const totalPlayers = game?.players?.length || 0;
   
   return (
-    <div className="fixed inset-0 z-50 bg-dark-900/95 backdrop-blur-sm flex items-center justify-center p-6">
-      <div className="card-glow w-full max-w-md animate-slide-up">
+    <div className="fixed inset-0 z-50 bg-dark-900/95 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+      <div className="card-glow w-full max-w-md animate-slide-up max-h-[90dvh] overflow-y-auto">
         {/* Header */}
         <div className={`p-6 text-center ${
           isWinner 
