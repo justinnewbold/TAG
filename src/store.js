@@ -104,6 +104,7 @@ const initialState = {
   currentGame: null,
   games: [],
   friends: [],
+  friendRequests: [],
   stats: {
     gamesPlayed: 0,
     gamesWon: 0,
@@ -209,6 +210,8 @@ export const useStore = create(
       clearNewAchievement: () => set({ newAchievement: null }),
       
       // Game actions
+      setCurrentGame: (game) => set({ currentGame: game }),
+
       createGame: (settings) => {
         const gameCode = generateGameCode();
         const user = get().user;
@@ -566,12 +569,22 @@ export const useStore = create(
       },
       
       // Friends actions
+      setFriends: (friends) => set({ friends }),
+
       addFriend: (friend) => set((state) => ({
         friends: [...state.friends, { ...friend, id: generateId(), addedAt: Date.now(), status: 'active' }],
       })),
-      
+
       removeFriend: (friendId) => set((state) => ({
         friends: state.friends.filter(f => f.id !== friendId),
+      })),
+
+      addFriendRequest: (request) => set((state) => ({
+        friendRequests: [...state.friendRequests, request],
+      })),
+
+      removeFriendRequest: (requestId) => set((state) => ({
+        friendRequests: state.friendRequests.filter(r => r.id !== requestId),
       })),
       
       // Invites
@@ -620,6 +633,10 @@ export const useStore = create(
           ...state.stats,
           powerupsCollected: state.stats.powerupsCollected + 1,
         },
+      })),
+
+      removePowerup: (powerupId) => set((state) => ({
+        powerupInventory: state.powerupInventory.filter(p => p.id !== powerupId),
       })),
       
       usePowerup: (powerupId) => {
