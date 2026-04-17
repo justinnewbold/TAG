@@ -956,7 +956,8 @@ export class GameManager {
         game.potatoExpiresAt = now + (game.settings.potatoTimer || 45000);
         game.players = game.players.map(p => {
           if (p.id === taggerId) {
-            return { ...p, isIt: false, tagCount: (p.tagCount || 0) + 1, becameItAt: null };
+            // Preserve becameItAt so final survival time reflects time before they became IT
+            return { ...p, isIt: false, tagCount: (p.tagCount || 0) + 1 };
           }
           if (p.id === targetId) {
             return { ...p, isIt: true, becameItAt: now };
@@ -972,7 +973,8 @@ export class GameManager {
         game.itPlayerId = targetId;
         game.players = game.players.map(p => {
           if (p.id === taggerId) {
-            return { ...p, isIt: false, tagCount: (p.tagCount || 0) + 1, becameItAt: null };
+            // Preserve becameItAt so final survival time reflects time before they became IT
+            return { ...p, isIt: false, tagCount: (p.tagCount || 0) + 1 };
           }
           if (p.id === targetId) {
             return { ...p, isIt: true, becameItAt: now };
