@@ -13,7 +13,7 @@ describe('useStore', () => {
       games: [],
       friends: [],
       friendRequests: [],
-      powerups: [],
+      powerupInventory: [],
       settings: {
         theme: 'dark',
         vibration: true,
@@ -82,10 +82,10 @@ describe('useStore', () => {
       useStore.setState({ currentGame: mockGame });
 
       const newPlayer = { id: 'player-2', name: 'Player 2' };
-      useStore.getState().handlePlayerJoined(newPlayer);
+      useStore.getState().handlePlayerJoined({ player: newPlayer, playerCount: 2 });
 
       expect(useStore.getState().currentGame.players).toHaveLength(2);
-      expect(useStore.getState().currentGame.players[1]).toEqual(newPlayer);
+      expect(useStore.getState().currentGame.players[1]).toMatchObject(newPlayer);
     });
 
     it('removes player from current game', () => {
@@ -153,13 +153,13 @@ describe('useStore', () => {
 
       useStore.getState().addPowerup(powerup);
 
-      expect(useStore.getState().powerups).toHaveLength(1);
-      expect(useStore.getState().powerups[0]).toEqual(powerup);
+      expect(useStore.getState().powerupInventory).toHaveLength(1);
+      expect(useStore.getState().powerupInventory[0]).toMatchObject(powerup);
     });
 
     it('removes powerup from inventory', () => {
       useStore.setState({
-        powerups: [
+        powerupInventory: [
           { id: 'powerup-1', type: 'speed_boost' },
           { id: 'powerup-2', type: 'shield' },
         ],
@@ -167,8 +167,8 @@ describe('useStore', () => {
 
       useStore.getState().removePowerup('powerup-1');
 
-      expect(useStore.getState().powerups).toHaveLength(1);
-      expect(useStore.getState().powerups[0].id).toBe('powerup-2');
+      expect(useStore.getState().powerupInventory).toHaveLength(1);
+      expect(useStore.getState().powerupInventory[0].id).toBe('powerup-2');
     });
   });
 
