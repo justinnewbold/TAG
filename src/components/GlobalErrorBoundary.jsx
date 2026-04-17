@@ -25,6 +25,14 @@ class GlobalErrorBoundary extends React.Component {
     return { hasError: true, error };
   }
 
+  componentDidUpdate(prevProps) {
+    // Allow recovery when the children prop reference changes after a reset.
+    // This lets callers swap in non-throwing children to clear the error state.
+    if (this.state.hasError && prevProps.children !== this.props.children) {
+      this.setState({ hasError: false, error: null, errorInfo: null });
+    }
+  }
+
   componentDidCatch(error, errorInfo) {
     this.setState((prev) => ({
       errorInfo,
@@ -74,6 +82,12 @@ class GlobalErrorBoundary extends React.Component {
       }
     } catch (e) {
       errorLogger.warn('Failed to preserve state during error recovery', { error: e.message });
+      // Clear corrupted storage so the app can start fresh on reload
+      try {
+        localStorage.removeItem('tag-game-storage');
+      } catch (removeError) {
+        // Ignore storage errors
+      }
     }
     window.location.href = '/';
   };
@@ -157,7 +171,15 @@ class GlobalErrorBoundary extends React.Component {
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-xl font-medium transition-colors"
                 >
                   <RefreshCw className="w-5 h-5" aria-hidden="true" />
-                  Try Again
+                  Try to recover without refreshing
+                </button>
+
+                <button
+                  onClick={this.handleRefresh}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-500/80 hover:bg-primary-600 text-white rounded-xl font-medium transition-colors"
+                >
+                  <RefreshCw className="w-5 h-5" aria-hidden="true" />
+                  Refresh Page
                 </button>
 
                 <button
@@ -181,7 +203,7 @@ class GlobalErrorBoundary extends React.Component {
 
               {/* Help text */}
               <p className="text-gray-500 text-xs text-center">
-                If this keeps happening, try refreshing the page or clearing your browser cache.
+                Please try refreshing the page or clearing your browser cache if this keeps happening.
               </p>
             </div>
           </div>
