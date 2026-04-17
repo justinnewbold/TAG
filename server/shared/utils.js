@@ -30,7 +30,7 @@ export function getDistance(lat1, lng1, lat2, lng2) {
  * @returns {number} Speed in meters per second
  */
 export function calculateSpeed(loc1, loc2) {
-  if (!loc1 || !loc2 || !loc1.timestamp || !loc2.timestamp) return 0;
+  if (!loc1 || !loc2 || loc1.timestamp == null || loc2.timestamp == null) return 0;
 
   const distance = getDistance(loc1.lat, loc1.lng, loc2.lat, loc2.lng);
   const timeMs = Math.abs(loc2.timestamp - loc1.timestamp);
