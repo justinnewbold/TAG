@@ -187,7 +187,8 @@ export default function EnhancedGameSettings({
   const formatInterval = (ms) => {
     if (ms >= 86400000) return `${ms / 86400000} day(s)`;
     if (ms >= 3600000) return `${ms / 3600000} hour(s)`;
-    return `${ms / 60000} minutes`;
+    if (ms >= 60000) return `${ms / 60000} minute(s)`;
+    return `${Math.round(ms / 1000)} second(s)`;
   };
 
   const SectionHeader = ({ title, icon: Icon, section, badge }) => (

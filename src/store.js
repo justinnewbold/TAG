@@ -381,8 +381,9 @@ export const useStore = create(
               ...p,
               isIt: p.id === taggedPlayerId,
               tagCount: p.id === taggerId ? (p.tagCount || 0) + 1 : p.tagCount,
-              // Track when player became IT (used for final survival time calculation)
-              becameItAt: p.id === taggedPlayerId ? now : (p.id === taggerId ? null : p.becameItAt),
+              // Track when player became IT (used for final survival time calculation).
+              // Preserve becameItAt for the tagger so we know they were IT at some point.
+              becameItAt: p.id === taggedPlayerId ? now : p.becameItAt,
             })),
           };
           
@@ -822,7 +823,8 @@ export const useStore = create(
               ...p,
               isIt: p.id === newItPlayerId,
               tagCount: p.id === taggerId ? (p.tagCount || 0) + 1 : p.tagCount,
-              becameItAt: p.id === newItPlayerId ? now : null,
+              // Preserve existing becameItAt for players who were previously IT
+              becameItAt: p.id === newItPlayerId ? now : p.becameItAt,
             })),
           };
 
@@ -976,7 +978,8 @@ export const useStore = create(
           players: state.currentGame.players.map(p => ({
             ...p,
             isIt: p.id === newItId,
-            becameItAt: p.id === newItId ? Date.now() : null,
+            // Preserve existing becameItAt for players who were previously IT
+            becameItAt: p.id === newItId ? Date.now() : p.becameItAt,
           })),
         };
 

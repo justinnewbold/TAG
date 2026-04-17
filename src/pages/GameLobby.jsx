@@ -258,6 +258,7 @@ function GameLobby() {
   }
   
   const formatInterval = (ms) => {
+    if (ms < 60 * 1000) return `${Math.round(ms / 1000)} sec`;
     if (ms < 60 * 60 * 1000) return `${Math.floor(ms / (60 * 1000))} min`;
     if (ms < 24 * 60 * 60 * 1000) return `${Math.floor(ms / (60 * 60 * 1000))} hour${ms >= 2 * 60 * 60 * 1000 ? 's' : ''}`;
     return `${Math.floor(ms / (24 * 60 * 60 * 1000))} day${ms >= 2 * 24 * 60 * 60 * 1000 ? 's' : ''}`;
