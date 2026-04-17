@@ -330,7 +330,7 @@ class SocketService {
     });
 
     // Handle tag events
-    this.socket.on('game:tagged', (data) => {
+    this.socket.on('player:tagged', (data) => {
       if (import.meta.env.DEV) console.log('Socket: Tag event', data);
       try {
         useStore.getState().handlePlayerTagged(data);
