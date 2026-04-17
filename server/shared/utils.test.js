@@ -1,9 +1,9 @@
 /**
  * Unit tests for shared utility functions
- * Run with: node --test shared/utils.test.js
+ * Run with: npm test (vitest) or node --test shared/utils.test.js
  */
 
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import assert from 'node:assert';
 import {
   getDistance,
